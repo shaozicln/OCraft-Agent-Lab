@@ -1,0 +1,28 @@
+{
+  "user_id": "1lg9mfbqP9TQlHXBAAAB",
+  "npc_id": "colleague_chenyu",
+  "session_started_at": "2026-07-08T09:08:00.679Z",
+  "snapshots": [
+    {
+      "saved_at": "2026-07-08T09:08:02.188Z",
+      "npc_state": {
+        "affinity": 30,
+        "fatigue": 30,
+        "current_status": "talk",
+        "chapter_state": "daily"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "114514",
+          "at": "2026-07-08T09:08:00.679Z"
+        },
+        {
+          "role": "assistant",
+          "content": "……嗯？啊…你刚说啥…（迷迷糊糊抬头，手指无意识戳着键盘）  \n我刚趴桌上眯了三分钟，梦里好像听见一串数字…  \n要不…你等我啃口小饼干再接话？（摸出一包薯片，晃了晃）",
+          "at": "2026-07-08T09:08:00.679Z"
+        }
+      ]
+    }
+  ]
+}
