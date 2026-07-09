@@ -1,3 +1,4 @@
+export * from './auth.schema';
 export * from './player.schema';
 export * from './npc.schema';
 export * from './ws.schema';

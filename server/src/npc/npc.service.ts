@@ -16,7 +16,7 @@ import {
 @Injectable()
 export class NpcService {
   private readonly logger = new Logger(NpcService.name);
-  private readonly mockDataDir = path.join(__dirname, '..', 'mock-data');
+  private readonly mockDataDir = path.join(__dirname, '..', '..', 'mock-data');
   private definitions = new Map<string, NpcDefinition>();
   /** key: `${playerId}:${npcId}` */
   private runtimeCache = new Map<string, NpcRuntimeState>();

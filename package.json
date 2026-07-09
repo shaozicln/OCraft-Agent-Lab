@@ -1,0 +1,7 @@
+{
+  "name": "ocraft-ai-game",
+  "private": true,
+  "scripts": {
+    "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-all.ps1"
+  }
+}

@@ -7,12 +7,10 @@ exports.chapterStateSchema = zod_1.z.enum(['daily', 'uneasy', 'dream_reveal']);
 exports.DEFAULT_CHAPTER_STATE = 'daily';
 exports.playerIdSchema = zod_1.z.string().uuid();
 exports.playerChatPayloadSchema = zod_1.z.object({
-    playerId: exports.playerIdSchema,
     npcId: zod_1.z.string().min(1).max(64),
     message: zod_1.z.string().trim().min(1).max(500),
 });
 exports.requestNpcStatePayloadSchema = zod_1.z.object({
-    playerId: exports.playerIdSchema,
     npcId: zod_1.z.string().min(1).max(64),
 });
 exports.npcStreamEventSchema = zod_1.z.object({
@@ -41,15 +39,12 @@ exports.npcErrorEventSchema = zod_1.z.object({
     message: zod_1.z.string(),
 });
 exports.saveConversationPayloadSchema = zod_1.z.object({
-    playerId: exports.playerIdSchema,
     npcId: zod_1.z.string().min(1).max(64),
 });
 exports.listConversationArchivesPayloadSchema = zod_1.z.object({
-    playerId: exports.playerIdSchema,
     npcId: zod_1.z.string().min(1).max(64),
 });
 exports.loadConversationArchivePayloadSchema = zod_1.z.object({
-    playerId: exports.playerIdSchema,
     npcId: zod_1.z.string().min(1).max(64),
     filename: zod_1.z.string().min(1).max(128),
     snapshotIndex: zod_1.z.number().int().min(0),

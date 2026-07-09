@@ -9,12 +9,10 @@ export type ChapterState = z.infer<typeof chapterStateSchema>;
 export declare const DEFAULT_CHAPTER_STATE: ChapterState;
 export declare const playerIdSchema: z.ZodString;
 export declare const playerChatPayloadSchema: z.ZodObject<{
-    playerId: z.ZodString;
     npcId: z.ZodString;
     message: z.ZodString;
 }, z.core.$strip>;
 export declare const requestNpcStatePayloadSchema: z.ZodObject<{
-    playerId: z.ZodString;
     npcId: z.ZodString;
 }, z.core.$strip>;
 export declare const npcStreamEventSchema: z.ZodObject<{
@@ -51,15 +49,12 @@ export declare const npcErrorEventSchema: z.ZodObject<{
     message: z.ZodString;
 }, z.core.$strip>;
 export declare const saveConversationPayloadSchema: z.ZodObject<{
-    playerId: z.ZodString;
     npcId: z.ZodString;
 }, z.core.$strip>;
 export declare const listConversationArchivesPayloadSchema: z.ZodObject<{
-    playerId: z.ZodString;
     npcId: z.ZodString;
 }, z.core.$strip>;
 export declare const loadConversationArchivePayloadSchema: z.ZodObject<{
-    playerId: z.ZodString;
     npcId: z.ZodString;
     filename: z.ZodString;
     snapshotIndex: z.ZodNumber;

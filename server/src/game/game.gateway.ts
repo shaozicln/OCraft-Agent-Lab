@@ -1,6 +1,7 @@
 import {
   ConnectedSocket,
   MessageBody,
+  OnGatewayConnection,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -15,31 +16,65 @@ import {
   requestNpcStatePayloadSchema,
   saveConversationPayloadSchema,
 } from '@ocraft/shared';
+import { AuthService } from '../auth/auth.service';
 import { AgentHarnessService } from '../agent/agent-harness.service';
 import { ConversationService } from './conversation.service';
 import { NpcService } from '../npc/npc.service';
 
+interface AuthedSocket extends Socket {
+  data: {
+    playerId?: string;
+    username?: string;
+  };
+}
+
 @WebSocketGateway({
   cors: { origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:3000' },
 })
-export class GameGateway {
+export class GameGateway implements OnGatewayConnection {
   private readonly logger = new Logger(GameGateway.name);
 
   @WebSocketServer()
   server: Server;
 
   constructor(
+    private readonly authService: AuthService,
     private readonly agentHarness: AgentHarnessService,
     private readonly conversationService: ConversationService,
     private readonly npcService: NpcService,
   ) {}
 
-  handleConnection(client: Socket) {
-    this.logger.log(`Client connected: ${client.id}`);
+  handleConnection(client: AuthedSocket) {
+    const token = client.handshake.auth?.token;
+    if (typeof token !== 'string' || !token) {
+      this.logger.warn(`WS rejected: missing token (${client.id})`);
+      client.disconnect(true);
+      return;
+    }
+
+    const session = this.authService.verifyToken(token);
+    if (!session) {
+      this.logger.warn(`WS rejected: invalid token (${client.id})`);
+      client.disconnect(true);
+      return;
+    }
+
+    client.data.playerId = session.playerId;
+    this.logger.log(
+      `Client connected: ${client.id} player=${session.playerId}`,
+    );
   }
 
-  handleDisconnect(client: Socket) {
+  handleDisconnect(client: AuthedSocket) {
     this.logger.log(`Client disconnected: ${client.id}`);
+  }
+
+  private requirePlayerId(client: AuthedSocket): string {
+    const playerId = client.data.playerId;
+    if (!playerId) {
+      throw new WsException('未登录或会话已失效');
+    }
+    return playerId;
   }
 
   private buildStatePayload(
@@ -63,7 +98,7 @@ export class GameGateway {
 
   @SubscribeMessage('request_npc_state')
   async handleRequestNpcState(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthedSocket,
     @MessageBody() payload: unknown,
   ) {
     const parsed = requestNpcStatePayloadSchema.safeParse(payload);
@@ -71,7 +106,8 @@ export class GameGateway {
       throw new WsException(parsed.error.message);
     }
 
-    const { playerId, npcId } = parsed.data;
+    const playerId = this.requirePlayerId(client);
+    const { npcId } = parsed.data;
     await this.conversationService.ensureSession(playerId, npcId);
 
     client.emit(
@@ -82,7 +118,7 @@ export class GameGateway {
 
   @SubscribeMessage('player_chat')
   async handlePlayerChat(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthedSocket,
     @MessageBody() payload: unknown,
   ) {
     const parsed = playerChatPayloadSchema.safeParse(payload);
@@ -90,7 +126,8 @@ export class GameGateway {
       throw new WsException(parsed.error.message);
     }
 
-    const { playerId, npcId, message } = parsed.data;
+    const playerId = this.requirePlayerId(client);
+    const { npcId, message } = parsed.data;
     await this.conversationService.ensureSession(playerId, npcId);
     this.logger.log(
       `player_chat player=${playerId} npc=${npcId} msg="${message}"`,
@@ -130,7 +167,7 @@ export class GameGateway {
 
   @SubscribeMessage('save_conversation')
   async handleSaveConversation(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthedSocket,
     @MessageBody() payload: unknown,
   ) {
     const parsed = saveConversationPayloadSchema.safeParse(payload);
@@ -138,7 +175,8 @@ export class GameGateway {
       throw new WsException(parsed.error.message);
     }
 
-    const { playerId, npcId } = parsed.data;
+    const playerId = this.requirePlayerId(client);
+    const { npcId } = parsed.data;
     await this.conversationService.ensureSession(playerId, npcId);
     const runtime = this.npcService.getRuntimeState(playerId, npcId);
     const result = await this.conversationService.saveSnapshot(
@@ -161,7 +199,7 @@ export class GameGateway {
 
   @SubscribeMessage('list_conversation_archives')
   async handleListConversationArchives(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthedSocket,
     @MessageBody() payload: unknown,
   ) {
     const parsed = listConversationArchivesPayloadSchema.safeParse(payload);
@@ -169,7 +207,8 @@ export class GameGateway {
       throw new WsException(parsed.error.message);
     }
 
-    const { playerId, npcId } = parsed.data;
+    const playerId = this.requirePlayerId(client);
+    const { npcId } = parsed.data;
     const archives = await this.conversationService.listArchives(
       playerId,
       npcId,
@@ -182,7 +221,7 @@ export class GameGateway {
 
   @SubscribeMessage('load_conversation_archive')
   async handleLoadConversationArchive(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthedSocket,
     @MessageBody() payload: unknown,
   ) {
     const parsed = loadConversationArchivePayloadSchema.safeParse(payload);
@@ -190,7 +229,8 @@ export class GameGateway {
       throw new WsException(parsed.error.message);
     }
 
-    const { playerId, npcId, filename, snapshotIndex } = parsed.data;
+    const playerId = this.requirePlayerId(client);
+    const { npcId, filename, snapshotIndex } = parsed.data;
     const restored = await this.conversationService.restoreSnapshot(
       playerId,
       npcId,

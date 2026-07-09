@@ -8,13 +8,11 @@ export const DEFAULT_CHAPTER_STATE: ChapterState = 'daily';
 export const playerIdSchema = z.string().uuid();
 
 export const playerChatPayloadSchema = z.object({
-  playerId: playerIdSchema,
   npcId: z.string().min(1).max(64),
   message: z.string().trim().min(1).max(500),
 });
 
 export const requestNpcStatePayloadSchema = z.object({
-  playerId: playerIdSchema,
   npcId: z.string().min(1).max(64),
 });
 
@@ -48,17 +46,14 @@ export const npcErrorEventSchema = z.object({
 });
 
 export const saveConversationPayloadSchema = z.object({
-  playerId: playerIdSchema,
   npcId: z.string().min(1).max(64),
 });
 
 export const listConversationArchivesPayloadSchema = z.object({
-  playerId: playerIdSchema,
   npcId: z.string().min(1).max(64),
 });
 
 export const loadConversationArchivePayloadSchema = z.object({
-  playerId: playerIdSchema,
   npcId: z.string().min(1).max(64),
   filename: z.string().min(1).max(128),
   snapshotIndex: z.number().int().min(0),

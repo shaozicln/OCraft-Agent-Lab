@@ -10,11 +10,9 @@ import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { NpcStateUpdate } from '@ocraft/shared';
 import { DEFAULT_NPC_ID, GAME_SERVER_URL } from '@/config/game';
-import { getOrCreatePlayerId } from '@/lib/player-id';
 
-export function useGameSocket(npcId = DEFAULT_NPC_ID) {
+export function useGameSocket(token: string, npcId = DEFAULT_NPC_ID) {
   const socketRef = useRef<Socket | null>(null);
-  const playerIdRef = useRef('');
   const [connected, setConnected] = useState(false);
   const [npcState, setNpcState] = useState<NpcStateUpdate | null>(null);
   const [streamText, setStreamText] = useState('');
@@ -29,16 +27,17 @@ export function useGameSocket(npcId = DEFAULT_NPC_ID) {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    playerIdRef.current = getOrCreatePlayerId();
-    const socket = io(GAME_SERVER_URL, { transports: ['websocket'] });
+    if (!token) return;
+
+    const socket = io(GAME_SERVER_URL, {
+      auth: { token },
+      transports: ['websocket'],
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {
       setConnected(true);
-      socket.emit('request_npc_state', {
-        playerId: playerIdRef.current,
-        npcId,
-      });
+      socket.emit('request_npc_state', { npcId });
     });
     socket.on('disconnect', () => {
       setConnected(false);
@@ -97,18 +96,10 @@ export function useGameSocket(npcId = DEFAULT_NPC_ID) {
     return () => {
       socket.disconnect();
     };
-  }, [npcId]);
-
-  const withPlayerPayload = <T extends Record<string, unknown>>(payload: T) => ({
-    playerId: playerIdRef.current,
-    ...payload,
-  });
+  }, [token, npcId]);
 
   const requestNpcState = () => {
-    socketRef.current?.emit(
-      'request_npc_state',
-      withPlayerPayload({ npcId }),
-    );
+    socketRef.current?.emit('request_npc_state', { npcId });
   };
 
   const sendChat = (message: string): boolean => {
@@ -118,20 +109,14 @@ export function useGameSocket(npcId = DEFAULT_NPC_ID) {
     }
     setStreamText('');
     setIsStreaming(true);
-    socketRef.current.emit(
-      'player_chat',
-      withPlayerPayload({ npcId, message }),
-    );
+    socketRef.current.emit('player_chat', { npcId, message });
     return true;
   };
 
   const saveConversation = (): boolean => {
     if (!socketRef.current?.connected) return false;
     setSaveError(null);
-    socketRef.current.emit(
-      'save_conversation',
-      withPlayerPayload({ npcId }),
-    );
+    socketRef.current.emit('save_conversation', { npcId });
     return true;
   };
 
@@ -139,20 +124,18 @@ export function useGameSocket(npcId = DEFAULT_NPC_ID) {
     if (!socketRef.current?.connected) return false;
     setLoadError(null);
     setArchivesList(null);
-    socketRef.current.emit(
-      'list_conversation_archives',
-      withPlayerPayload({ npcId }),
-    );
+    socketRef.current.emit('list_conversation_archives', { npcId });
     return true;
   };
 
   const loadArchive = (filename: string, snapshotIndex: number): boolean => {
     if (!socketRef.current?.connected) return false;
     setLoadError(null);
-    socketRef.current.emit(
-      'load_conversation_archive',
-      withPlayerPayload({ npcId, filename, snapshotIndex }),
-    );
+    socketRef.current.emit('load_conversation_archive', {
+      npcId,
+      filename,
+      snapshotIndex,
+    });
     return true;
   };
 

@@ -3,8 +3,8 @@ import { resolve } from 'path';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
-// 从 server/.env 加载环境变量（dev 与 prod 均相对于编译输出目录定位）
-config({ path: resolve(__dirname, '../.env') });
+// 从 server/.env 加载（编译后在 dist/src/main.js，需上溯两级）
+config({ path: resolve(__dirname, '../../.env') });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

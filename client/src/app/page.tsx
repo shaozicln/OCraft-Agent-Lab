@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AuthGate } from '@/components/ui/AuthGate';
 import { GameCanvas } from '@/components/r3f/GameCanvas';
 import { ChatBox } from '@/components/ui/ChatBox';
 import { HUD } from '@/components/ui/HUD';
@@ -11,7 +12,15 @@ import { useGameSocket } from '@/hooks/useGameSocket';
 import { useNpcConfig } from '@/hooks/useNpcConfig';
 import * as THREE from 'three';
 
-export default function GamePage() {
+function GamePageInner({
+  token,
+  username,
+  logout,
+}: {
+  token: string;
+  username: string;
+  logout: () => void;
+}) {
   const { npc, loading, error } = useNpcConfig(DEFAULT_NPC_ID);
   const [nearNpc, setNearNpc] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -37,7 +46,7 @@ export default function GamePage() {
     loadArchive,
     clearLoadedConversation,
     clearLastSaved,
-  } = useGameSocket(DEFAULT_NPC_ID);
+  } = useGameSocket(token, DEFAULT_NPC_ID);
 
   const movementEnabled = !chatOpen;
   const lookEnabled = !chatOpen;
@@ -147,7 +156,16 @@ export default function GamePage() {
         <p className={`text-xs ${connected ? 'text-emerald-600' : 'text-red-500'}`}>
           {connected ? '● 已连接服务器' : '○ 未连接服务器 (3010)'}
         </p>
+        <p className="text-xs text-gray-400">当前账号：{username}</p>
       </div>
+
+      <button
+        type="button"
+        onClick={logout}
+        className="absolute top-4 right-4 z-20 rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs text-gray-600 shadow-sm hover:bg-gray-50"
+      >
+        退出登录
+      </button>
 
       {!pointerLocked && !chatOpen && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
@@ -190,5 +208,15 @@ export default function GamePage() {
         onClearLastSaved={clearLastSaved}
       />
     </main>
+  );
+}
+
+export default function GamePage() {
+  return (
+    <AuthGate>
+      {({ token, username, logout }) => (
+        <GamePageInner token={token} username={username} logout={logout} />
+      )}
+    </AuthGate>
   );
 }
