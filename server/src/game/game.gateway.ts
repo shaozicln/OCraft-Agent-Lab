@@ -248,6 +248,7 @@ export class GameGateway implements OnGatewayConnection {
       npc_state: {
         ...restored.npcState,
         chapter_state: restored.chapterState,
+        story_flags: restored.storyFlags,
       },
     });
 

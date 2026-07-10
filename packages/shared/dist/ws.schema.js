@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.DEFAULT_CHAPTER_STATE = exports.chapterStateSchema = void 0;
 const zod_1 = require("zod");
+const story_schema_1 = require("./story.schema");
 /** MVP 章节状态：日常 → 异常回避 → 梦境透露 */
 exports.chapterStateSchema = zod_1.z.enum(['daily', 'uneasy', 'dream_reveal']);
 exports.DEFAULT_CHAPTER_STATE = 'daily';
@@ -54,6 +55,8 @@ exports.archivedNpcStateSchema = zod_1.z.object({
     fatigue: zod_1.z.number(),
     current_status: zod_1.z.string(),
     chapter_state: exports.chapterStateSchema,
+    /** 存档时的 story flags 快照（读档整表恢复；旧档缺省为空） */
+    story_flags: story_schema_1.storyFlagsSnapshotSchema.default({}),
 });
 exports.archivedMessageSchema = zod_1.z.object({
     role: zod_1.z.enum(['user', 'assistant']),

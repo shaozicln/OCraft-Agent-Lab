@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { storyFlagsSnapshotSchema } from './story.schema';
 
 /** MVP 章节状态：日常 → 异常回避 → 梦境透露 */
 export const chapterStateSchema = z.enum(['daily', 'uneasy', 'dream_reveal']);
@@ -64,6 +65,8 @@ export const archivedNpcStateSchema = z.object({
   fatigue: z.number(),
   current_status: z.string(),
   chapter_state: chapterStateSchema,
+  /** 存档时的 story flags 快照（读档整表恢复；旧档缺省为空） */
+  story_flags: storyFlagsSnapshotSchema.default({}),
 });
 
 export const archivedMessageSchema = z.object({

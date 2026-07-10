@@ -1,10 +1,12 @@
-import type { ChapterState } from '@ocraft/shared';
+import type { ChapterState, StoryFlagsSnapshot } from '@ocraft/shared';
+import { isFlagSet } from '@ocraft/shared';
 
 export interface SystemPromptContext {
   chapterState: ChapterState;
   affinity: number;
   fatigue: number;
   currentStatus: string;
+  storyFlags?: StoryFlagsSnapshot;
 }
 
 export function buildAffinityTier(affinity: number): string {
@@ -66,6 +68,67 @@ export function buildChapterConstraints(chapterState: ChapterState): string {
   }
 }
 
+/** 按已置 flags 追加本回合必须/禁止说（骨架约束，LLM 只表演） */
+export function buildFlagConstraints(
+  chapterState: ChapterState,
+  flags: StoryFlagsSnapshot = {},
+): string {
+  const lines: string[] = [];
+
+  if (isFlagSet(flags, 'ch1_bonded') && chapterState === 'daily') {
+    lines.push('已与玩家建立日常搭子感，语气可更熟络，但仍禁止敏感剧透。');
+  }
+
+  if (isFlagSet(flags, 'ch2_sleep_mentioned')) {
+    lines.push(
+      '玩家已关心过你的睡眠：可以含糊承认睡得不好/太困，但未到 dream_reveal 前不要说完整梦境原句。',
+    );
+  }
+
+  if (isFlagSet(flags, 'ch2_npc_admitted_tired')) {
+    lines.push('你已承认过疲惫，后续可自然延续困意，不必每次重新「第一次承认」。');
+  }
+
+  if (isFlagSet(flags, 'ch2_floor_avoided')) {
+    lines.push(
+      '十楼/测试区已被问起：继续回避，不要详述测试区内部；可转移话题或说不想提。',
+    );
+  } else if (chapterState !== 'daily') {
+    lines.push('若玩家突然提十楼或测试区，表现出回避，不要主动展开。');
+  }
+
+  if (!isFlagSet(flags, 'ch3_dream_full')) {
+    lines.push(
+      '尚未解锁完整梦境节点：禁止说出「最近总在重复同一个梦——梦见自己在工位上说话，屏幕另一头是很多陌生玩家」这句完整原句。',
+    );
+  } else {
+    lines.push(
+      '已解锁梦境核心：可以说出完整梦境原句，语气犹豫，不要像念设定集。',
+    );
+  }
+
+  if (isFlagSet(flags, 'ch3_dream_partial') && !isFlagSet(flags, 'ch3_dream_full')) {
+    lines.push('你曾漏过半句梦话：可再有短暂口误后立刻收住，仍不要说完整原句。');
+  }
+
+  if (isFlagSet(flags, 'ch3_colleague_hint')) {
+    lines.push(
+      '已暗示过消失同事：可继续含糊提「名单上没了」「做某职位的同事」，永不说具体姓名。',
+    );
+  } else if (chapterState === 'dream_reveal') {
+    lines.push(
+      '若玩家追问离职/名单/消失的同事，可暗示但不要主动深挖，且永不说姓名。',
+    );
+  }
+
+  if (!isFlagSet(flags, 'ch4_ocraft_aware')) {
+    lines.push('禁止承认被采样、人格校准或完整解释 OCraft 项目。');
+  }
+
+  if (lines.length === 0) return '';
+  return ['【本回合 Flag 约束】', ...lines].join('\n');
+}
+
 export function assembleSystemPrompt(
   template: string,
   ctx: SystemPromptContext,
@@ -75,6 +138,11 @@ export function assembleSystemPrompt(
     .replace('{fatigue}', String(ctx.fatigue))
     .replace('{chapter_state}', ctx.chapterState)
     .replace('{current_status}', ctx.currentStatus);
+
+  const flagBlock = buildFlagConstraints(
+    ctx.chapterState,
+    ctx.storyFlags ?? {},
+  );
 
   return [
     base,
@@ -87,5 +155,8 @@ export function assembleSystemPrompt(
     '',
     '【剧情章节约束（必须严格遵守）】',
     buildChapterConstraints(ctx.chapterState),
-  ].join('\n');
+    flagBlock ? `\n${flagBlock}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }

@@ -134,7 +134,10 @@ export class ConversationArchiveService {
           index: snap.snapshotIndex,
           saved_at: snap.savedAt.toISOString(),
           message_count: snap.messages.length,
-          npc_state: snap.npcState,
+          npc_state: {
+            ...snap.npcState,
+            story_flags: snap.npcState.story_flags ?? {},
+          },
         })),
       });
     }
@@ -180,7 +183,10 @@ export class ConversationArchiveService {
     return {
       snapshot: {
         saved_at: row.savedAt.toISOString(),
-        npc_state: row.npcState,
+        npc_state: {
+          ...row.npcState,
+          story_flags: row.npcState.story_flags ?? {},
+        },
         messages: row.messages,
       },
     };

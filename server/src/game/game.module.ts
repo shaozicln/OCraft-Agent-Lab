@@ -8,9 +8,10 @@ import { AgentHarnessService } from '../agent/agent-harness.service';
 import { LlmService } from '../agent/llm.service';
 import { RagService } from '../agent/rag.service';
 import { NpcModule } from '../npc/npc.module';
+import { StoryModule } from '../story/story.module';
 
 @Module({
-  imports: [DbModule, AuthModule, NpcModule],
+  imports: [DbModule, AuthModule, NpcModule, StoryModule],
   providers: [
     GameGateway,
     ConversationService,

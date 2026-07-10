@@ -11,7 +11,11 @@ import { LlmService } from './llm.service';
 import { RagService } from './rag.service';
 import { NpcService } from '../npc/npc.service';
 import { ConversationService } from '../game/conversation.service';
-import { evaluateChapterTransition } from './chapter-transition';
+import { StoryFlagService } from '../story/story-flag.service';
+import {
+  evaluateChapterTransition,
+  evaluateNpcReplyFlags,
+} from './chapter-transition';
 
 export interface AgentRunResult {
   toolCalls: ToolCallResult[];
@@ -33,6 +37,7 @@ export class AgentHarnessService {
     private readonly ragService: RagService,
     private readonly llmService: LlmService,
     private readonly conversationService: ConversationService,
+    private readonly storyFlagService: StoryFlagService,
   ) {}
 
   async run(
@@ -53,22 +58,34 @@ export class AgentHarnessService {
       toolCalls,
     );
 
-    const nextChapter = evaluateChapterTransition({
+    const flags = this.storyFlagService.getFlags(playerId, npcId);
+    const transition = evaluateChapterTransition({
       chapterState,
       playerMessage,
       runtimeState: postToolState,
+      flags,
     });
-    if (nextChapter !== chapterState) {
+
+    if (transition.flagsToSet.length > 0) {
+      await this.storyFlagService.setFlags(
+        playerId,
+        npcId,
+        transition.flagsToSet,
+      );
+    }
+
+    if (transition.chapterState !== chapterState) {
       chapterState = await this.conversationService.setChapterState(
         playerId,
         npcId,
-        nextChapter,
+        transition.chapterState,
       );
       this.logger.log(
         `Chapter advanced player=${playerId} npc=${npcId} → ${chapterState}`,
       );
     }
 
+    const storyFlags = this.storyFlagService.getFlags(playerId, npcId);
     const ragHits = this.ragService.retrieve(
       npcId,
       playerMessage,
@@ -82,6 +99,7 @@ export class AgentHarnessService {
       affinity: runtimeForPrompt.affinity,
       fatigue: runtimeForPrompt.fatigue,
       currentStatus: runtimeForPrompt.current_status,
+      storyFlags,
     });
     const systemContent = `${systemPrompt}\n\n【相关长期记忆】\n${memoryContext}\n\n请用中文、口语化、符合人设地回复玩家。回复控制在 2-4 句话。`;
 
@@ -116,7 +134,7 @@ export class AgentHarnessService {
     const stream = this.llmService.streamChat(messages, { toolCalls });
 
     this.logger.log(
-      `Agent run player=${playerId} npc=${npcId} chapter=${chapterState} ragHits=${ragHits.length} tools=${toolCalls.length} mock=${this.llmService.isMockMode()}`,
+      `Agent run player=${playerId} npc=${npcId} chapter=${chapterState} flags=${Object.keys(storyFlags).join(',') || '-'} ragHits=${ragHits.length} tools=${toolCalls.length} mock=${this.llmService.isMockMode()}`,
     );
 
     return { toolCalls, finalState, animation, stream };
@@ -135,6 +153,20 @@ export class AgentHarnessService {
       'assistant',
       assistantReply,
     );
+
+    const chapterState = this.conversationService.getChapterState(
+      playerId,
+      npcId,
+    );
+    const flags = this.storyFlagService.getFlags(playerId, npcId);
+    const replyFlags = evaluateNpcReplyFlags(
+      chapterState,
+      assistantReply,
+      flags,
+    );
+    if (replyFlags.length > 0) {
+      await this.storyFlagService.setFlags(playerId, npcId, replyFlags);
+    }
   }
 
   private applyKeywordTools(

@@ -15,6 +15,13 @@
       "when": 1752067200000,
       "tag": "0001_player_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1752153600000,
+      "tag": "0002_story_flags_text",
+      "breakpoints": true
     }
   ]
 }

@@ -14,7 +14,6 @@
  * - conversation_snapshots 某次存档里的具体快照（消息 + NPC 状态）
  */
 import {
-  boolean,
   date,
   integer,
   jsonb,
@@ -108,7 +107,8 @@ export const playerNpcState = pgTable(
 
 /**
  * 剧情 Flag（阶段 C 写入）
- * 如 ch1_bonded、ch3_dream_full；一旦 true 不可回退，只能读档恢复
+ * 普通 flag value = "true"；ch5_player_stance = help|leave|silence
+ * 一旦写入不可回退，只能读档整表恢复
  */
 export const storyFlags = pgTable(
   'story_flags',
@@ -119,8 +119,8 @@ export const storyFlags = pgTable(
     npcId: text('npc_id').notNull(),
     /** Flag 名称，见 Docs/Story/story-canon.md 附录 A */
     flagName: text('flag_name').notNull(),
-    /** 是否已触发，默认 true（本表只记录已触发的 flag） */
-    value: boolean('value').notNull().default(true),
+    /** 置位值：普通 flag 为 "true"；stance 为枚举字符串 */
+    value: text('value').notNull().default('true'),
   },
   (t) => [primaryKey({ columns: [t.playerId, t.npcId, t.flagName] })],
 );

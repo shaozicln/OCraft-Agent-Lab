@@ -68,6 +68,7 @@ export declare const archivedNpcStateSchema: z.ZodObject<{
         uneasy: "uneasy";
         dream_reveal: "dream_reveal";
     }>;
+    story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.core.$strip>;
 export declare const archivedMessageSchema: z.ZodObject<{
     role: z.ZodEnum<{
@@ -90,6 +91,7 @@ export declare const conversationSnapshotSummarySchema: z.ZodObject<{
             uneasy: "uneasy";
             dream_reveal: "dream_reveal";
         }>;
+        story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
     }, z.core.$strip>;
 }, z.core.$strip>;
 export declare const conversationArchiveSummarySchema: z.ZodObject<{
@@ -108,6 +110,7 @@ export declare const conversationArchiveSummarySchema: z.ZodObject<{
                 uneasy: "uneasy";
                 dream_reveal: "dream_reveal";
             }>;
+            story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
         }, z.core.$strip>;
     }, z.core.$strip>>;
 }, z.core.$strip>;
@@ -135,6 +138,7 @@ export declare const conversationArchivesListEventSchema: z.ZodObject<{
                     uneasy: "uneasy";
                     dream_reveal: "dream_reveal";
                 }>;
+                story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
             }, z.core.$strip>;
         }, z.core.$strip>>;
     }, z.core.$strip>>;
@@ -160,6 +164,7 @@ export declare const conversationLoadedEventSchema: z.ZodObject<{
             uneasy: "uneasy";
             dream_reveal: "dream_reveal";
         }>;
+        story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
     }, z.core.$strip>;
 }, z.core.$strip>;
 export type PlayerChatPayload = z.infer<typeof playerChatPayloadSchema>;

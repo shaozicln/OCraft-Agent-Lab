@@ -1,4 +1,7 @@
 When Cursor auto-generates a Git commit message, 
-please always use the Conventional Commits format in plain English (e.g., feat: ..., fix: ..., refactor: ...). Keep it concise.
+use the Conventional Commits format with an English prefix 
+(e.g., feat:, fix:, refactor:) followed by a brief Chinese description. 
+For multiple changes, separate them with / (e.g., feat: 完善数据库 / 一键启动配置). Keep it concise.
 
-Do not create, modify, or suggest test files (*.spec.ts, *.e2e-spec.ts, jest config). This project does not use automated tests.
+Do not create, modify, or suggest test files (*.spec.ts, *.e2e-spec.ts, jest config). 
+This project does not use automated tests.

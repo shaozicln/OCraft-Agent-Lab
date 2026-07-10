@@ -69,6 +69,7 @@ npm run db:studio
 编辑 `.env` 填入 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`（OpenAI 兼容接口，快速体验推荐阿里百炼，有新手额度还方便）。
 
 ### 3. 一键启动
+_先启动Docker_
 
 ```text
 Ctrl+Shift+B
@@ -81,9 +82,21 @@ Ctrl+Shift+B
 
 若无响应：`Ctrl+Shift+P` → **Tasks: Run Task** → **dev:all**
 
+若要自定义启动按键：
+1. 编译器内按 Ctrl+Shift+P，输入 Preferences: Open Keyboard Shortcuts (JSON)。
+2. 在 keybindings.json 中写入：
+```json
+[
+    {
+        "key": "ctrl+shift+b", // 按键组合
+        "command": "workbench.action.tasks.runTask",
+        "args": "dev:all"
+    }
+]
+```
+保存即可
+
 ### 4. 分别启动
-
-
 
 #### 后端（端口 3010）
 
@@ -129,4 +142,6 @@ npm run dev
 
 PS：未配置 LLM Key 时，是写死的固定回复。
 
-*还要做好多东西啊。。。不然可能打不出预想中的多结局ORZ*
+*还要做好多东西啊。。。不然可能打不出预想中的自定义和多结局ORZ*
+
+下一步：扩展各种自定义方式

@@ -5,9 +5,11 @@ import {
   DEFAULT_CHAPTER_STATE,
   type LlmMessage,
   type NpcRuntimeState,
+  type StoryFlagsSnapshot,
 } from '@ocraft/shared';
 import { PlayerStateRepository } from '../db/player-state.repository';
 import { NpcService } from '../npc/npc.service';
+import { StoryFlagService } from '../story/story-flag.service';
 import {
   ConversationArchiveService,
   type ConversationSnapshot,
@@ -32,6 +34,7 @@ export interface RestoreSnapshotResult {
   messages: SessionTranscript['messages'];
   npcState: NpcRuntimeState;
   chapterState: ChapterState;
+  storyFlags: StoryFlagsSnapshot;
 }
 
 @Injectable()
@@ -47,6 +50,7 @@ export class ConversationService {
     private readonly archiveService: ConversationArchiveService,
     private readonly playerStateRepo: PlayerStateRepository,
     private readonly npcService: NpcService,
+    private readonly storyFlagService: StoryFlagService,
   ) {}
 
   private key(playerId: string, npcId: string) {
@@ -67,6 +71,7 @@ export class ConversationService {
     );
 
     await this.npcService.hydrateRuntime(playerId, npcId);
+    await this.storyFlagService.hydrate(playerId, npcId);
     this.chapterStates.set(k, session.chapterState);
     this.history.set(k, session.recentMessages);
 
@@ -177,6 +182,7 @@ export class ConversationService {
         fatigue: npcState.fatigue,
         current_status: npcState.current_status,
         chapter_state: this.getChapterState(playerId, npcId),
+        story_flags: this.storyFlagService.getFlags(playerId, npcId),
       },
       messages: [...transcript.messages],
     };
@@ -241,6 +247,11 @@ export class ConversationService {
     this.sessionArchiveFiles.set(k, safeFilename);
     this.hydrated.add(k);
 
+    const storyFlags: StoryFlagsSnapshot = {
+      ...(snapshot.npc_state.story_flags ?? {}),
+    };
+    await this.storyFlagService.replaceAll(playerId, npcId, storyFlags);
+
     await this.playerStateRepo.saveFullSession(playerId, npcId, {
       runtime: {
         affinity: snapshot.npc_state.affinity,
@@ -264,6 +275,7 @@ export class ConversationService {
         current_status: snapshot.npc_state.current_status,
       },
       chapterState: snapshot.npc_state.chapter_state,
+      storyFlags,
     };
   }
 
@@ -278,5 +290,6 @@ export class ConversationService {
     this.transcripts.delete(k);
     this.sessionArchiveFiles.delete(k);
     this.hydrated.delete(k);
+    this.storyFlagService.clearCache(playerId, npcId);
   }
 }
