@@ -15,7 +15,8 @@
     "lint": "eslint \"src/**/*.ts\" --fix",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "pack:validate": "ts-node -r tsconfig-paths/register scripts/validate-pack.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -3,8 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.DEFAULT_CHAPTER_STATE = exports.chapterStateSchema = void 0;
 const zod_1 = require("zod");
 const story_schema_1 = require("./story.schema");
-/** MVP 章节状态：日常 → 异常回避 → 梦境透露 */
-exports.chapterStateSchema = zod_1.z.enum(['daily', 'uneasy', 'dream_reveal']);
+/**
+ * 章节 ID：由当前 Story Pack 声明（不再写死业务枚举）。
+ * 官方 office 包仍使用 daily / uneasy / dream_reveal。
+ */
+exports.chapterStateSchema = zod_1.z.string().min(1).max(64);
+/** 无 Pack 时的回退默认；有 Pack 时应用 getDefaultChapterId(pack) */
 exports.DEFAULT_CHAPTER_STATE = 'daily';
 exports.playerIdSchema = zod_1.z.string().uuid();
 exports.playerChatPayloadSchema = zod_1.z.object({

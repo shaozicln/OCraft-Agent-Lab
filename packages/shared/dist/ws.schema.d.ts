@@ -1,11 +1,11 @@
 import { z } from 'zod';
-/** MVP 章节状态：日常 → 异常回避 → 梦境透露 */
-export declare const chapterStateSchema: z.ZodEnum<{
-    daily: "daily";
-    uneasy: "uneasy";
-    dream_reveal: "dream_reveal";
-}>;
+/**
+ * 章节 ID：由当前 Story Pack 声明（不再写死业务枚举）。
+ * 官方 office 包仍使用 daily / uneasy / dream_reveal。
+ */
+export declare const chapterStateSchema: z.ZodString;
 export type ChapterState = z.infer<typeof chapterStateSchema>;
+/** 无 Pack 时的回退默认；有 Pack 时应用 getDefaultChapterId(pack) */
 export declare const DEFAULT_CHAPTER_STATE: ChapterState;
 export declare const playerIdSchema: z.ZodString;
 export declare const playerChatPayloadSchema: z.ZodObject<{
@@ -33,11 +33,7 @@ export declare const npcStateUpdateSchema: z.ZodObject<{
     maxFatigue: z.ZodOptional<z.ZodNumber>;
     animation: z.ZodOptional<z.ZodString>;
     current_status: z.ZodOptional<z.ZodString>;
-    chapter_state: z.ZodOptional<z.ZodEnum<{
-        daily: "daily";
-        uneasy: "uneasy";
-        dream_reveal: "dream_reveal";
-    }>>;
+    chapter_state: z.ZodOptional<z.ZodString>;
     toolCalls: z.ZodOptional<z.ZodArray<z.ZodObject<{
         tool: z.ZodString;
         args: z.ZodRecord<z.ZodString, z.ZodUnknown>;
@@ -63,11 +59,7 @@ export declare const archivedNpcStateSchema: z.ZodObject<{
     affinity: z.ZodNumber;
     fatigue: z.ZodNumber;
     current_status: z.ZodString;
-    chapter_state: z.ZodEnum<{
-        daily: "daily";
-        uneasy: "uneasy";
-        dream_reveal: "dream_reveal";
-    }>;
+    chapter_state: z.ZodString;
     story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.core.$strip>;
 export declare const archivedMessageSchema: z.ZodObject<{
@@ -86,11 +78,7 @@ export declare const conversationSnapshotSummarySchema: z.ZodObject<{
         affinity: z.ZodNumber;
         fatigue: z.ZodNumber;
         current_status: z.ZodString;
-        chapter_state: z.ZodEnum<{
-            daily: "daily";
-            uneasy: "uneasy";
-            dream_reveal: "dream_reveal";
-        }>;
+        chapter_state: z.ZodString;
         story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
     }, z.core.$strip>;
 }, z.core.$strip>;
@@ -105,11 +93,7 @@ export declare const conversationArchiveSummarySchema: z.ZodObject<{
             affinity: z.ZodNumber;
             fatigue: z.ZodNumber;
             current_status: z.ZodString;
-            chapter_state: z.ZodEnum<{
-                daily: "daily";
-                uneasy: "uneasy";
-                dream_reveal: "dream_reveal";
-            }>;
+            chapter_state: z.ZodString;
             story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
         }, z.core.$strip>;
     }, z.core.$strip>>;
@@ -133,11 +117,7 @@ export declare const conversationArchivesListEventSchema: z.ZodObject<{
                 affinity: z.ZodNumber;
                 fatigue: z.ZodNumber;
                 current_status: z.ZodString;
-                chapter_state: z.ZodEnum<{
-                    daily: "daily";
-                    uneasy: "uneasy";
-                    dream_reveal: "dream_reveal";
-                }>;
+                chapter_state: z.ZodString;
                 story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
             }, z.core.$strip>;
         }, z.core.$strip>>;
@@ -159,11 +139,7 @@ export declare const conversationLoadedEventSchema: z.ZodObject<{
         affinity: z.ZodNumber;
         fatigue: z.ZodNumber;
         current_status: z.ZodString;
-        chapter_state: z.ZodEnum<{
-            daily: "daily";
-            uneasy: "uneasy";
-            dream_reveal: "dream_reveal";
-        }>;
+        chapter_state: z.ZodString;
         story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
     }, z.core.$strip>;
 }, z.core.$strip>;

@@ -19,6 +19,7 @@ __exportStar(require("./player.schema"), exports);
 __exportStar(require("./npc.schema"), exports);
 __exportStar(require("./ws.schema"), exports);
 __exportStar(require("./story.schema"), exports);
+__exportStar(require("./pack.schema"), exports);
 __exportStar(require("./chapter.util"), exports);
 __exportStar(require("./tools.schema"), exports);
 __exportStar(require("./llm.schema"), exports);

@@ -5,11 +5,7 @@ export declare const npcMemorySchema: z.ZodObject<{
     tags: z.ZodArray<z.ZodString>;
     keywords: z.ZodArray<z.ZodString>;
     content: z.ZodString;
-    min_chapter: z.ZodOptional<z.ZodEnum<{
-        daily: "daily";
-        uneasy: "uneasy";
-        dream_reveal: "dream_reveal";
-    }>>;
+    min_chapter: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export declare const npcMetaSchema: z.ZodObject<{
     avatar: z.ZodString;
@@ -48,11 +44,7 @@ export declare const npcDefinitionSchema: z.ZodObject<{
         tags: z.ZodArray<z.ZodString>;
         keywords: z.ZodArray<z.ZodString>;
         content: z.ZodString;
-        min_chapter: z.ZodOptional<z.ZodEnum<{
-            daily: "daily";
-            uneasy: "uneasy";
-            dream_reveal: "dream_reveal";
-        }>>;
+        min_chapter: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>>;
 }, z.core.$strip>;
 export declare const npcRuntimeStateSchema: z.ZodObject<{

@@ -1,6 +1,7 @@
 # OCraft Game
 
-测试 Agent 回复，根据npc状态变化走剧情的一小段网页端剧情，有 Api-Key 就能玩
+测试 Agent 回复，根据npc状态变化走可自定义剧情的一小段网页端剧情，有 Api-Key 就能玩，大概玩法是是有新点子填填设定就能对话
+
 
 - **前端**：Next.js + React Three Fiber（3D）+ Socket.io  
 - **后端**：NestJS（HTTP + WebSocket）+  LLM  
@@ -69,7 +70,8 @@ npm run db:studio
 编辑 `.env` 填入 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`（OpenAI 兼容接口，快速体验推荐阿里百炼，有新手额度还方便）。
 
 ### 3. 一键启动
-_先启动Docker_
+
+*先启动Docker*
 
 ```text
 Ctrl+Shift+B
@@ -83,8 +85,10 @@ Ctrl+Shift+B
 若无响应：`Ctrl+Shift+P` → **Tasks: Run Task** → **dev:all**
 
 若要自定义启动按键：
+
 1. 编译器内按 Ctrl+Shift+P，输入 Preferences: Open Keyboard Shortcuts (JSON)。
 2. 在 keybindings.json 中写入：
+
 ```json
 [
     {
@@ -94,9 +98,12 @@ Ctrl+Shift+B
     }
 ]
 ```
+
 保存即可
 
 ### 4. 分别启动
+
+
 
 #### 后端（端口 3010）
 

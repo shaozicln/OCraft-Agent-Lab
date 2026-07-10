@@ -65,6 +65,8 @@ export function buildChapterConstraints(chapterState: ChapterState): string {
         '仍禁止透露：OCraft 全貌、被删除同事的具体姓名、公司内部报告原文。',
         '语气要犹豫、像在鼓起勇气，有点想要从玩家这里获得救赎，又怕拉玩家下水，所以不要像解说设定集。',
       ].join('\n');
+    default:
+      return `当前章节：${chapterState}。（Pack 约束尚未接入解释器时的回退文案）`;
   }
 }
 

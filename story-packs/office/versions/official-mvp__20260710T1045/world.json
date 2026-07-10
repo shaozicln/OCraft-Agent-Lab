@@ -1,0 +1,110 @@
+{
+  "default_chapter": "daily",
+  "chapters": [
+    {
+      "id": "daily",
+      "display_name": "困倦搭子",
+      "hud_label": "日常",
+      "rank": 0
+    },
+    {
+      "id": "uneasy",
+      "display_name": "不自然回避",
+      "hud_label": "异常",
+      "rank": 1
+    },
+    {
+      "id": "dream_reveal",
+      "display_name": "被删除的人",
+      "hud_label": "梦境",
+      "rank": 2
+    }
+  ],
+  "flags": [
+    {
+      "name": "ch1_bonded",
+      "type": "bool",
+      "description": "日常搭子关系建立（好感曾≥40）",
+      "irreversible": true
+    },
+    {
+      "name": "ch2_sleep_mentioned",
+      "type": "bool",
+      "description": "玩家关心睡眠/疲惫",
+      "irreversible": true
+    },
+    {
+      "name": "ch2_npc_admitted_tired",
+      "type": "bool",
+      "description": "陈予承认睡得不好",
+      "irreversible": true
+    },
+    {
+      "name": "ch2_floor_avoided",
+      "type": "bool",
+      "description": "十楼/测试区被问起且回避",
+      "irreversible": true
+    },
+    {
+      "name": "ch3_dream_partial",
+      "type": "bool",
+      "description": "半句梦话/口误",
+      "irreversible": true
+    },
+    {
+      "name": "ch3_dream_full",
+      "type": "bool",
+      "description": "梦境核心事实已透露",
+      "irreversible": true
+    },
+    {
+      "name": "ch3_colleague_hint",
+      "type": "bool",
+      "description": "消失同事被暗示",
+      "irreversible": true
+    },
+    {
+      "name": "ch4_ocraft_aware",
+      "type": "bool",
+      "description": "知晓被采样/项目（占位）",
+      "irreversible": true
+    },
+    {
+      "name": "ch5_player_stance",
+      "type": "enum",
+      "description": "玩家站队（占位）",
+      "enum_values": ["help", "leave", "silence"],
+      "irreversible": true
+    },
+    {
+      "name": "ending_locked",
+      "type": "bool",
+      "description": "结局已判定（占位）",
+      "irreversible": true
+    }
+  ],
+  "numeric_tools": {
+    "fatigue_increase": {
+      "triggers": [
+        "加班",
+        "开会",
+        "汇报",
+        "需求",
+        "报告",
+        "熬夜",
+        "bug",
+        "工单",
+        "deadline"
+      ],
+      "delta": 15,
+      "reason": "工作话题加重疲惫"
+    },
+    "interest_hit": {
+      "affinity_delta": 10,
+      "affinity_reason": "共同兴趣",
+      "fatigue_delta": -15,
+      "fatigue_reason": "提到兴趣话题"
+    }
+  },
+  "endings": []
+}

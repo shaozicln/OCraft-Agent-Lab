@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.npcPublicResponseSchema = exports.npcRuntimeStateSchema = exports.npcDefinitionSchema = exports.npcAttributesSchema = exports.npcMetaSchema = exports.npcMemorySchema = exports.vec3Schema = void 0;
 const zod_1 = require("zod");
-const ws_schema_1 = require("./ws.schema");
 exports.vec3Schema = zod_1.z.tuple([
     zod_1.z.number(),
     zod_1.z.number(),
@@ -13,8 +12,8 @@ exports.npcMemorySchema = zod_1.z.object({
     tags: zod_1.z.array(zod_1.z.string()),
     keywords: zod_1.z.array(zod_1.z.string()),
     content: zod_1.z.string(),
-    /** 解锁此记忆的最低章节，默认 daily */
-    min_chapter: ws_schema_1.chapterStateSchema.optional(),
+    /** 解锁此记忆的最低章节 id（由 Pack 声明），默认最低章 */
+    min_chapter: zod_1.z.string().min(1).max(64).optional(),
 });
 exports.npcMetaSchema = zod_1.z.object({
     avatar: zod_1.z.string(),

@@ -1,9 +1,13 @@
 import { z } from 'zod';
 import { storyFlagsSnapshotSchema } from './story.schema';
 
-/** MVP 章节状态：日常 → 异常回避 → 梦境透露 */
-export const chapterStateSchema = z.enum(['daily', 'uneasy', 'dream_reveal']);
+/**
+ * 章节 ID：由当前 Story Pack 声明（不再写死业务枚举）。
+ * 官方 office 包仍使用 daily / uneasy / dream_reveal。
+ */
+export const chapterStateSchema = z.string().min(1).max(64);
 export type ChapterState = z.infer<typeof chapterStateSchema>;
+/** 无 Pack 时的回退默认；有 Pack 时应用 getDefaultChapterId(pack) */
 export const DEFAULT_CHAPTER_STATE: ChapterState = 'daily';
 
 export const playerIdSchema = z.string().uuid();

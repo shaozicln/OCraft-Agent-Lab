@@ -1,6 +1,7 @@
 import type { ChapterState } from './ws.schema';
 
-const CHAPTER_RANK: Record<ChapterState, number> = {
+/** 无 Pack 时的回退 rank（官方 office 三章） */
+const FALLBACK_CHAPTER_RANK: Record<string, number> = {
   daily: 0,
   uneasy: 1,
   dream_reveal: 2,
@@ -10,6 +11,13 @@ const CHAPTER_RANK: Record<ChapterState, number> = {
 export function isChapterAtLeast(
   current: ChapterState,
   required: ChapterState,
+  rankMap?: Record<string, number>,
 ): boolean {
-  return CHAPTER_RANK[current] >= CHAPTER_RANK[required];
+  const ranks = rankMap ?? FALLBACK_CHAPTER_RANK;
+  const cur = ranks[current];
+  const req = ranks[required];
+  if (cur === undefined || req === undefined) {
+    return current === required;
+  }
+  return cur >= req;
 }

@@ -12,8 +12,8 @@ export const npcMemorySchema = z.object({
   tags: z.array(z.string()),
   keywords: z.array(z.string()),
   content: z.string(),
-  /** 解锁此记忆的最低章节，默认 daily */
-  min_chapter: chapterStateSchema.optional(),
+  /** 解锁此记忆的最低章节 id（由 Pack 声明），默认最低章 */
+  min_chapter: z.string().min(1).max(64).optional(),
 });
 
 export const npcMetaSchema = z.object({
