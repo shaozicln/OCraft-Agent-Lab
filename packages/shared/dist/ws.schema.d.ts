@@ -1,12 +1,10 @@
 import { z } from 'zod';
 /**
  * 章节 ID：由当前 Story Pack 声明（不再写死业务枚举）。
- * 官方 office 包仍使用 daily / uneasy / dream_reveal。
  */
 export declare const chapterStateSchema: z.ZodString;
 export type ChapterState = z.infer<typeof chapterStateSchema>;
-/** 无 Pack 时的回退默认；有 Pack 时应用 getDefaultChapterId(pack) */
-export declare const DEFAULT_CHAPTER_STATE: ChapterState;
+/** 玩家 UID：三位数字字符串，如 001（注册时顺序分配） */
 export declare const playerIdSchema: z.ZodString;
 export declare const playerChatPayloadSchema: z.ZodObject<{
     npcId: z.ZodString;

@@ -1,8 +1,41 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* 浅色：白 / 半透明白 */
+html[data-theme="light"] {
+  --ui-bg: #f8fafc;
+  --ui-bg-elevated: #ffffff;
+  --ui-panel: rgba(255, 255, 255, 0.88);
+  --ui-panel-solid: #ffffff;
+  --ui-fg: #0f172a;
+  --ui-fg-muted: #64748b;
+  --ui-border: rgba(15, 23, 42, 0.12);
+  --ui-accent: #0284c7;
+  --ui-accent-fg: #ffffff;
+  --ui-danger: #dc2626;
+  --ui-input: #ffffff;
+  --ui-overlay: rgba(15, 23, 42, 0.25);
+  --ui-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+  --background: var(--ui-bg);
+  --foreground: var(--ui-fg);
+}
+
+/* 深色：蓝黑 / 半透明蓝黑（现控制台） */
+html[data-theme="dark"] {
+  --ui-bg: #0f172a;
+  --ui-bg-elevated: #1e293b;
+  --ui-panel: rgba(15, 23, 42, 0.88);
+  --ui-panel-solid: #0f172a;
+  --ui-fg: #f1f5f9;
+  --ui-fg-muted: #94a3b8;
+  --ui-border: rgba(148, 163, 184, 0.25);
+  --ui-accent: #38bdf8;
+  --ui-accent-fg: #0f172a;
+  --ui-danger: #f87171;
+  --ui-input: #1e293b;
+  --ui-overlay: rgba(2, 6, 23, 0.45);
+  --ui-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  --background: var(--ui-bg);
+  --foreground: var(--ui-fg);
 }
 
 @theme inline {
@@ -12,23 +45,15 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* 全局滚动条：隐藏默认粗条，改为蓝色细线 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #38bdf8 transparent;
+  scrollbar-color: var(--ui-accent) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -41,12 +66,12 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: #38bdf8;
+  background-color: var(--ui-accent);
   border-radius: 9999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: #0ea5e9;
+  opacity: 0.9;
 }
 
 *::-webkit-scrollbar-corner {

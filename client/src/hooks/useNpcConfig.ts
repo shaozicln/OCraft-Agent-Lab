@@ -2,19 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import type { NpcPublicResponse } from '@ocraft/shared';
-import { DEFAULT_NPC_ID, GAME_SERVER_URL } from '@/config/game';
+import { GAME_SERVER_URL } from '@/config/game';
 
-export function useNpcConfig(npcId = DEFAULT_NPC_ID) {
+export function useNpcConfig(npcId: string, token: string) {
   const [npc, setNpc] = useState<NpcPublicResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!npcId || !token) {
+      setLoading(false);
+      setNpc(null);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    fetch(`${GAME_SERVER_URL}/npc/${npcId}`)
+    fetch(`${GAME_SERVER_URL}/npc/${encodeURIComponent(npcId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(`Failed to load NPC (${res.status})`);
@@ -37,7 +44,7 @@ export function useNpcConfig(npcId = DEFAULT_NPC_ID) {
     return () => {
       cancelled = true;
     };
-  }, [npcId]);
+  }, [npcId, token]);
 
   return { npc, loading, error };
 }

@@ -1,10 +1,189 @@
 {
   "version": 1,
+  "rules": [
+    {
+      "id": "bond_daily",
+      "enabled": true,
+      "from_chapter": "daily",
+      "to_chapter": null,
+      "min_affinity": 40,
+      "require_flags": [],
+      "player_triggers": [],
+      "set_flags": [
+        {
+          "name": "ch1_bonded",
+          "value": "true"
+        }
+      ],
+      "notes": "好感曾≥40 即置搭子 flag，不升章"
+    },
+    {
+      "id": "daily_to_uneasy",
+      "enabled": true,
+      "from_chapter": "daily",
+      "to_chapter": "uneasy",
+      "min_affinity": 40,
+      "max_fatigue": 70,
+      "require_flags": [
+        "ch1_bonded"
+      ],
+      "player_triggers": [
+        "没睡好",
+        "睡不好",
+        "失眠",
+        "没休息",
+        "休息不好",
+        "精神不好",
+        "最近是不是"
+      ],
+      "set_flags": [
+        {
+          "name": "ch2_sleep_mentioned",
+          "value": "true"
+        }
+      ],
+      "notes": "演示句②；fatigue≤70 才升 uneasy"
+    },
+    {
+      "id": "floor_avoided",
+      "enabled": true,
+      "from_chapter": "uneasy",
+      "to_chapter": null,
+      "min_affinity": 0,
+      "require_flags": [],
+      "player_triggers": [
+        "十楼",
+        "测试区",
+        "测试楼"
+      ],
+      "set_flags": [
+        {
+          "name": "ch2_floor_avoided",
+          "value": "true"
+        }
+      ],
+      "notes": "玩家问起十楼/测试区；不升章"
+    },
+    {
+      "id": "dream_partial",
+      "enabled": true,
+      "from_chapter": "uneasy",
+      "to_chapter": null,
+      "min_affinity": 0,
+      "require_flags": [
+        "ch2_sleep_mentioned"
+      ],
+      "player_triggers": [
+        "做梦",
+        "做噩梦",
+        "梦到",
+        "梦见"
+      ],
+      "set_flags": [
+        {
+          "name": "ch3_dream_partial",
+          "value": "true"
+        }
+      ],
+      "notes": "uneasy 下触及梦但未升章时记半句口误节点"
+    },
+    {
+      "id": "uneasy_to_dream_reveal",
+      "enabled": true,
+      "from_chapter": "uneasy",
+      "to_chapter": "dream_reveal",
+      "min_affinity": 45,
+      "require_flags": [
+        "ch2_sleep_mentioned"
+      ],
+      "player_triggers": [
+        "同一个梦",
+        "重复的梦",
+        "总做",
+        "老是做",
+        "做梦",
+        "噩梦"
+      ],
+      "set_flags": [
+        {
+          "name": "ch3_dream_full",
+          "value": "true"
+        }
+      ],
+      "notes": "演示句③"
+    },
+    {
+      "id": "colleague_hint",
+      "enabled": true,
+      "from_chapter": "dream_reveal",
+      "to_chapter": null,
+      "min_affinity": 55,
+      "require_flags": [
+        "ch3_dream_full"
+      ],
+      "player_triggers": [
+        "同事",
+        "离职",
+        "名单",
+        "消失"
+      ],
+      "set_flags": [
+        {
+          "name": "ch3_colleague_hint",
+          "value": "true"
+        }
+      ],
+      "notes": "消失同事暗示；不升章"
+    },
+    {
+      "id": "ch4_ocraft_aware_placeholder",
+      "enabled": false,
+      "from_chapter": "dream_reveal",
+      "to_chapter": null,
+      "min_affinity": 70,
+      "require_flags": [
+        "ch3_dream_full"
+      ],
+      "player_triggers": [
+        "OCraft",
+        "采样",
+        "人格校准"
+      ],
+      "set_flags": [
+        {
+          "name": "ch4_ocraft_aware",
+          "value": "true"
+        }
+      ],
+      "notes": "P3 启用"
+    },
+    {
+      "id": "ch5_stance_placeholder",
+      "enabled": false,
+      "from_chapter": "dream_reveal",
+      "to_chapter": null,
+      "min_affinity": 0,
+      "require_flags": [
+        "ch4_ocraft_aware"
+      ],
+      "player_triggers": [
+        "我帮你",
+        "一起走",
+        "算了",
+        "交给公司"
+      ],
+      "set_flags": [],
+      "notes": "P3：由代码写 ch5_player_stance / ending_locked"
+    }
+  ],
   "npc_reply_flag_rules": [
     {
       "id": "admit_tired",
       "enabled": true,
-      "when_chapter_in": ["uneasy", "dream_reveal"],
+      "when_chapter_in": [
+        "uneasy",
+        "dream_reveal"
+      ],
       "set_flag": "ch2_npc_admitted_tired",
       "value": "true",
       "triggers": [
@@ -16,112 +195,6 @@
         "没休息好",
         "休息不好"
       ]
-    }
-  ],
-  "rules": [
-    {
-      "id": "bond_daily",
-      "enabled": true,
-      "from_chapter": "daily",
-      "to_chapter": null,
-      "min_affinity": 40,
-      "require_flags": [],
-      "player_triggers": [],
-      "set_flags": [{ "name": "ch1_bonded", "value": "true" }],
-      "notes": "好感曾≥40 即置搭子 flag，不升章"
-    },
-    {
-      "id": "daily_to_uneasy",
-      "enabled": true,
-      "from_chapter": "daily",
-      "to_chapter": "uneasy",
-      "min_affinity": 40,
-      "max_fatigue": 70,
-      "require_flags": ["ch1_bonded"],
-      "player_triggers": [
-        "没睡好",
-        "睡不好",
-        "失眠",
-        "没休息",
-        "休息不好",
-        "精神不好",
-        "最近是不是"
-      ],
-      "set_flags": [{ "name": "ch2_sleep_mentioned", "value": "true" }],
-      "notes": "演示句②；fatigue≤70 才升 uneasy"
-    },
-    {
-      "id": "floor_avoided",
-      "enabled": true,
-      "from_chapter": "uneasy",
-      "to_chapter": null,
-      "min_affinity": 0,
-      "require_flags": [],
-      "player_triggers": ["十楼", "测试区", "测试楼"],
-      "set_flags": [{ "name": "ch2_floor_avoided", "value": "true" }],
-      "notes": "玩家问起十楼/测试区；不升章"
-    },
-    {
-      "id": "dream_partial",
-      "enabled": true,
-      "from_chapter": "uneasy",
-      "to_chapter": null,
-      "min_affinity": 0,
-      "require_flags": ["ch2_sleep_mentioned"],
-      "player_triggers": ["做梦", "做噩梦", "梦到", "梦见"],
-      "set_flags": [{ "name": "ch3_dream_partial", "value": "true" }],
-      "notes": "uneasy 下触及梦但未升章时记半句口误节点"
-    },
-    {
-      "id": "uneasy_to_dream_reveal",
-      "enabled": true,
-      "from_chapter": "uneasy",
-      "to_chapter": "dream_reveal",
-      "min_affinity": 45,
-      "require_flags": ["ch2_sleep_mentioned"],
-      "player_triggers": [
-        "同一个梦",
-        "重复的梦",
-        "总做",
-        "老是做",
-        "做梦",
-        "噩梦"
-      ],
-      "set_flags": [{ "name": "ch3_dream_full", "value": "true" }],
-      "notes": "演示句③"
-    },
-    {
-      "id": "colleague_hint",
-      "enabled": true,
-      "from_chapter": "dream_reveal",
-      "to_chapter": null,
-      "min_affinity": 55,
-      "require_flags": ["ch3_dream_full"],
-      "player_triggers": ["同事", "离职", "名单", "消失"],
-      "set_flags": [{ "name": "ch3_colleague_hint", "value": "true" }],
-      "notes": "消失同事暗示；不升章"
-    },
-    {
-      "id": "ch4_ocraft_aware_placeholder",
-      "enabled": false,
-      "from_chapter": "dream_reveal",
-      "to_chapter": null,
-      "min_affinity": 70,
-      "require_flags": ["ch3_dream_full"],
-      "player_triggers": ["OCraft", "采样", "人格校准"],
-      "set_flags": [{ "name": "ch4_ocraft_aware", "value": "true" }],
-      "notes": "P3 启用"
-    },
-    {
-      "id": "ch5_stance_placeholder",
-      "enabled": false,
-      "from_chapter": "dream_reveal",
-      "to_chapter": null,
-      "min_affinity": 0,
-      "require_flags": ["ch4_ocraft_aware"],
-      "player_triggers": ["我帮你", "一起走", "算了", "交给公司"],
-      "set_flags": [],
-      "notes": "P3：由代码写 ch5_player_stance / ending_locked"
     }
   ]
 }

@@ -1,19 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
 import {
-  DEFAULT_CHAPTER_STATE,
   type ArchivedMessage,
   type ChapterState,
   type LlmMessage,
   type NpcRuntimeState,
-  type PlayerProfile,
-  type UpdatePlayerProfilePayload,
+  type PlayerExtra,
+  type PlayerGender,
+  type PlayerPackProfile,
 } from '@ocraft/shared';
 import { DbService } from './db.service';
 import {
   conversationArchives,
   conversationSnapshots,
   playerNpcState,
+  playerPackProfiles,
   players,
 } from './schema';
 
@@ -26,6 +27,26 @@ export interface PersistedSessionRow {
   activeArchiveFilename: string | null;
 }
 
+function emptyPackProfile(
+  playerId: string,
+  worldId: string,
+  packVersionId: string,
+): PlayerPackProfile {
+  return {
+    playerId,
+    worldId,
+    packVersionId,
+    realName: null,
+    onlineName: null,
+    jobTitle: null,
+    gender: null,
+    age: null,
+    birthday: null,
+    extra: {},
+    updatedAt: new Date(0).toISOString(),
+  };
+}
+
 @Injectable()
 export class PlayerStateRepository {
   private readonly logger = new Logger(PlayerStateRepository.name);
@@ -35,24 +56,34 @@ export class PlayerStateRepository {
   async ensurePlayer(playerId: string): Promise<void> {
     if (!this.dbService.isReady) return;
     const db = this.dbService.db;
-    await db
-      .insert(players)
-      .values({ id: playerId, extra: {} })
-      .onConflictDoNothing();
+    await db.insert(players).values({ id: playerId }).onConflictDoNothing();
   }
 
-  async getPlayerProfile(playerId: string): Promise<PlayerProfile | null> {
+  async getPackProfile(
+    playerId: string,
+    worldId: string,
+    packVersionId: string,
+  ): Promise<PlayerPackProfile | null> {
     if (!this.dbService.isReady) return null;
+    await this.ensurePlayer(playerId);
     const db = this.dbService.db;
     const rows = await db
       .select()
-      .from(players)
-      .where(eq(players.id, playerId))
+      .from(playerPackProfiles)
+      .where(
+        and(
+          eq(playerPackProfiles.playerId, playerId),
+          eq(playerPackProfiles.worldId, worldId),
+          eq(playerPackProfiles.packVersionId, packVersionId),
+        ),
+      )
       .limit(1);
     const row = rows[0];
-    if (!row) return null;
+    if (!row) return emptyPackProfile(playerId, worldId, packVersionId);
     return {
-      id: row.id,
+      playerId: row.playerId,
+      worldId: row.worldId,
+      packVersionId: row.packVersionId,
       realName: row.realName,
       onlineName: row.onlineName,
       jobTitle: row.jobTitle,
@@ -60,52 +91,92 @@ export class PlayerStateRepository {
       age: row.age,
       birthday: row.birthday,
       extra: row.extra ?? {},
-      createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
   }
 
-  async updatePlayerProfile(
+  async updatePackProfile(
     playerId: string,
-    patch: Omit<UpdatePlayerProfilePayload, 'playerId'>,
-  ): Promise<PlayerProfile | null> {
+    worldId: string,
+    packVersionId: string,
+    patch: {
+      realName?: string | null;
+      onlineName?: string | null;
+      jobTitle?: string | null;
+      gender?: PlayerGender | null;
+      age?: number | null;
+      birthday?: string | null;
+      extra?: PlayerExtra;
+    },
+  ): Promise<PlayerPackProfile | null> {
     if (!this.dbService.isReady) return null;
     await this.ensurePlayer(playerId);
     const db = this.dbService.db;
     const now = new Date();
-    const set: Partial<typeof players.$inferInsert> = { updatedAt: now };
-    if (patch.realName !== undefined) set.realName = patch.realName;
-    if (patch.onlineName !== undefined) set.onlineName = patch.onlineName;
-    if (patch.jobTitle !== undefined) set.jobTitle = patch.jobTitle;
-    if (patch.gender !== undefined) set.gender = patch.gender;
-    if (patch.age !== undefined) set.age = patch.age;
-    if (patch.birthday !== undefined) set.birthday = patch.birthday;
-    if (patch.extra !== undefined) set.extra = patch.extra;
+    const existing = await this.getPackProfile(playerId, worldId, packVersionId);
+    const next = {
+      realName:
+        patch.realName !== undefined ? patch.realName : (existing?.realName ?? null),
+      onlineName:
+        patch.onlineName !== undefined
+          ? patch.onlineName
+          : (existing?.onlineName ?? null),
+      jobTitle:
+        patch.jobTitle !== undefined ? patch.jobTitle : (existing?.jobTitle ?? null),
+      gender: patch.gender !== undefined ? patch.gender : (existing?.gender ?? null),
+      age: patch.age !== undefined ? patch.age : (existing?.age ?? null),
+      birthday:
+        patch.birthday !== undefined ? patch.birthday : (existing?.birthday ?? null),
+      extra: patch.extra !== undefined ? patch.extra : (existing?.extra ?? {}),
+    };
 
     await db
-      .insert(players)
+      .insert(playerPackProfiles)
       .values({
-        id: playerId,
-        extra: patch.extra ?? {},
-        ...set,
+        playerId,
+        worldId,
+        packVersionId,
+        ...next,
+        updatedAt: now,
       })
       .onConflictDoUpdate({
-        target: players.id,
-        set,
+        target: [
+          playerPackProfiles.playerId,
+          playerPackProfiles.worldId,
+          playerPackProfiles.packVersionId,
+        ],
+        set: { ...next, updatedAt: now },
       });
 
-    return this.getPlayerProfile(playerId);
+    return this.getPackProfile(playerId, worldId, packVersionId);
+  }
+
+  private sessionWhere(
+    playerId: string,
+    worldId: string,
+    packVersionId: string,
+    npcId: string,
+  ) {
+    return and(
+      eq(playerNpcState.playerId, playerId),
+      eq(playerNpcState.worldId, worldId),
+      eq(playerNpcState.packVersionId, packVersionId),
+      eq(playerNpcState.npcId, npcId),
+    );
   }
 
   async loadSession(
     playerId: string,
+    worldId: string,
+    packVersionId: string,
     npcId: string,
     defaults: NpcRuntimeState,
+    defaultChapter: ChapterState,
   ): Promise<PersistedSessionRow> {
     if (!this.dbService.isReady) {
       return {
         runtime: defaults,
-        chapterState: DEFAULT_CHAPTER_STATE,
+        chapterState: defaultChapter,
         recentMessages: [],
         transcriptMessages: [],
         sessionStartedAt: null,
@@ -118,29 +189,26 @@ export class PlayerStateRepository {
     const rows = await db
       .select()
       .from(playerNpcState)
-      .where(
-        and(
-          eq(playerNpcState.playerId, playerId),
-          eq(playerNpcState.npcId, npcId),
-        ),
-      )
+      .where(this.sessionWhere(playerId, worldId, packVersionId, npcId))
       .limit(1);
 
     const row = rows[0];
     if (!row) {
       await db.insert(playerNpcState).values({
         playerId,
+        worldId,
+        packVersionId,
         npcId,
         affinity: defaults.affinity,
         fatigue: defaults.fatigue,
         currentStatus: defaults.current_status,
-        chapterState: DEFAULT_CHAPTER_STATE,
+        chapterState: defaultChapter,
         recentMessages: [],
         transcriptMessages: [],
       });
       return {
         runtime: defaults,
-        chapterState: DEFAULT_CHAPTER_STATE,
+        chapterState: defaultChapter,
         recentMessages: [],
         transcriptMessages: [],
         sessionStartedAt: null,
@@ -164,8 +232,11 @@ export class PlayerStateRepository {
 
   async saveRuntime(
     playerId: string,
+    worldId: string,
+    packVersionId: string,
     npcId: string,
     runtime: NpcRuntimeState,
+    defaultChapter: ChapterState,
   ): Promise<void> {
     if (!this.dbService.isReady) return;
     await this.ensurePlayer(playerId);
@@ -174,14 +245,21 @@ export class PlayerStateRepository {
       .insert(playerNpcState)
       .values({
         playerId,
+        worldId,
+        packVersionId,
         npcId,
         affinity: runtime.affinity,
         fatigue: runtime.fatigue,
         currentStatus: runtime.current_status,
-        chapterState: DEFAULT_CHAPTER_STATE,
+        chapterState: defaultChapter,
       })
       .onConflictDoUpdate({
-        target: [playerNpcState.playerId, playerNpcState.npcId],
+        target: [
+          playerNpcState.playerId,
+          playerNpcState.worldId,
+          playerNpcState.packVersionId,
+          playerNpcState.npcId,
+        ],
         set: {
           affinity: runtime.affinity,
           fatigue: runtime.fatigue,
@@ -192,6 +270,8 @@ export class PlayerStateRepository {
 
   async saveChapterState(
     playerId: string,
+    worldId: string,
+    packVersionId: string,
     npcId: string,
     chapterState: ChapterState,
   ): Promise<void> {
@@ -201,16 +281,13 @@ export class PlayerStateRepository {
     await db
       .update(playerNpcState)
       .set({ chapterState })
-      .where(
-        and(
-          eq(playerNpcState.playerId, playerId),
-          eq(playerNpcState.npcId, npcId),
-        ),
-      );
+      .where(this.sessionWhere(playerId, worldId, packVersionId, npcId));
   }
 
   async saveConversationBuffers(
     playerId: string,
+    worldId: string,
+    packVersionId: string,
     npcId: string,
     data: {
       recentMessages: LlmMessage[];
@@ -235,16 +312,13 @@ export class PlayerStateRepository {
           activeArchiveFilename: data.activeArchiveFilename,
         }),
       })
-      .where(
-        and(
-          eq(playerNpcState.playerId, playerId),
-          eq(playerNpcState.npcId, npcId),
-        ),
-      );
+      .where(this.sessionWhere(playerId, worldId, packVersionId, npcId));
   }
 
   async saveFullSession(
     playerId: string,
+    worldId: string,
+    packVersionId: string,
     npcId: string,
     data: {
       runtime: NpcRuntimeState;
@@ -262,6 +336,8 @@ export class PlayerStateRepository {
       .insert(playerNpcState)
       .values({
         playerId,
+        worldId,
+        packVersionId,
         npcId,
         affinity: data.runtime.affinity,
         fatigue: data.runtime.fatigue,
@@ -275,7 +351,12 @@ export class PlayerStateRepository {
         activeArchiveFilename: data.activeArchiveFilename ?? null,
       })
       .onConflictDoUpdate({
-        target: [playerNpcState.playerId, playerNpcState.npcId],
+        target: [
+          playerNpcState.playerId,
+          playerNpcState.worldId,
+          playerNpcState.packVersionId,
+          playerNpcState.npcId,
+        ],
         set: {
           affinity: data.runtime.affinity,
           fatigue: data.runtime.fatigue,

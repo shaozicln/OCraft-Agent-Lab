@@ -7,9 +7,11 @@
  * 3. npm run db:migrate
  *
  * 表一览：
- * - players              玩家账号与资料（真名、网名、岗位等）
- * - player_npc_state     某玩家与某 NPC 的当前进度（好感、章节、对话缓存）
- * - story_flags          剧情节点是否已触发（阶段 C 启用，只升不降）
+ * - players              玩家账号 + 选用 Pack
+ * - player_pack_profiles 某玩家在某包版本下的角色人设
+ * - player_npc_state     某玩家在某包版本下与某 NPC 的当前进度
+ * - story_flags          剧情节点是否已触发（按包隔离，只升不降）
+ * - story_pack_versions  seed 进库的包版本全文（JSONB）
  * - conversation_archives 一次游戏会话的存档「文件」元数据
  * - conversation_snapshots 某次存档里的具体快照（消息 + NPC 状态）
  */
@@ -31,32 +33,23 @@ import type {
   LlmMessage,
   PlayerExtra,
   PlayerGender,
+  StoryPack,
 } from '@ocraft/shared';
 
-/** 玩家表：登录账号与游戏资料 */
+/** 玩家表：登录账号 + 选用 Pack（角色人设见 player_pack_profiles） */
 export const players = pgTable(
   'players',
   {
-    /** 玩家唯一 ID（服务端生成 UUID） */
-    id: uuid('id').primaryKey(),
+    /** 玩家 UID：三位数字，如 001（注册时顺序分配） */
+    id: text('id').primaryKey(),
     /** 登录用户名（小写存储，全局唯一） */
     username: text('username'),
     /** scrypt 密码哈希，格式 salt:hash */
     passwordHash: text('password_hash'),
-  /** 真名 / 公司用户名（工牌、协作软件显示名） */
-  realName: text('real_name'),
-  /** 游戏内网名（Steam、论坛等；剧情可吐槽「全网同名」） */
-  onlineName: text('online_name'),
-  /** 公司岗位（如前端、测试、运营） */
-  jobTitle: text('job_title'),
-  /** 性别：male | female | other | undisclosed */
-  gender: text('gender').$type<PlayerGender | null>(),
-  /** 年龄 */
-  age: integer('age'),
-  /** 生日，格式 YYYY-MM-DD */
-  birthday: date('birthday', { mode: 'string' }),
-  /** 玩家自填扩展资料 JSON（爱好、忌口等），默认空对象 */
-  extra: jsonb('extra').$type<PlayerExtra>().notNull().default({}),
+  /** 选用的世界；null = 跟随全服默认默认 */
+  selectedWorldId: text('selected_world_id'),
+  /** 选用的包版本目录名；null = 跟随全服默认默认 */
+  selectedPackVersionId: text('selected_pack_version_id'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -68,15 +61,78 @@ export const players = pgTable(
 );
 
 /**
- * 玩家 × NPC 运行时状态
- * 一行 = 一个玩家对一个 NPC 的当前进度（刷新页面后从这里恢复）
+ * 玩家在某 Pack 版本下的角色人设（与进度一样按版本隔离）
+ */
+export const playerPackProfiles = pgTable(
+  'player_pack_profiles',
+  {
+    playerId: text('player_id')
+      .notNull()
+      .references(() => players.id),
+    worldId: text('world_id').notNull(),
+    packVersionId: text('pack_version_id').notNull(),
+    /** 真名 / 公司用户名 */
+    realName: text('real_name'),
+    /** 游戏内网名 */
+    onlineName: text('online_name'),
+    /** 公司岗位 */
+    jobTitle: text('job_title'),
+    gender: text('gender').$type<PlayerGender | null>(),
+    age: integer('age'),
+    birthday: date('birthday', { mode: 'string' }),
+    /** 个人设定等扩展 JSON */
+    extra: jsonb('extra').$type<PlayerExtra>().notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.playerId, t.worldId, t.packVersionId],
+      name: 'player_pack_profiles_pk',
+    }),
+  ],
+);
+
+/**
+ * seed 进库的 Story Pack 版本（磁盘仍为真相源；库供运行时/面板）
+ */
+export const storyPackVersions = pgTable(
+  'story_pack_versions',
+  {
+    worldId: text('world_id').notNull(),
+    packVersionId: text('pack_version_id').notNull(),
+    displayName: text('display_name').notNull(),
+    createdAt: text('created_at').notNull(),
+    notes: text('notes'),
+    /** 完整 StoryPack JSON */
+    packJson: jsonb('pack_json').notNull().$type<StoryPack>(),
+    seededAt: timestamp('seeded_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.worldId, t.packVersionId],
+      name: 'story_pack_versions_pk',
+    }),
+  ],
+);
+
+/**
+ * 玩家 × Pack × NPC 运行时状态
+ * 一行 = 某玩家在某包版本下对某 NPC 的当前进度（换包不串档）
  */
 export const playerNpcState = pgTable(
   'player_npc_state',
   {
-    playerId: uuid('player_id')
+    playerId: text('player_id')
       .notNull()
       .references(() => players.id),
+    /** Story Pack 世界 ID，如 office */
+    worldId: text('world_id').notNull(),
+    /** 版本目录名，如 official-mvp__20260710T1045 */
+    packVersionId: text('pack_version_id').notNull(),
     /** NPC 标识，如 colleague_chenyu */
     npcId: text('npc_id').notNull(),
     /** 好感度 0–100 */
@@ -85,7 +141,7 @@ export const playerNpcState = pgTable(
     fatigue: integer('fatigue').notNull(),
     /** 当前动画/状态，如 sleeping、talk、excited_talk */
     currentStatus: text('current_status').notNull(),
-    /** 剧情章节：daily | uneasy | dream_reveal（只升不降） */
+    /** 剧情章节 id（由 Pack 声明，只升不降） */
     chapterState: text('chapter_state').notNull().$type<ChapterState>(),
     /** 最近几轮对话，供 LLM 当上下文（约 6 轮） */
     recentMessages: jsonb('recent_messages')
@@ -102,27 +158,39 @@ export const playerNpcState = pgTable(
     /** 若本会话已存过档，对应 conversation_archives.filename */
     activeArchiveFilename: text('active_archive_filename'),
   },
-  (t) => [primaryKey({ columns: [t.playerId, t.npcId] })],
+  (t) => [
+    primaryKey({
+      columns: [t.playerId, t.worldId, t.packVersionId, t.npcId],
+      name: 'player_npc_state_pk',
+    }),
+  ],
 );
 
 /**
- * 剧情 Flag（阶段 C 写入）
- * 普通 flag value = "true"；ch5_player_stance = help|leave|silence
+ * 剧情 Flag（按 Pack 隔离）
+ * 普通 flag value = "true"；enum flag 为包内声明的枚举值
  * 一旦写入不可回退，只能读档整表恢复
  */
 export const storyFlags = pgTable(
   'story_flags',
   {
-    playerId: uuid('player_id')
+    playerId: text('player_id')
       .notNull()
       .references(() => players.id),
+    worldId: text('world_id').notNull(),
+    packVersionId: text('pack_version_id').notNull(),
     npcId: text('npc_id').notNull(),
-    /** Flag 名称，见 Docs/Story/story-canon.md 附录 A */
+    /** Flag 名称，由当前 Pack 的 world.flags 声明 */
     flagName: text('flag_name').notNull(),
     /** 置位值：普通 flag 为 "true"；stance 为枚举字符串 */
     value: text('value').notNull().default('true'),
   },
-  (t) => [primaryKey({ columns: [t.playerId, t.npcId, t.flagName] })],
+  (t) => [
+    primaryKey({
+      columns: [t.playerId, t.worldId, t.packVersionId, t.npcId, t.flagName],
+      name: 'story_flags_pk',
+    }),
+  ],
 );
 
 /**
@@ -133,7 +201,7 @@ export const conversationArchives = pgTable(
   'conversation_archives',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    playerId: uuid('player_id')
+    playerId: text('player_id')
       .notNull()
       .references(() => players.id),
     npcId: text('npc_id').notNull(),

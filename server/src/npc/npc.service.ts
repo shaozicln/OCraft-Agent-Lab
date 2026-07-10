@@ -1,47 +1,53 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   NpcDefinition,
   NpcPublicResponse,
   NpcRuntimeState,
-  npcDefinitionSchema,
+  type PackNpc,
 } from '@ocraft/shared';
 import { PlayerStateRepository } from '../db/player-state.repository';
+import { PackService } from '../story/pack.service';
 import {
   assembleSystemPrompt,
   type SystemPromptContext,
 } from './prompt-builder';
 
+function packNpcToDefinition(npc: PackNpc): NpcDefinition {
+  return {
+    npc_id: npc.npc_id,
+    name: npc.name,
+    meta: npc.meta,
+    attributes: npc.attributes,
+    system_prompt_template: npc.system_prompt_template,
+    memories: npc.memories,
+  };
+}
+
 @Injectable()
 export class NpcService {
   private readonly logger = new Logger(NpcService.name);
-  private readonly mockDataDir = path.join(__dirname, '..', '..', 'mock-data');
-  private definitions = new Map<string, NpcDefinition>();
-  /** key: `${playerId}:${npcId}` */
+  /** key: PackService.sessionKey(playerId, npcId) */
   private runtimeCache = new Map<string, NpcRuntimeState>();
 
-  constructor(private readonly playerStateRepo: PlayerStateRepository) {
-    this.loadDefinitions();
-  }
+  constructor(
+    private readonly playerStateRepo: PlayerStateRepository,
+    private readonly packService: PackService,
+  ) {}
 
   sessionKey(playerId: string, npcId: string): string {
-    return `${playerId}:${npcId}`;
+    return this.packService.sessionKey(playerId, npcId);
   }
 
-  private loadDefinitions() {
-    const filePath = path.join(this.mockDataDir, 'npc.json');
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    const npc = npcDefinitionSchema.parse(JSON.parse(raw));
-    this.definitions.set(npc.npc_id, npc);
+  private progressKey() {
+    return this.packService.getProgressKey();
   }
 
   getDefinition(npcId: string): NpcDefinition {
-    const def = this.definitions.get(npcId);
-    if (!def) {
+    const npc = this.packService.tryGetNpc(npcId);
+    if (!npc) {
       throw new NotFoundException(`NPC not found: ${npcId}`);
     }
-    return def;
+    return packNpcToDefinition(npc);
   }
 
   getPublicProfile(npcId: string): NpcPublicResponse {
@@ -65,10 +71,14 @@ export class NpcService {
   }
 
   async hydrateRuntime(playerId: string, npcId: string): Promise<NpcRuntimeState> {
+    const { worldId, packVersionId } = this.progressKey();
     const session = await this.playerStateRepo.loadSession(
       playerId,
+      worldId,
+      packVersionId,
       npcId,
       this.getDefaultRuntimeState(npcId),
+      this.packService.getDefaultChapter(),
     );
     const key = this.sessionKey(playerId, npcId);
     this.runtimeCache.set(key, session.runtime);
@@ -99,7 +109,15 @@ export class NpcService {
 
     const key = this.sessionKey(playerId, npcId);
     this.runtimeCache.set(key, next);
-    void this.playerStateRepo.saveRuntime(playerId, npcId, next);
+    const { worldId, packVersionId } = this.progressKey();
+    void this.playerStateRepo.saveRuntime(
+      playerId,
+      worldId,
+      packVersionId,
+      npcId,
+      next,
+      this.packService.getDefaultChapter(),
+    );
     this.logger.log(`Updated state for ${key}: ${JSON.stringify(next)}`);
     return next;
   }
@@ -117,9 +135,16 @@ export class NpcService {
     return [...triggers];
   }
 
-  buildSystemPrompt(npcId: string, ctx: SystemPromptContext): string {
+  buildSystemPrompt(
+    npcId: string,
+    ctx: Omit<SystemPromptContext, 'prompts'>,
+  ): string {
     const def = this.getDefinition(npcId);
-    return assembleSystemPrompt(def.system_prompt_template, ctx);
+    const prompts = this.packService.getPack().prompts;
+    return assembleSystemPrompt(def.system_prompt_template, {
+      ...ctx,
+      prompts,
+    });
   }
 
   resetAllSessionsForNpc(npcId: string) {

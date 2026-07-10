@@ -26,9 +26,9 @@ exports.npcAttributesSchema = zod_1.z.object({
     max_fatigue: zod_1.z.number(),
     affinity: zod_1.z.number(),
     current_status: zod_1.z.string(),
-    /** 好感度触发主词，玩家输入命中任一词（含 favorite_synonyms）时好感 +10 */
+    /** 好感度触发主词，玩家输入命中任一词（含 favorite_synonyms）时走 Pack numeric_tools.interest_hit */
     favorite_things: zod_1.z.array(zod_1.z.string()),
-    /** 主词 → 同义词/相关词，与 favorite_things 一并作为好感触发词 */
+    /** 主词 → 同义词/相关词，与 favorite_things 一并作为兴趣触发词 */
     favorite_synonyms: zod_1.z.record(zod_1.z.string(), zod_1.z.array(zod_1.z.string())).optional(),
 });
 exports.npcDefinitionSchema = zod_1.z.object({

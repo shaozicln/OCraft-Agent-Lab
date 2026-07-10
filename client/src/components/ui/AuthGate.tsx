@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import {
+  type AuthSession,
   formatAuthValidationError,
   loginPayloadSchema,
   registerPayloadSchema,
@@ -15,11 +16,12 @@ interface AuthGateProps {
     playerId: string;
     token: string;
     logout: () => void;
+    updateSession: (session: AuthSession) => void;
   }) => ReactNode;
 }
 
 export function AuthGate({ children }: AuthGateProps) {
-  const { session, loading, login, register, logout, isAuthenticated } =
+  const { session, loading, login, register, logout, updateSession, isAuthenticated } =
     useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -63,11 +65,28 @@ export function AuthGate({ children }: AuthGateProps) {
 
   if (!isAuthenticated || !session) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-50 to-white px-4">
-        <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-          <h1 className="text-2xl font-bold text-gray-900">OCraft 办公室篇</h1>
+      <main
+        className="flex min-h-screen items-center justify-center px-4"
+        style={{ background: 'var(--ui-bg)' }}
+      >
+        <div
+          className="w-full max-w-md rounded-2xl border p-8"
+          style={{
+            background: 'var(--ui-panel-solid)',
+            borderColor: 'var(--ui-border)',
+            color: 'var(--ui-fg)',
+            boxShadow: 'var(--ui-shadow)',
+          }}
+        >
+          <h1 className="text-2xl font-bold">OCraft</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
+            登录后进入 3D 场景与剧情包
+          </p>
           
-          <div className="mt-6 flex gap-2 rounded-lg bg-gray-100 p-1">
+          <div
+            className="mt-6 flex gap-2 rounded-lg p-1"
+            style={{ background: 'var(--ui-bg)' }}
+          >
             <button
               type="button"
               onClick={() => {
@@ -75,10 +94,17 @@ export function AuthGate({ children }: AuthGateProps) {
                 setError(null);
               }}
               className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
-                mode === 'login'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                mode === 'login' ? '' : ''
               }`}
+              style={
+                mode === 'login'
+                  ? {
+                      background: 'var(--ui-panel-solid)',
+                      color: 'var(--ui-fg)',
+                      boxShadow: 'var(--ui-shadow)',
+                    }
+                  : { color: 'var(--ui-fg-muted)' }
+              }
             >
               登录
             </button>
@@ -88,11 +114,16 @@ export function AuthGate({ children }: AuthGateProps) {
                 setMode('register');
                 setError(null);
               }}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+              className="flex-1 rounded-md px-3 py-2 text-sm font-medium transition"
+              style={
                 mode === 'register'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
+                  ? {
+                      background: 'var(--ui-panel-solid)',
+                      color: 'var(--ui-fg)',
+                      boxShadow: 'var(--ui-shadow)',
+                    }
+                  : { color: 'var(--ui-fg-muted)' }
+              }
             >
               注册
             </button>
@@ -100,19 +131,28 @@ export function AuthGate({ children }: AuthGateProps) {
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <label className="block">
-              <span className="text-sm text-gray-600">用户名</span>
+              <span className="text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
+                用户名
+              </span>
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                className="mt-1 w-full rounded-lg border px-3 py-2 outline-none"
+                style={{
+                  background: 'var(--ui-input)',
+                  borderColor: 'var(--ui-border)',
+                  color: 'var(--ui-fg)',
+                }}
                 placeholder="中文、字母、数字、下划线，2–32 位"
                 required
               />
             </label>
 
             <label className="block">
-              <span className="text-sm text-gray-600">密码</span>
+              <span className="text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
+                密码
+              </span>
               <input
                 type="password"
                 value={password}
@@ -120,7 +160,12 @@ export function AuthGate({ children }: AuthGateProps) {
                 autoComplete={
                   mode === 'login' ? 'current-password' : 'new-password'
                 }
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                className="mt-1 w-full rounded-lg border px-3 py-2 outline-none"
+                style={{
+                  background: 'var(--ui-input)',
+                  borderColor: 'var(--ui-border)',
+                  color: 'var(--ui-fg)',
+                }}
                 placeholder="至少 6 位"
                 required
                 minLength={6}
@@ -128,7 +173,10 @@ export function AuthGate({ children }: AuthGateProps) {
             </label>
 
             {error && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              <p
+                className="rounded-lg px-3 py-2 text-sm"
+                style={{ color: 'var(--ui-danger)' }}
+              >
                 {error}
               </p>
             )}
@@ -136,7 +184,11 @@ export function AuthGate({ children }: AuthGateProps) {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+              className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
+              style={{
+                background: 'var(--ui-accent)',
+                color: 'var(--ui-accent-fg)',
+              }}
             >
               {submitting
                 ? '请稍候…'
@@ -146,7 +198,7 @@ export function AuthGate({ children }: AuthGateProps) {
             </button>
           </form>
 
-          <p className="mt-4 text-xs text-gray-400">
+          <p className="mt-4 text-xs" style={{ color: 'var(--ui-fg-muted)' }}>
             同一用户名在任何设备登录都会加载同一份进度。
           </p>
         </div>
@@ -161,6 +213,7 @@ export function AuthGate({ children }: AuthGateProps) {
         playerId: session.playerId,
         token: session.token,
         logout,
+        updateSession,
       })}
     </>
   );

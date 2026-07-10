@@ -5,6 +5,7 @@ import {
   NpcMemory,
 } from '@ocraft/shared';
 import { NpcService } from '../npc/npc.service';
+import { PackService } from '../story/pack.service';
 
 export interface RagHit {
   memory: NpcMemory;
@@ -13,20 +14,29 @@ export interface RagHit {
 
 @Injectable()
 export class RagService {
-  constructor(private readonly npcService: NpcService) {}
+  constructor(
+    private readonly npcService: NpcService,
+    private readonly packService: PackService,
+  ) {}
 
   retrieve(
     npcId: string,
     query: string,
-    chapterState: ChapterState = 'daily',
+    chapterState: ChapterState,
     topK = 2,
   ): RagHit[] {
     const def = this.npcService.getDefinition(npcId);
+    const defaultChapter = this.packService.getDefaultChapter();
+    const rankMap = this.packService.getChapterRankMap();
     const normalizedQuery = query.toLowerCase();
 
     const scored = def.memories
       .filter((memory) =>
-        isChapterAtLeast(chapterState, memory.min_chapter ?? 'daily'),
+        isChapterAtLeast(
+          chapterState,
+          memory.min_chapter ?? defaultChapter,
+          rankMap,
+        ),
       )
       .map((memory) => {
         let score = 0;

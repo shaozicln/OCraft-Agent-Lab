@@ -1,0 +1,145 @@
+{
+  "affinity_tiers": [
+    {
+      "max_exclusive": 30,
+      "text": ""
+    },
+    {
+      "max_exclusive": 60,
+      "text": ""
+    },
+    {
+      "max_exclusive": 80,
+      "text": ""
+    },
+    {
+      "max_exclusive": 101,
+      "text": ""
+    }
+  ],
+  "fatigue_hints": [
+    {
+      "min": 100,
+      "text": ""
+    },
+    {
+      "min": 95,
+      "text": ""
+    },
+    {
+      "min": 80,
+      "text": ""
+    },
+    {
+      "min": 55,
+      "text": ""
+    },
+    {
+      "min": 30,
+      "text": ""
+    },
+    {
+      "min": 0,
+      "text": ""
+    }
+  ],
+  "chapter_constraints": {
+    "daily": "",
+    "uneasy": "",
+    "dream_reveal": ""
+  },
+  "flag_constraints": [
+    {
+      "id": "bonded_daily_tone",
+      "when": {
+        "flag": "ch1_bonded",
+        "set": true,
+        "chapter": "daily"
+      },
+      "text": ""
+    },
+    {
+      "id": "sleep_mentioned",
+      "when": {
+        "flag": "ch2_sleep_mentioned",
+        "set": true
+      },
+      "text": ""
+    },
+    {
+      "id": "admitted_tired",
+      "when": {
+        "flag": "ch2_npc_admitted_tired",
+        "set": true
+      },
+      "text": ""
+    },
+    {
+      "id": "floor_avoided",
+      "when": {
+        "flag": "ch2_floor_avoided",
+        "set": true
+      },
+      "text": ""
+    },
+    {
+      "id": "floor_not_yet_uneasy",
+      "when": {
+        "flag": "ch2_floor_avoided",
+        "set": false,
+        "chapter_not": "daily"
+      },
+      "text": ""
+    },
+    {
+      "id": "dream_full_locked",
+      "when": {
+        "flag": "ch3_dream_full",
+        "set": false
+      },
+      "text": ""
+    },
+    {
+      "id": "dream_full_unlocked",
+      "when": {
+        "flag": "ch3_dream_full",
+        "set": true
+      },
+      "text": ""
+    },
+    {
+      "id": "dream_partial_only",
+      "when": {
+        "flag": "ch3_dream_partial",
+        "set": true
+      },
+      "text": ""
+    },
+    {
+      "id": "colleague_hinted",
+      "when": {
+        "flag": "ch3_colleague_hint",
+        "set": true
+      },
+      "text": ""
+    },
+    {
+      "id": "colleague_askable",
+      "when": {
+        "flag": "ch3_colleague_hint",
+        "set": false,
+        "chapter": "dream_reveal"
+      },
+      "text": ""
+    },
+    {
+      "id": "ocraft_locked",
+      "when": {
+        "flag": "ch4_ocraft_aware",
+        "set": false
+      },
+      "text": ""
+    }
+  ],
+  "reply_instruction": ""
+}

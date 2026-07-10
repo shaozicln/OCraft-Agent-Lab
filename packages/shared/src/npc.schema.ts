@@ -28,9 +28,9 @@ export const npcAttributesSchema = z.object({
   max_fatigue: z.number(),
   affinity: z.number(),
   current_status: z.string(),
-  /** 好感度触发主词，玩家输入命中任一词（含 favorite_synonyms）时好感 +10 */
+  /** 好感度触发主词，玩家输入命中任一词（含 favorite_synonyms）时走 Pack numeric_tools.interest_hit */
   favorite_things: z.array(z.string()),
-  /** 主词 → 同义词/相关词，与 favorite_things 一并作为好感触发词 */
+  /** 主词 → 同义词/相关词，与 favorite_things 一并作为兴趣触发词 */
   favorite_synonyms: z.record(z.string(), z.array(z.string())).optional(),
 });
 

@@ -87,13 +87,24 @@ export function Player({
       keys.current[e.code] = false;
     };
 
+    /** Esc 刚退出锁定后，浏览器会短暂拒绝重锁（SecurityError），需吞掉 Promise 拒绝 */
+    let reLockBlockedUntil = 0;
+
     const onCanvasClick = () => {
       if (!lookEnabledRef.current || document.pointerLockElement === canvas) return;
-      canvas.requestPointerLock();
+      if (Date.now() < reLockBlockedUntil) return;
+      const req = canvas.requestPointerLock();
+      void Promise.resolve(req).catch(() => {
+        reLockBlockedUntil = Date.now() + 1200;
+      });
     };
 
     const onLockChange = () => {
       onPointerLockChange(document.pointerLockElement === canvas);
+    };
+
+    const onLockError = () => {
+      reLockBlockedUntil = Date.now() + 1200;
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -122,6 +133,7 @@ export function Player({
     canvas.addEventListener('click', onCanvasClick);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     document.addEventListener('pointerlockchange', onLockChange);
+    document.addEventListener('pointerlockerror', onLockError);
     document.addEventListener('mousemove', onMouseMove);
 
     return () => {
@@ -130,6 +142,7 @@ export function Player({
       canvas.removeEventListener('click', onCanvasClick);
       canvas.removeEventListener('wheel', onWheel);
       document.removeEventListener('pointerlockchange', onLockChange);
+      document.removeEventListener('pointerlockerror', onLockError);
       document.removeEventListener('mousemove', onMouseMove);
       if (document.pointerLockElement === canvas) {
         document.exitPointerLock();

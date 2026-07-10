@@ -8,17 +8,25 @@ import {
 } from '@ocraft/shared';
 import { PlayerStateRepository } from '../db/player-state.repository';
 import { storyFlags } from '../db/schema';
+import { PackService } from './pack.service';
 
 @Injectable()
 export class StoryFlagService {
   private readonly logger = new Logger(StoryFlagService.name);
-  /** key: `${playerId}:${npcId}` */
+  /** key: PackService.sessionKey(playerId, npcId) */
   private readonly cache = new Map<string, StoryFlagsSnapshot>();
 
-  constructor(private readonly playerStateRepo: PlayerStateRepository) {}
+  constructor(
+    private readonly playerStateRepo: PlayerStateRepository,
+    private readonly packService: PackService,
+  ) {}
 
   private key(playerId: string, npcId: string) {
-    return `${playerId}:${npcId}`;
+    return this.packService.sessionKey(playerId, npcId);
+  }
+
+  private progressKey() {
+    return this.packService.getProgressKey();
   }
 
   getFlags(playerId: string, npcId: string): StoryFlagsSnapshot {
@@ -36,12 +44,18 @@ export class StoryFlagService {
       return this.getFlags(playerId, npcId);
     }
 
+    const { worldId, packVersionId } = this.progressKey();
     const db = this.playerStateRepo.db;
     const rows = await db
       .select()
       .from(storyFlags)
       .where(
-        and(eq(storyFlags.playerId, playerId), eq(storyFlags.npcId, npcId)),
+        and(
+          eq(storyFlags.playerId, playerId),
+          eq(storyFlags.worldId, worldId),
+          eq(storyFlags.packVersionId, packVersionId),
+          eq(storyFlags.npcId, npcId),
+        ),
       );
 
     const snapshot: StoryFlagsSnapshot = {};
@@ -73,10 +87,18 @@ export class StoryFlagService {
 
     if (this.playerStateRepo.ready) {
       await this.playerStateRepo.ensurePlayer(playerId);
+      const { worldId, packVersionId } = this.progressKey();
       const db = this.playerStateRepo.db;
       await db
         .insert(storyFlags)
-        .values({ playerId, npcId, flagName, value })
+        .values({
+          playerId,
+          worldId,
+          packVersionId,
+          npcId,
+          flagName,
+          value,
+        })
         .onConflictDoNothing();
     }
 
@@ -117,15 +139,23 @@ export class StoryFlagService {
     if (!this.playerStateRepo.ready) return;
 
     await this.playerStateRepo.ensurePlayer(playerId);
+    const { worldId, packVersionId } = this.progressKey();
     const db = this.playerStateRepo.db;
     await db
       .delete(storyFlags)
       .where(
-        and(eq(storyFlags.playerId, playerId), eq(storyFlags.npcId, npcId)),
+        and(
+          eq(storyFlags.playerId, playerId),
+          eq(storyFlags.worldId, worldId),
+          eq(storyFlags.packVersionId, packVersionId),
+          eq(storyFlags.npcId, npcId),
+        ),
       );
 
     const rows = Object.entries(safe).map(([flagName, value]) => ({
       playerId,
+      worldId,
+      packVersionId,
       npcId,
       flagName,
       value,

@@ -75,7 +75,7 @@ export declare const packNpcReplyFlagRuleSchema: z.ZodObject<{
     when_chapter_in: z.ZodArray<z.ZodString>;
     set_flag: z.ZodString;
     value: z.ZodDefault<z.ZodString>;
-    triggers: z.ZodArray<z.ZodString>;
+    triggers: z.ZodDefault<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 export declare const packTriggersFileSchema: z.ZodObject<{
     version: z.ZodDefault<z.ZodNumber>;
@@ -100,7 +100,7 @@ export declare const packTriggersFileSchema: z.ZodObject<{
         when_chapter_in: z.ZodArray<z.ZodString>;
         set_flag: z.ZodString;
         value: z.ZodDefault<z.ZodString>;
-        triggers: z.ZodArray<z.ZodString>;
+        triggers: z.ZodDefault<z.ZodArray<z.ZodString>>;
     }, z.core.$strip>>>;
 }, z.core.$strip>;
 /** 好感区间文案：affinity < max_exclusive 时命中（最后一档用极大 max） */
@@ -170,6 +170,44 @@ export declare const packNumericToolsSchema: z.ZodObject<{
         fatigue_reason: z.ZodString;
     }, z.core.$strip>;
 }, z.core.$strip>;
+/** 第一期支持的动画状态（与前端 Humanoid 一致） */
+export declare const packAnimationIdSchema: z.ZodEnum<{
+    idle: "idle";
+    sleeping: "sleeping";
+    talk: "talk";
+    excited_talk: "excited_talk";
+}>;
+/**
+ * 动画规则条件（按规则数组顺序，先命中先生效）
+ * - fatigue_delta_gt / lt：本轮 updateFatigue 的 delta 合计
+ * - message_triggers：玩家消息包含任一词
+ * - interest_hit：命中 NPC favorite / synonyms
+ * - current_status：当前动画状态等于该值
+ */
+export declare const packAnimationRuleWhenSchema: z.ZodObject<{
+    fatigue_delta_gt: z.ZodOptional<z.ZodNumber>;
+    fatigue_delta_lt: z.ZodOptional<z.ZodNumber>;
+    message_triggers: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    interest_hit: z.ZodOptional<z.ZodBoolean>;
+    current_status: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+export declare const packAnimationRuleSchema: z.ZodObject<{
+    id: z.ZodString;
+    enabled: z.ZodDefault<z.ZodBoolean>;
+    when: z.ZodObject<{
+        fatigue_delta_gt: z.ZodOptional<z.ZodNumber>;
+        fatigue_delta_lt: z.ZodOptional<z.ZodNumber>;
+        message_triggers: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        interest_hit: z.ZodOptional<z.ZodBoolean>;
+        current_status: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>;
+    animation: z.ZodEnum<{
+        idle: "idle";
+        sleeping: "sleeping";
+        talk: "talk";
+        excited_talk: "excited_talk";
+    }>;
+}, z.core.$strip>;
 export declare const packEndingSchema: z.ZodObject<{
     id: z.ZodString;
     display_name: z.ZodString;
@@ -194,6 +232,7 @@ export declare const packWorldFileSchema: z.ZodObject<{
         irreversible: z.ZodDefault<z.ZodBoolean>;
     }, z.core.$strip>>;
     default_chapter: z.ZodOptional<z.ZodString>;
+    default_npc: z.ZodOptional<z.ZodString>;
     numeric_tools: z.ZodObject<{
         fatigue_increase: z.ZodObject<{
             triggers: z.ZodArray<z.ZodString>;
@@ -207,6 +246,23 @@ export declare const packWorldFileSchema: z.ZodObject<{
             fatigue_reason: z.ZodString;
         }, z.core.$strip>;
     }, z.core.$strip>;
+    animation_rules: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        enabled: z.ZodDefault<z.ZodBoolean>;
+        when: z.ZodObject<{
+            fatigue_delta_gt: z.ZodOptional<z.ZodNumber>;
+            fatigue_delta_lt: z.ZodOptional<z.ZodNumber>;
+            message_triggers: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            interest_hit: z.ZodOptional<z.ZodBoolean>;
+            current_status: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>;
+        animation: z.ZodEnum<{
+            idle: "idle";
+            sleeping: "sleeping";
+            talk: "talk";
+            excited_talk: "excited_talk";
+        }>;
+    }, z.core.$strip>>>;
     endings: z.ZodDefault<z.ZodArray<z.ZodObject<{
         id: z.ZodString;
         display_name: z.ZodString;
@@ -223,7 +279,6 @@ export declare const packHeaderSchema: z.ZodObject<{
 }, z.core.$strip>;
 export declare const worldManifestSchema: z.ZodObject<{
     world_id: z.ZodString;
-    display_name: z.ZodString;
     official_version_dir: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
@@ -254,6 +309,7 @@ export declare const storyPackSchema: z.ZodObject<{
             irreversible: z.ZodDefault<z.ZodBoolean>;
         }, z.core.$strip>>;
         default_chapter: z.ZodOptional<z.ZodString>;
+        default_npc: z.ZodOptional<z.ZodString>;
         numeric_tools: z.ZodObject<{
             fatigue_increase: z.ZodObject<{
                 triggers: z.ZodArray<z.ZodString>;
@@ -267,6 +323,23 @@ export declare const storyPackSchema: z.ZodObject<{
                 fatigue_reason: z.ZodString;
             }, z.core.$strip>;
         }, z.core.$strip>;
+        animation_rules: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            enabled: z.ZodDefault<z.ZodBoolean>;
+            when: z.ZodObject<{
+                fatigue_delta_gt: z.ZodOptional<z.ZodNumber>;
+                fatigue_delta_lt: z.ZodOptional<z.ZodNumber>;
+                message_triggers: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                interest_hit: z.ZodOptional<z.ZodBoolean>;
+                current_status: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+            animation: z.ZodEnum<{
+                idle: "idle";
+                sleeping: "sleeping";
+                talk: "talk";
+                excited_talk: "excited_talk";
+            }>;
+        }, z.core.$strip>>>;
         endings: z.ZodDefault<z.ZodArray<z.ZodObject<{
             id: z.ZodString;
             display_name: z.ZodString;
@@ -297,7 +370,7 @@ export declare const storyPackSchema: z.ZodObject<{
             when_chapter_in: z.ZodArray<z.ZodString>;
             set_flag: z.ZodString;
             value: z.ZodDefault<z.ZodString>;
-            triggers: z.ZodArray<z.ZodString>;
+            triggers: z.ZodDefault<z.ZodArray<z.ZodString>>;
         }, z.core.$strip>>>;
     }, z.core.$strip>;
     prompts: z.ZodObject<{
@@ -357,8 +430,15 @@ export type PackNpc = z.infer<typeof packNpcSchema>;
 export type PackTriggerRule = z.infer<typeof packTriggerRuleSchema>;
 export type PackNpcReplyFlagRule = z.infer<typeof packNpcReplyFlagRuleSchema>;
 export type PackTriggersFile = z.infer<typeof packTriggersFileSchema>;
+export type PackAffinityTier = z.infer<typeof packAffinityTierSchema>;
+export type PackFatigueHint = z.infer<typeof packFatigueHintSchema>;
+export type PackFlagConstraintWhen = z.infer<typeof packFlagConstraintWhenSchema>;
+export type PackFlagConstraint = z.infer<typeof packFlagConstraintSchema>;
 export type PackPromptsFile = z.infer<typeof packPromptsFileSchema>;
 export type PackNumericTools = z.infer<typeof packNumericToolsSchema>;
+export type PackAnimationId = z.infer<typeof packAnimationIdSchema>;
+export type PackAnimationRuleWhen = z.infer<typeof packAnimationRuleWhenSchema>;
+export type PackAnimationRule = z.infer<typeof packAnimationRuleSchema>;
 export type PackEnding = z.infer<typeof packEndingSchema>;
 export type PackWorldFile = z.infer<typeof packWorldFileSchema>;
 export type PackHeader = z.infer<typeof packHeaderSchema>;
@@ -367,4 +447,7 @@ export type StoryPack = z.infer<typeof storyPackSchema>;
 /** 交叉校验：触发/记忆/约束引用的章节与 flag 必须在 world 中声明 */
 export declare function assertPackReferences(pack: StoryPack): void;
 export declare function getDefaultChapterId(pack: StoryPack): string;
+export declare function getDefaultNpcId(pack: StoryPack): string;
 export declare function getChapterRankMap(pack: StoryPack): Record<string, number>;
+/** chapterId → HUD / 列表显示名（优先 hud_label） */
+export declare function getChapterLabelMap(pack: StoryPack): Record<string, string>;

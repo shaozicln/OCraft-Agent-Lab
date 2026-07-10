@@ -23,7 +23,7 @@ exports.loginPayloadSchema = zod_1.z.object({
     password: exports.passwordSchema,
 });
 exports.authSessionSchema = zod_1.z.object({
-    playerId: zod_1.z.string().uuid(),
+    playerId: zod_1.z.string().regex(/^\d{3}$/, '玩家 UID 须为三位数字'),
     username: zod_1.z.string(),
     token: zod_1.z.string().min(1),
 });

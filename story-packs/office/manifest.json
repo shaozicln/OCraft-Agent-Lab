@@ -1,6 +1,5 @@
 {
   "world_id": "office",
-  "display_name": "办公室（官方）",
   "official_version_dir": "official-mvp__20260710T1045",
-  "description": "从 MVP npc.json + story-triggers + prompt 约束迁移的官方包"
+  "description": "从 MVP npc.json + story-triggers + prompt 约束迁移的测试包"
 }

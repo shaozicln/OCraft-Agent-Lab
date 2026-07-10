@@ -40,7 +40,7 @@ interface HUDProps {
   affinity: number;
   fatigue: number;
   maxFatigue: number;
-  chapterState?: string;
+  chapterLabel?: string;
   affinityDelta?: number;
   fatigueDelta?: number;
 }
@@ -51,7 +51,7 @@ export function HUD({
   affinity,
   fatigue,
   maxFatigue,
-  chapterState,
+  chapterLabel,
   affinityDelta,
   fatigueDelta,
 }: HUDProps) {
@@ -74,9 +74,9 @@ export function HUD({
         color="#60A5FA"
         delta={fatigueDelta}
       />
-      {chapterState && (
+      {chapterLabel && (
         <p className="text-xs text-slate-400 mt-1">
-          章节：<span className="text-amber-300 font-mono">{chapterState}</span>
+          章节：<span className="text-amber-300">{chapterLabel}</span>
         </p>
       )}
     </div>

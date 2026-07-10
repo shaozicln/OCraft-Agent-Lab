@@ -1,16 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.DEFAULT_CHAPTER_STATE = exports.chapterStateSchema = void 0;
+exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
 const zod_1 = require("zod");
 const story_schema_1 = require("./story.schema");
 /**
  * 章节 ID：由当前 Story Pack 声明（不再写死业务枚举）。
- * 官方 office 包仍使用 daily / uneasy / dream_reveal。
  */
 exports.chapterStateSchema = zod_1.z.string().min(1).max(64);
-/** 无 Pack 时的回退默认；有 Pack 时应用 getDefaultChapterId(pack) */
-exports.DEFAULT_CHAPTER_STATE = 'daily';
-exports.playerIdSchema = zod_1.z.string().uuid();
+/** 玩家 UID：三位数字字符串，如 001（注册时顺序分配） */
+exports.playerIdSchema = zod_1.z
+    .string()
+    .regex(/^\d{3}$/, '玩家 UID 须为三位数字');
 exports.playerChatPayloadSchema = zod_1.z.object({
     npcId: zod_1.z.string().min(1).max(64),
     message: zod_1.z.string().trim().min(1).max(500),

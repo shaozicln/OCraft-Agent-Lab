@@ -18,6 +18,7 @@ import {
 } from '@ocraft/shared';
 import { AuthService } from '../auth/auth.service';
 import { AgentHarnessService } from '../agent/agent-harness.service';
+import { PackService } from '../story/pack.service';
 import { ConversationService } from './conversation.service';
 import { NpcService } from '../npc/npc.service';
 
@@ -42,6 +43,7 @@ export class GameGateway implements OnGatewayConnection {
     private readonly agentHarness: AgentHarnessService,
     private readonly conversationService: ConversationService,
     private readonly npcService: NpcService,
+    private readonly packService: PackService,
   ) {}
 
   handleConnection(client: AuthedSocket) {
@@ -108,12 +110,13 @@ export class GameGateway implements OnGatewayConnection {
 
     const playerId = this.requirePlayerId(client);
     const { npcId } = parsed.data;
-    await this.conversationService.ensureSession(playerId, npcId);
-
-    client.emit(
-      'npc_state_update',
-      this.buildStatePayload(playerId, npcId),
-    );
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      await this.conversationService.ensureSession(playerId, npcId);
+      client.emit(
+        'npc_state_update',
+        this.buildStatePayload(playerId, npcId),
+      );
+    });
   }
 
   @SubscribeMessage('player_chat')
@@ -128,41 +131,44 @@ export class GameGateway implements OnGatewayConnection {
 
     const playerId = this.requirePlayerId(client);
     const { npcId, message } = parsed.data;
-    await this.conversationService.ensureSession(playerId, npcId);
-    this.logger.log(
-      `player_chat player=${playerId} npc=${npcId} msg="${message}"`,
-    );
 
-    try {
-      const result = await this.agentHarness.run(playerId, npcId, message);
-
-      let fullReply = '';
-      for await (const chunk of result.stream) {
-        if (chunk.text) {
-          fullReply += chunk.text;
-          client.emit('npc_stream', { npcId, chunk: chunk.text });
-        }
-      }
-      client.emit('npc_stream', { npcId, chunk: '', done: true });
-
-      await this.agentHarness.recordAssistantReply(
-        playerId,
-        npcId,
-        message,
-        fullReply,
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      await this.conversationService.ensureSession(playerId, npcId);
+      this.logger.log(
+        `player_chat player=${playerId} npc=${npcId} msg="${message}"`,
       );
 
-      client.emit('npc_state_update', {
-        ...this.buildStatePayload(playerId, npcId, result.animation),
-        toolCalls: result.toolCalls,
-      });
-    } catch (err) {
-      this.logger.error(err);
-      client.emit('npc_error', {
-        npcId,
-        message: err instanceof Error ? err.message : 'Unknown error',
-      });
-    }
+      try {
+        const result = await this.agentHarness.run(playerId, npcId, message);
+
+        let fullReply = '';
+        for await (const chunk of result.stream) {
+          if (chunk.text) {
+            fullReply += chunk.text;
+            client.emit('npc_stream', { npcId, chunk: chunk.text });
+          }
+        }
+        client.emit('npc_stream', { npcId, chunk: '', done: true });
+
+        await this.agentHarness.recordAssistantReply(
+          playerId,
+          npcId,
+          message,
+          fullReply,
+        );
+
+        client.emit('npc_state_update', {
+          ...this.buildStatePayload(playerId, npcId, result.animation),
+          toolCalls: result.toolCalls,
+        });
+      } catch (err) {
+        this.logger.error(err);
+        client.emit('npc_error', {
+          npcId,
+          message: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    });
   }
 
   @SubscribeMessage('save_conversation')
@@ -177,23 +183,25 @@ export class GameGateway implements OnGatewayConnection {
 
     const playerId = this.requirePlayerId(client);
     const { npcId } = parsed.data;
-    await this.conversationService.ensureSession(playerId, npcId);
-    const runtime = this.npcService.getRuntimeState(playerId, npcId);
-    const result = await this.conversationService.saveSnapshot(
-      playerId,
-      npcId,
-      runtime,
-    );
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      await this.conversationService.ensureSession(playerId, npcId);
+      const runtime = this.npcService.getRuntimeState(playerId, npcId);
+      const result = await this.conversationService.saveSnapshot(
+        playerId,
+        npcId,
+        runtime,
+      );
 
-    if (!result) {
-      throw new WsException('没有可存档的对话');
-    }
+      if (!result) {
+        throw new WsException('没有可存档的对话');
+      }
 
-    client.emit('conversation_saved', {
-      npcId,
-      filename: result.filename,
-      snapshotIndex: result.snapshotIndex,
-      savedAt: result.savedAt,
+      client.emit('conversation_saved', {
+        npcId,
+        filename: result.filename,
+        snapshotIndex: result.snapshotIndex,
+        savedAt: result.savedAt,
+      });
     });
   }
 
@@ -209,13 +217,15 @@ export class GameGateway implements OnGatewayConnection {
 
     const playerId = this.requirePlayerId(client);
     const { npcId } = parsed.data;
-    const archives = await this.conversationService.listArchives(
-      playerId,
-      npcId,
-    );
-    client.emit('conversation_archives_list', {
-      npcId,
-      archives,
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      const archives = await this.conversationService.listArchives(
+        playerId,
+        npcId,
+      );
+      client.emit('conversation_archives_list', {
+        npcId,
+        archives,
+      });
     });
   }
 
@@ -231,34 +241,36 @@ export class GameGateway implements OnGatewayConnection {
 
     const playerId = this.requirePlayerId(client);
     const { npcId, filename, snapshotIndex } = parsed.data;
-    const restored = await this.conversationService.restoreSnapshot(
-      playerId,
-      npcId,
-      filename,
-      snapshotIndex,
-    );
-
-    this.npcService.updateRuntimeState(playerId, npcId, restored.npcState);
-
-    client.emit('conversation_loaded', {
-      npcId,
-      filename: restored.filename,
-      snapshotIndex: restored.snapshotIndex,
-      messages: restored.messages,
-      npc_state: {
-        ...restored.npcState,
-        chapter_state: restored.chapterState,
-        story_flags: restored.storyFlags,
-      },
-    });
-
-    client.emit(
-      'npc_state_update',
-      this.buildStatePayload(
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      const restored = await this.conversationService.restoreSnapshot(
         playerId,
         npcId,
-        restored.npcState.current_status,
-      ),
-    );
+        filename,
+        snapshotIndex,
+      );
+
+      this.npcService.updateRuntimeState(playerId, npcId, restored.npcState);
+
+      client.emit('conversation_loaded', {
+        npcId,
+        filename: restored.filename,
+        snapshotIndex: restored.snapshotIndex,
+        messages: restored.messages,
+        npc_state: {
+          ...restored.npcState,
+          chapter_state: restored.chapterState,
+          story_flags: restored.storyFlags,
+        },
+      });
+
+      client.emit(
+        'npc_state_update',
+        this.buildStatePayload(
+          playerId,
+          npcId,
+          restored.npcState.current_status,
+        ),
+      );
+    });
   }
 }

@@ -21,6 +21,7 @@ interface ChatBoxProps {
   loadedConversation: ConversationLoadedEvent | null;
   saveError: string | null;
   loadError: string | null;
+  chapterLabels?: Record<string, string>;
   onClose: () => void;
   onSend: (message: string) => boolean;
   onSave: () => boolean;
@@ -50,6 +51,7 @@ export function ChatBox({
   loadedConversation,
   saveError,
   loadError,
+  chapterLabels,
   onClose,
   onSend,
   onSave,
@@ -241,6 +243,7 @@ export function ChatBox({
         archives={archivesList}
         loading={archivesLoading}
         error={loadError}
+        chapterLabels={chapterLabels}
         onClose={() => setLoadPanelOpen(false)}
         onLoad={handleLoad}
       />
@@ -333,7 +336,7 @@ export function ChatBox({
 
           <div ref={scrollRef} className="h-40 overflow-y-auto px-4 py-3 space-y-2">
             {history.length === 0 && (
-              <p className="text-slate-500 text-sm">试试：「今晚下班玩游戏吗？」</p>
+              <p className="text-slate-500 text-sm">开始对话吧</p>
             )}
             {!connected && (
               <p className="text-red-400 text-sm">未连接服务器，请先启动 server（3010）</p>

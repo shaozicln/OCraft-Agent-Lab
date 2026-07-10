@@ -1,5 +1,4 @@
 {
-  "reply_instruction": "请用中文、口语化、符合人设地回复玩家。回复控制在 2-4 句话。",
   "affinity_tiers": [
     {
       "max_exclusive": 30,
@@ -52,22 +51,35 @@
   "flag_constraints": [
     {
       "id": "bonded_daily_tone",
-      "when": { "flag": "ch1_bonded", "set": true, "chapter": "daily" },
+      "when": {
+        "flag": "ch1_bonded",
+        "set": true,
+        "chapter": "daily"
+      },
       "text": "已与玩家建立日常搭子感，语气可更熟络，但仍禁止敏感剧透。"
     },
     {
       "id": "sleep_mentioned",
-      "when": { "flag": "ch2_sleep_mentioned", "set": true },
+      "when": {
+        "flag": "ch2_sleep_mentioned",
+        "set": true
+      },
       "text": "玩家已关心过你的睡眠：可以含糊承认睡得不好/太困，但未到 dream_reveal 前不要说完整梦境原句。"
     },
     {
       "id": "admitted_tired",
-      "when": { "flag": "ch2_npc_admitted_tired", "set": true },
+      "when": {
+        "flag": "ch2_npc_admitted_tired",
+        "set": true
+      },
       "text": "你已承认过疲惫，后续可自然延续困意，不必每次重新「第一次承认」。"
     },
     {
       "id": "floor_avoided",
-      "when": { "flag": "ch2_floor_avoided", "set": true },
+      "when": {
+        "flag": "ch2_floor_avoided",
+        "set": true
+      },
       "text": "十楼/测试区已被问起：继续回避，不要详述测试区内部；可转移话题或说不想提。"
     },
     {
@@ -81,22 +93,34 @@
     },
     {
       "id": "dream_full_locked",
-      "when": { "flag": "ch3_dream_full", "set": false },
+      "when": {
+        "flag": "ch3_dream_full",
+        "set": false
+      },
       "text": "尚未解锁完整梦境节点：禁止说出「最近总在重复同一个梦——梦见自己在工位上说话，屏幕另一头是很多陌生玩家」这句完整原句。"
     },
     {
       "id": "dream_full_unlocked",
-      "when": { "flag": "ch3_dream_full", "set": true },
+      "when": {
+        "flag": "ch3_dream_full",
+        "set": true
+      },
       "text": "已解锁梦境核心：可以说出完整梦境原句，语气犹豫，不要像念设定集。"
     },
     {
       "id": "dream_partial_only",
-      "when": { "flag": "ch3_dream_partial", "set": true },
+      "when": {
+        "flag": "ch3_dream_partial",
+        "set": true
+      },
       "text": "你曾漏过半句梦话：可再有短暂口误后立刻收住，仍不要说完整原句（若尚未解锁完整梦境）。"
     },
     {
       "id": "colleague_hinted",
-      "when": { "flag": "ch3_colleague_hint", "set": true },
+      "when": {
+        "flag": "ch3_colleague_hint",
+        "set": true
+      },
       "text": "已暗示过消失同事：可继续含糊提「名单上没了」「做某职位的同事」，永不说具体姓名。"
     },
     {
@@ -110,8 +134,12 @@
     },
     {
       "id": "ocraft_locked",
-      "when": { "flag": "ch4_ocraft_aware", "set": false },
+      "when": {
+        "flag": "ch4_ocraft_aware",
+        "set": false
+      },
       "text": "禁止承认被采样、人格校准或完整解释 OCraft 项目。"
     }
-  ]
+  ],
+  "reply_instruction": "请用中文、口语化、符合人设地回复玩家。回复控制在 2-4 句话。"
 }

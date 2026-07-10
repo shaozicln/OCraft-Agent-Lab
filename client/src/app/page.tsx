@@ -4,29 +4,46 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AuthGate } from '@/components/ui/AuthGate';
 import { GameCanvas } from '@/components/r3f/GameCanvas';
 import { ChatBox } from '@/components/ui/ChatBox';
+import { EscMenu } from '@/components/ui/EscMenu';
 import { HUD } from '@/components/ui/HUD';
 import { InteractionPrompt } from '@/components/ui/InteractionPrompt';
 import { HumanoidAnimation } from '@/components/r3f/Humanoid';
-import { DEFAULT_NPC_ID, INTERACTION_DISTANCE } from '@/config/game';
+import { INTERACTION_DISTANCE } from '@/config/game';
 import { useGameSocket } from '@/hooks/useGameSocket';
 import { useNpcConfig } from '@/hooks/useNpcConfig';
+import { usePackRuntime } from '@/hooks/usePackRuntime';
 import * as THREE from 'three';
 
 function GamePageInner({
   token,
   username,
   logout,
+  updateSession,
 }: {
   token: string;
   username: string;
   logout: () => void;
+  updateSession: (session: import('@ocraft/shared').AuthSession) => void;
 }) {
-  const { npc, loading, error } = useNpcConfig(DEFAULT_NPC_ID);
+  const {
+    runtime,
+    loading: packLoading,
+    error: packError,
+  } = usePackRuntime(token);
+  const npcId = runtime?.default_npc_id ?? '';
+  const chapterLabels = runtime?.chapter_labels ?? {};
+  const defaultChapter = runtime?.default_chapter ?? '';
+
+  const { npc, loading: npcLoading, error: npcError } = useNpcConfig(
+    npcId,
+    token,
+  );
   const [nearNpc, setNearNpc] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [pointerLocked, setPointerLocked] = useState(false);
-  const [npcAnimation, setNpcAnimation] = useState<HumanoidAnimation>('sleeping');
-  const prevStateRef = useRef({ affinity: 30, fatigue: 30 });
+  const [npcAnimation, setNpcAnimation] = useState<HumanoidAnimation>('idle');
+  const prevStateRef = useRef({ affinity: 0, fatigue: 0 });
   const [deltas, setDeltas] = useState<{ affinity?: number; fatigue?: number }>({});
 
   const {
@@ -46,10 +63,11 @@ function GamePageInner({
     loadArchive,
     clearLoadedConversation,
     clearLastSaved,
-  } = useGameSocket(token, DEFAULT_NPC_ID);
+  } = useGameSocket(token, npcId);
 
-  const movementEnabled = !chatOpen;
-  const lookEnabled = !chatOpen;
+  const uiBlocking = chatOpen || menuOpen;
+  const movementEnabled = !uiBlocking;
+  const lookEnabled = !uiBlocking;
 
   const handlePlayerMove = useCallback((_pos: THREE.Vector3, distance: number) => {
     const isNear = distance < INTERACTION_DISTANCE;
@@ -58,6 +76,7 @@ function GamePageInner({
 
   const openChat = useCallback(() => {
     document.exitPointerLock();
+    setMenuOpen(false);
     setChatOpen(true);
     requestNpcState();
   }, [requestNpcState]);
@@ -67,9 +86,23 @@ function GamePageInner({
     setChatOpen(false);
   }, []);
 
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (chatOpen) return;
+
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        document.exitPointerLock();
+        setMenuOpen((v) => !v);
+        return;
+      }
+
+      if (menuOpen) return;
+
       if (e.code === 'KeyF' && nearNpc) {
         e.preventDefault();
         openChat();
@@ -77,7 +110,7 @@ function GamePageInner({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [nearNpc, chatOpen, openChat]);
+  }, [nearNpc, chatOpen, menuOpen, openChat]);
 
   useEffect(() => {
     if (npc?.runtime) {
@@ -116,18 +149,35 @@ function GamePageInner({
     }
   }, [npcState?.animation]);
 
-  if (loading) {
+  if (packLoading || (npcId && npcLoading)) {
     return (
-      <main className="flex w-screen h-screen items-center justify-center bg-white text-gray-500">
-        加载 NPC 配置…
+      <main
+        className="flex w-screen h-screen items-center justify-center"
+        style={{ background: 'var(--ui-bg)', color: 'var(--ui-fg-muted)' }}
+      >
+        加载剧情包…
       </main>
     );
   }
 
-  if (error || !npc) {
+  if (packError || !runtime) {
     return (
-      <main className="flex w-screen h-screen items-center justify-center bg-white text-red-500">
-        无法加载 NPC：{error ?? 'unknown'}（请确认 server 已启动）
+      <main
+        className="flex w-screen h-screen items-center justify-center"
+        style={{ background: 'var(--ui-bg)', color: 'var(--ui-danger)' }}
+      >
+        无法加载剧情包：{packError ?? 'unknown'}（请确认 server 已启动）
+      </main>
+    );
+  }
+
+  if (npcError || !npc) {
+    return (
+      <main
+        className="flex w-screen h-screen items-center justify-center"
+        style={{ background: 'var(--ui-bg)', color: 'var(--ui-danger)' }}
+      >
+        无法加载 NPC：{npcError ?? 'unknown'}（请确认 server 已启动）
       </main>
     );
   }
@@ -135,6 +185,8 @@ function GamePageInner({
   const affinity = npcState?.affinity ?? npc.runtime.affinity;
   const fatigue = npcState?.fatigue ?? npc.runtime.fatigue;
   const maxFatigue = npcState?.maxFatigue ?? npc.max_fatigue;
+  const chapterId = npcState?.chapter_state ?? defaultChapter;
+  const chapterLabel = chapterLabels[chapterId] ?? chapterId;
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-white">
@@ -145,13 +197,15 @@ function GamePageInner({
         movementEnabled={movementEnabled}
         lookEnabled={lookEnabled}
         onPointerLockChange={setPointerLocked}
-        uiOverlayActive={chatOpen}
+        uiOverlayActive={uiBlocking}
       />
 
       <div className="absolute top-4 left-4 z-20 pointer-events-none space-y-1">
-        <h1 className="text-gray-800 text-lg font-bold">OCraft-办公室篇</h1>
+        <h1 className="text-gray-800 text-lg font-bold">
+          {runtime.selection.world_id}/{runtime.selection.pack_version_id}
+        </h1>
         <p className="text-gray-500 text-xs">
-          WASD 移动 · 鼠标转视角 · 滚轮缩放 · Alt 呼出鼠标 · 靠近 {npc.name} 按 F
+          WASD 移动 · Esc 菜单 · 靠近 {npc.name} 按 F
         </p>
         <p className={`text-xs ${connected ? 'text-emerald-600' : 'text-red-500'}`}>
           {connected ? '● 已连接服务器' : '○ 未连接服务器 (3010)'}
@@ -161,16 +215,20 @@ function GamePageInner({
 
       <button
         type="button"
-        onClick={logout}
+        onClick={() => {
+          if (chatOpen) return;
+          document.exitPointerLock();
+          setMenuOpen((v) => !v);
+        }}
         className="absolute top-4 right-4 z-20 rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs text-gray-600 shadow-sm hover:bg-gray-50"
       >
-        退出登录
+        Esc
       </button>
 
-      {!pointerLocked && !chatOpen && (
+      {!pointerLocked && !uiBlocking && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
           <p className="text-gray-400/80 text-sm bg-white/70 px-4 py-2 rounded-full border border-gray-200">
-            点击画面锁定鼠标 · 滚轮缩放视角
+            点击画面锁定鼠标 · Esc 打开菜单
           </p>
         </div>
       )}
@@ -181,12 +239,16 @@ function GamePageInner({
         affinity={affinity}
         fatigue={fatigue}
         maxFatigue={maxFatigue}
-        chapterState={npcState?.chapter_state ?? 'daily'}
+        chapterLabel={chapterLabel}
         affinityDelta={deltas.affinity}
         fatigueDelta={deltas.fatigue}
       />
 
-      <InteractionPrompt visible={nearNpc && !chatOpen} onInteract={openChat} />
+      <InteractionPrompt
+        visible={nearNpc && !uiBlocking}
+        npcName={npcState?.name ?? npc.name}
+        onInteract={openChat}
+      />
 
       <ChatBox
         open={chatOpen}
@@ -199,6 +261,7 @@ function GamePageInner({
         loadedConversation={loadedConversation}
         saveError={saveError}
         loadError={loadError}
+        chapterLabels={chapterLabels}
         onClose={closeChat}
         onSend={sendChat}
         onSave={saveConversation}
@@ -207,6 +270,18 @@ function GamePageInner({
         onClearLoadedConversation={clearLoadedConversation}
         onClearLastSaved={clearLastSaved}
       />
+
+      <EscMenu
+        open={menuOpen}
+        token={token}
+        username={username}
+        packLabel={`${runtime.selection.world_id}/${runtime.selection.pack_version_id}`}
+        worldId={runtime.selection.world_id}
+        packVersionId={runtime.selection.pack_version_id}
+        onClose={closeMenu}
+        onLogout={logout}
+        onSessionUpdate={updateSession}
+      />
     </main>
   );
 }
@@ -214,8 +289,13 @@ function GamePageInner({
 export default function GamePage() {
   return (
     <AuthGate>
-      {({ token, username, logout }) => (
-        <GamePageInner token={token} username={username} logout={logout} />
+      {({ token, username, logout, updateSession }) => (
+        <GamePageInner
+          token={token}
+          username={username}
+          logout={logout}
+          updateSession={updateSession}
+        />
       )}
     </AuthGate>
   );

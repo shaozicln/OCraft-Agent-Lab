@@ -22,6 +22,41 @@
       "when": 1752153600000,
       "tag": "0002_story_flags_text",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1752240000000,
+      "tag": "0003_pack_progress_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1752326400000,
+      "tag": "0004_pack_seed_and_selection",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1752412800000,
+      "tag": "0005_player_uid",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1752499200000,
+      "tag": "0006_player_uid_3digit",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1752585600000,
+      "tag": "0007_player_pack_profiles",
+      "breakpoints": true
     }
   ]
 }

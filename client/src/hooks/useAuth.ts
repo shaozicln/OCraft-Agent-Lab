@@ -7,6 +7,7 @@ import {
   getAuthSession,
   loginAccount,
   registerAccount,
+  setAuthSession,
   validateAuthSession,
 } from '@/lib/auth';
 
@@ -57,12 +58,18 @@ export function useAuth() {
     setSession(null);
   }, []);
 
+  const updateSession = useCallback((next: AuthSession) => {
+    setAuthSession(next);
+    setSession(next);
+  }, []);
+
   return {
     session,
     loading,
     login,
     register,
     logout,
+    updateSession,
     isAuthenticated: session !== null,
   };
 }

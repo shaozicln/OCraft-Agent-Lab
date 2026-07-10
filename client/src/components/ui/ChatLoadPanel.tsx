@@ -7,6 +7,8 @@ interface ChatLoadPanelProps {
   archives: ConversationArchiveSummary[] | null;
   loading: boolean;
   error: string | null;
+  /** chapterId → 展示名（来自当前 Pack） */
+  chapterLabels?: Record<string, string>;
   onClose: () => void;
   onLoad: (filename: string, snapshotIndex: number) => void;
 }
@@ -25,21 +27,19 @@ function formatTime(iso: string) {
   }
 }
 
-const CHAPTER_LABEL: Record<string, string> = {
-  daily: '日常',
-  uneasy: '异常',
-  dream_reveal: '梦境',
-};
-
 export function ChatLoadPanel({
   open,
   archives,
   loading,
   error,
+  chapterLabels = {},
   onClose,
   onLoad,
 }: ChatLoadPanelProps) {
   if (!open) return null;
+
+  const labelOf = (chapterId: string) =>
+    chapterLabels[chapterId] ?? chapterId;
 
   return (
     <div className="absolute inset-0 z-50 flex items-end justify-center pb-48 px-4 pointer-events-auto">
@@ -98,8 +98,7 @@ export function ChatLoadPanel({
                       <div className="text-xs text-slate-400 mt-0.5">
                         {snap.message_count} 条对话 · 好感 {snap.npc_state.affinity} ·
                         疲惫 {snap.npc_state.fatigue} ·{' '}
-                        {CHAPTER_LABEL[snap.npc_state.chapter_state] ??
-                          snap.npc_state.chapter_state}
+                        {labelOf(snap.npc_state.chapter_state)}
                       </div>
                     </button>
                   </li>

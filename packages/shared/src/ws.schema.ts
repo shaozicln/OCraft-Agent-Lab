@@ -3,14 +3,14 @@ import { storyFlagsSnapshotSchema } from './story.schema';
 
 /**
  * 章节 ID：由当前 Story Pack 声明（不再写死业务枚举）。
- * 官方 office 包仍使用 daily / uneasy / dream_reveal。
  */
 export const chapterStateSchema = z.string().min(1).max(64);
 export type ChapterState = z.infer<typeof chapterStateSchema>;
-/** 无 Pack 时的回退默认；有 Pack 时应用 getDefaultChapterId(pack) */
-export const DEFAULT_CHAPTER_STATE: ChapterState = 'daily';
 
-export const playerIdSchema = z.string().uuid();
+/** 玩家 UID：三位数字字符串，如 001（注册时顺序分配） */
+export const playerIdSchema = z
+  .string()
+  .regex(/^\d{3}$/, '玩家 UID 须为三位数字');
 
 export const playerChatPayloadSchema = z.object({
   npcId: z.string().min(1).max(64),

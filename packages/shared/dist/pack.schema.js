@@ -1,9 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.storyPackSchema = exports.worldManifestSchema = exports.packHeaderSchema = exports.packWorldFileSchema = exports.packEndingSchema = exports.packNumericToolsSchema = exports.packPromptsFileSchema = exports.packFlagConstraintSchema = exports.packFlagConstraintWhenSchema = exports.packFatigueHintSchema = exports.packAffinityTierSchema = exports.packTriggersFileSchema = exports.packNpcReplyFlagRuleSchema = exports.packTriggerRuleSchema = exports.packFlagSetEntrySchema = exports.packNpcSchema = exports.packMemorySchema = exports.packFlagDefSchema = exports.packChapterSchema = exports.packIdSchema = void 0;
+exports.storyPackSchema = exports.worldManifestSchema = exports.packHeaderSchema = exports.packWorldFileSchema = exports.packEndingSchema = exports.packAnimationRuleSchema = exports.packAnimationRuleWhenSchema = exports.packAnimationIdSchema = exports.packNumericToolsSchema = exports.packPromptsFileSchema = exports.packFlagConstraintSchema = exports.packFlagConstraintWhenSchema = exports.packFatigueHintSchema = exports.packAffinityTierSchema = exports.packTriggersFileSchema = exports.packNpcReplyFlagRuleSchema = exports.packTriggerRuleSchema = exports.packFlagSetEntrySchema = exports.packNpcSchema = exports.packMemorySchema = exports.packFlagDefSchema = exports.packChapterSchema = exports.packIdSchema = void 0;
 exports.assertPackReferences = assertPackReferences;
 exports.getDefaultChapterId = getDefaultChapterId;
+exports.getDefaultNpcId = getDefaultNpcId;
 exports.getChapterRankMap = getChapterRankMap;
+exports.getChapterLabelMap = getChapterLabelMap;
 const zod_1 = require("zod");
 /** 包内 ID：章节 / flag / NPC 等，由 Pack 声明，代码不写死业务枚举 */
 exports.packIdSchema = zod_1.z
@@ -13,9 +15,9 @@ exports.packIdSchema = zod_1.z
     .regex(/^[a-zA-Z0-9_-]+$/, 'id 仅允许字母数字、_、-');
 exports.packChapterSchema = zod_1.z.object({
     id: exports.packIdSchema,
-    display_name: zod_1.z.string().min(1),
+    display_name: zod_1.z.string(),
     /** HUD / 列表短文案 */
-    hud_label: zod_1.z.string().min(1).optional(),
+    hud_label: zod_1.z.string().optional(),
     /** 升序：越大越靠后；只升不降用此比较 */
     rank: zod_1.z.number().int().nonnegative(),
 });
@@ -32,13 +34,13 @@ exports.packMemorySchema = zod_1.z.object({
     id: zod_1.z.string().min(1),
     tags: zod_1.z.array(zod_1.z.string()).default([]),
     keywords: zod_1.z.array(zod_1.z.string()).default([]),
-    content: zod_1.z.string().min(1),
+    content: zod_1.z.string(),
     /** 解锁此记忆的最低章节 id；省略则视为最低章 */
     min_chapter: exports.packIdSchema.optional(),
 });
 exports.packNpcSchema = zod_1.z.object({
     npc_id: exports.packIdSchema,
-    name: zod_1.z.string().min(1),
+    name: zod_1.z.string(),
     meta: zod_1.z.object({
         avatar: zod_1.z.string(),
         model_path: zod_1.z.string(),
@@ -55,7 +57,7 @@ exports.packNpcSchema = zod_1.z.object({
             .record(zod_1.z.string(), zod_1.z.array(zod_1.z.string()))
             .optional(),
     }),
-    system_prompt_template: zod_1.z.string().min(1),
+    system_prompt_template: zod_1.z.string(),
     memories: zod_1.z.array(exports.packMemorySchema).default([]),
 });
 exports.packFlagSetEntrySchema = zod_1.z.object({
@@ -80,7 +82,7 @@ exports.packNpcReplyFlagRuleSchema = zod_1.z.object({
     when_chapter_in: zod_1.z.array(exports.packIdSchema).min(1),
     set_flag: exports.packIdSchema,
     value: zod_1.z.string().min(1).default('true'),
-    triggers: zod_1.z.array(zod_1.z.string()).min(1),
+    triggers: zod_1.z.array(zod_1.z.string()).default([]),
 });
 exports.packTriggersFileSchema = zod_1.z.object({
     version: zod_1.z.number().int().positive().default(1),
@@ -90,12 +92,12 @@ exports.packTriggersFileSchema = zod_1.z.object({
 /** 好感区间文案：affinity < max_exclusive 时命中（最后一档用极大 max） */
 exports.packAffinityTierSchema = zod_1.z.object({
     max_exclusive: zod_1.z.number(),
-    text: zod_1.z.string().min(1),
+    text: zod_1.z.string(),
 });
 /** 疲惫提示：fatigue >= min 时命中，按 min 降序匹配第一条 */
 exports.packFatigueHintSchema = zod_1.z.object({
     min: zod_1.z.number(),
-    text: zod_1.z.string().min(1),
+    text: zod_1.z.string(),
 });
 /**
  * Flag 约束条件（解释器求值）
@@ -112,7 +114,7 @@ exports.packFlagConstraintWhenSchema = zod_1.z.object({
 exports.packFlagConstraintSchema = zod_1.z.object({
     id: zod_1.z.string().min(1),
     when: exports.packFlagConstraintWhenSchema,
-    text: zod_1.z.string().min(1),
+    text: zod_1.z.string(),
 });
 exports.packPromptsFileSchema = zod_1.z.object({
     affinity_tiers: zod_1.z.array(exports.packAffinityTierSchema).min(1),
@@ -127,7 +129,7 @@ exports.packPromptsFileSchema = zod_1.z.object({
 });
 exports.packNumericToolsSchema = zod_1.z.object({
     fatigue_increase: zod_1.z.object({
-        triggers: zod_1.z.array(zod_1.z.string()).min(1),
+        triggers: zod_1.z.array(zod_1.z.string()),
         delta: zod_1.z.number(),
         reason: zod_1.z.string(),
     }),
@@ -139,9 +141,36 @@ exports.packNumericToolsSchema = zod_1.z.object({
         fatigue_reason: zod_1.z.string(),
     }),
 });
+/** 第一期支持的动画状态（与前端 Humanoid 一致） */
+exports.packAnimationIdSchema = zod_1.z.enum([
+    'idle',
+    'sleeping',
+    'talk',
+    'excited_talk',
+]);
+/**
+ * 动画规则条件（按规则数组顺序，先命中先生效）
+ * - fatigue_delta_gt / lt：本轮 updateFatigue 的 delta 合计
+ * - message_triggers：玩家消息包含任一词
+ * - interest_hit：命中 NPC favorite / synonyms
+ * - current_status：当前动画状态等于该值
+ */
+exports.packAnimationRuleWhenSchema = zod_1.z.object({
+    fatigue_delta_gt: zod_1.z.number().optional(),
+    fatigue_delta_lt: zod_1.z.number().optional(),
+    message_triggers: zod_1.z.array(zod_1.z.string()).optional(),
+    interest_hit: zod_1.z.boolean().optional(),
+    current_status: zod_1.z.string().optional(),
+});
+exports.packAnimationRuleSchema = zod_1.z.object({
+    id: zod_1.z.string().min(1),
+    enabled: zod_1.z.boolean().default(true),
+    when: exports.packAnimationRuleWhenSchema,
+    animation: exports.packAnimationIdSchema,
+});
 exports.packEndingSchema = zod_1.z.object({
     id: exports.packIdSchema,
-    display_name: zod_1.z.string().min(1),
+    display_name: zod_1.z.string(),
     /** 第一期仅占位；P3 再解释条件 */
     notes: zod_1.z.string().optional(),
     performance_hint: zod_1.z.string().optional(),
@@ -151,13 +180,17 @@ exports.packWorldFileSchema = zod_1.z.object({
     flags: zod_1.z.array(exports.packFlagDefSchema).min(1),
     /** 新进度默认章节 = chapters 中 rank 最小者，可显式覆盖 */
     default_chapter: exports.packIdSchema.optional(),
+    /** 进场默认 NPC；省略则取 npcs[0] */
+    default_npc: exports.packIdSchema.optional(),
     numeric_tools: exports.packNumericToolsSchema,
+    /** 玩家消息 / 数值变化 → 动画；空则保持当前状态 */
+    animation_rules: zod_1.z.array(exports.packAnimationRuleSchema).default([]),
     endings: zod_1.z.array(exports.packEndingSchema).default([]),
 });
 exports.packHeaderSchema = zod_1.z.object({
     schema_version: zod_1.z.number().int().positive(),
     world_id: exports.packIdSchema,
-    /** 用户自定义显示名（不含时间戳） */
+    /** 版本名（不含时间戳）；目录为 版本名__时间戳 */
     display_name: zod_1.z.string().min(1),
     /** ISO 或 yyyyMMddTHHmm */
     created_at: zod_1.z.string().min(1),
@@ -165,7 +198,6 @@ exports.packHeaderSchema = zod_1.z.object({
 });
 exports.worldManifestSchema = zod_1.z.object({
     world_id: exports.packIdSchema,
-    display_name: zod_1.z.string().min(1),
     /** versions/ 下的目录名（含 __时间戳） */
     official_version_dir: zod_1.z.string().min(1),
     description: zod_1.z.string().optional(),
@@ -177,7 +209,7 @@ exports.storyPackSchema = zod_1.z.object({
     triggers: exports.packTriggersFileSchema,
     prompts: exports.packPromptsFileSchema,
     npcs: zod_1.z.array(exports.packNpcSchema).min(1),
-    /** 磁盘版本目录名，如 官方MVP__20260710T1045 */
+    /** 磁盘版本目录名，如 默认MVP__20260710T1045 */
     version_dir: zod_1.z.string().min(1),
 });
 /** 交叉校验：触发/记忆/约束引用的章节与 flag 必须在 world 中声明 */
@@ -196,6 +228,11 @@ function assertPackReferences(pack) {
     };
     if (pack.world.default_chapter) {
         needChapter(pack.world.default_chapter, 'world.default_chapter');
+    }
+    if (pack.world.default_npc) {
+        if (!pack.npcs.some((n) => n.npc_id === pack.world.default_npc)) {
+            throw new Error(`Pack 引用未知 NPC "${pack.world.default_npc}" @ world.default_npc`);
+        }
     }
     for (const [ch] of Object.entries(pack.prompts.chapter_constraints)) {
         needChapter(ch, 'prompts.chapter_constraints');
@@ -246,10 +283,23 @@ function getDefaultChapterId(pack) {
     const sorted = [...pack.world.chapters].sort((a, b) => a.rank - b.rank);
     return sorted[0].id;
 }
+function getDefaultNpcId(pack) {
+    if (pack.world.default_npc)
+        return pack.world.default_npc;
+    return pack.npcs[0].npc_id;
+}
 function getChapterRankMap(pack) {
     const map = {};
     for (const c of pack.world.chapters) {
         map[c.id] = c.rank;
+    }
+    return map;
+}
+/** chapterId → HUD / 列表显示名（优先 hud_label） */
+function getChapterLabelMap(pack) {
+    const map = {};
+    for (const c of pack.world.chapters) {
+        map[c.id] = c.hud_label || c.display_name || c.id;
     }
     return map;
 }

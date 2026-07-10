@@ -4,6 +4,7 @@ export * from './npc.schema';
 export * from './ws.schema';
 export * from './story.schema';
 export * from './pack.schema';
+export * from './pack-api.schema';
 export * from './chapter.util';
 export * from './tools.schema';
 export * from './llm.schema';

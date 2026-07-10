@@ -1,0 +1,124 @@
+{
+  "chapters": [
+    {
+      "id": "daily",
+      "display_name": "",
+      "rank": 0
+    },
+    {
+      "id": "uneasy",
+      "display_name": "",
+      "rank": 1
+    },
+    {
+      "id": "dream_reveal",
+      "display_name": "",
+      "rank": 2
+    }
+  ],
+  "flags": [
+    {
+      "name": "ch1_bonded",
+      "type": "bool",
+      "irreversible": true
+    },
+    {
+      "name": "ch2_sleep_mentioned",
+      "type": "bool",
+      "irreversible": true
+    },
+    {
+      "name": "ch2_npc_admitted_tired",
+      "type": "bool",
+      "irreversible": true
+    },
+    {
+      "name": "ch2_floor_avoided",
+      "type": "bool",
+      "irreversible": true
+    },
+    {
+      "name": "ch3_dream_partial",
+      "type": "bool",
+      "irreversible": true
+    },
+    {
+      "name": "ch3_dream_full",
+      "type": "bool",
+      "irreversible": true
+    },
+    {
+      "name": "ch3_colleague_hint",
+      "type": "bool",
+      "irreversible": true
+    },
+    {
+      "name": "ch4_ocraft_aware",
+      "type": "bool",
+      "irreversible": true
+    },
+    {
+      "name": "ch5_player_stance",
+      "type": "enum",
+      "enum_values": [
+        "help",
+        "leave",
+        "silence"
+      ],
+      "irreversible": true
+    },
+    {
+      "name": "ending_locked",
+      "type": "bool",
+      "irreversible": true
+    }
+  ],
+  "default_chapter": "uneasy",
+  "default_npc": "npc_suolunsen",
+  "numeric_tools": {
+    "fatigue_increase": {
+      "triggers": [],
+      "delta": 15,
+      "reason": ""
+    },
+    "interest_hit": {
+      "affinity_delta": 10,
+      "affinity_reason": "",
+      "fatigue_delta": -15,
+      "fatigue_reason": ""
+    }
+  },
+  "animation_rules": [
+    {
+      "id": "fatigue_up_sleep",
+      "enabled": true,
+      "when": {
+        "fatigue_delta_gt": 0
+      },
+      "animation": "sleeping"
+    },
+    {
+      "id": "game_excited",
+      "enabled": true,
+      "when": {},
+      "animation": "excited_talk"
+    },
+    {
+      "id": "interest_talk",
+      "enabled": true,
+      "when": {
+        "interest_hit": true
+      },
+      "animation": "talk"
+    },
+    {
+      "id": "wake_from_sleep",
+      "enabled": true,
+      "when": {
+        "current_status": "sleeping"
+      },
+      "animation": "talk"
+    }
+  ],
+  "endings": []
+}

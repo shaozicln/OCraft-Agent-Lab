@@ -2,13 +2,13 @@ import { Injectable } from '@nestjs/common';
 import * as path from 'path';
 import {
   type ChapterState,
-  DEFAULT_CHAPTER_STATE,
   type LlmMessage,
   type NpcRuntimeState,
   type StoryFlagsSnapshot,
 } from '@ocraft/shared';
 import { PlayerStateRepository } from '../db/player-state.repository';
 import { NpcService } from '../npc/npc.service';
+import { PackService } from '../story/pack.service';
 import { StoryFlagService } from '../story/story-flag.service';
 import {
   ConversationArchiveService,
@@ -39,7 +39,7 @@ export interface RestoreSnapshotResult {
 
 @Injectable()
 export class ConversationService {
-  /** key: `${playerId}:${npcId}` */
+  /** key: PackService.sessionKey(playerId, npcId) */
   private readonly history = new Map<string, LlmMessage[]>();
   private readonly chapterStates = new Map<string, ChapterState>();
   private readonly transcripts = new Map<string, SessionTranscript>();
@@ -51,10 +51,19 @@ export class ConversationService {
     private readonly playerStateRepo: PlayerStateRepository,
     private readonly npcService: NpcService,
     private readonly storyFlagService: StoryFlagService,
+    private readonly packService: PackService,
   ) {}
 
   private key(playerId: string, npcId: string) {
-    return `${playerId}:${npcId}`;
+    return this.packService.sessionKey(playerId, npcId);
+  }
+
+  private progressKey() {
+    return this.packService.getProgressKey();
+  }
+
+  private defaultChapter(): ChapterState {
+    return this.packService.getDefaultChapter();
   }
 
   async ensureSession(playerId: string, npcId: string): Promise<void> {
@@ -63,11 +72,15 @@ export class ConversationService {
       return;
     }
 
+    const { worldId, packVersionId } = this.progressKey();
     const defaults = this.npcService.getDefaultRuntimeState(npcId);
     const session = await this.playerStateRepo.loadSession(
       playerId,
+      worldId,
+      packVersionId,
       npcId,
       defaults,
+      this.defaultChapter(),
     );
 
     await this.npcService.hydrateRuntime(playerId, npcId);
@@ -95,18 +108,27 @@ export class ConversationService {
   private async persistSession(playerId: string, npcId: string) {
     const k = this.key(playerId, npcId);
     const transcript = this.transcripts.get(k);
-    await this.playerStateRepo.saveFullSession(playerId, npcId, {
-      runtime: this.npcService.getRuntimeState(playerId, npcId),
-      chapterState: this.getChapterState(playerId, npcId),
-      recentMessages: this.history.get(k) ?? [],
-      transcriptMessages: transcript?.messages ?? [],
-      sessionStartedAt: transcript?.startedAt ?? null,
-      activeArchiveFilename: this.sessionArchiveFiles.get(k) ?? null,
-    });
+    const { worldId, packVersionId } = this.progressKey();
+    await this.playerStateRepo.saveFullSession(
+      playerId,
+      worldId,
+      packVersionId,
+      npcId,
+      {
+        runtime: this.npcService.getRuntimeState(playerId, npcId),
+        chapterState: this.getChapterState(playerId, npcId),
+        recentMessages: this.history.get(k) ?? [],
+        transcriptMessages: transcript?.messages ?? [],
+        sessionStartedAt: transcript?.startedAt ?? null,
+        activeArchiveFilename: this.sessionArchiveFiles.get(k) ?? null,
+      },
+    );
   }
 
   getChapterState(playerId: string, npcId: string): ChapterState {
-    return this.chapterStates.get(this.key(playerId, npcId)) ?? DEFAULT_CHAPTER_STATE;
+    return (
+      this.chapterStates.get(this.key(playerId, npcId)) ?? this.defaultChapter()
+    );
   }
 
   async setChapterState(
@@ -116,7 +138,14 @@ export class ConversationService {
   ): Promise<ChapterState> {
     const k = this.key(playerId, npcId);
     this.chapterStates.set(k, state);
-    await this.playerStateRepo.saveChapterState(playerId, npcId, state);
+    const { worldId, packVersionId } = this.progressKey();
+    await this.playerStateRepo.saveChapterState(
+      playerId,
+      worldId,
+      packVersionId,
+      npcId,
+      state,
+    );
     return state;
   }
 
@@ -252,18 +281,25 @@ export class ConversationService {
     };
     await this.storyFlagService.replaceAll(playerId, npcId, storyFlags);
 
-    await this.playerStateRepo.saveFullSession(playerId, npcId, {
-      runtime: {
-        affinity: snapshot.npc_state.affinity,
-        fatigue: snapshot.npc_state.fatigue,
-        current_status: snapshot.npc_state.current_status,
+    const { worldId, packVersionId } = this.progressKey();
+    await this.playerStateRepo.saveFullSession(
+      playerId,
+      worldId,
+      packVersionId,
+      npcId,
+      {
+        runtime: {
+          affinity: snapshot.npc_state.affinity,
+          fatigue: snapshot.npc_state.fatigue,
+          current_status: snapshot.npc_state.current_status,
+        },
+        chapterState: snapshot.npc_state.chapter_state,
+        recentMessages: history,
+        transcriptMessages: messages,
+        sessionStartedAt: transcript.startedAt,
+        activeArchiveFilename: safeFilename,
       },
-      chapterState: snapshot.npc_state.chapter_state,
-      recentMessages: history,
-      transcriptMessages: messages,
-      sessionStartedAt: transcript.startedAt,
-      activeArchiveFilename: safeFilename,
-    });
+    );
 
     return {
       filename: safeFilename,

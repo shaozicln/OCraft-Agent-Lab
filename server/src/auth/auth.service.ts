@@ -1,7 +1,6 @@
 import {
   createHmac,
   randomBytes,
-  randomUUID,
   scryptSync,
   timingSafeEqual,
 } from 'crypto';
@@ -12,11 +11,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { AuthSession } from '@ocraft/shared';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { DbService } from '../db/db.service';
 import { players } from '../db/schema';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天
+const UID_MAX = 999;
 
 @Injectable()
 export class AuthService {
@@ -64,6 +64,7 @@ export class AuthService {
     const exp = Number(expStr);
     if (!playerId || !Number.isFinite(exp) || !sig) return null;
     if (Date.now() > exp) return null;
+    if (!/^\d{3}$/.test(playerId)) return null;
 
     const payload = `${playerId}.${expStr}`;
     const expected = createHmac('sha256', this.secret)
@@ -87,6 +88,19 @@ export class AuthService {
     return this.dbService.db;
   }
 
+  /** 顺序分配三位 UID：001 … 999 */
+  private async allocateUid(): Promise<string> {
+    const db = this.requireDb();
+    const result = await db.execute<{ nextval: string | number }>(
+      sql`SELECT nextval('player_uid_seq') AS nextval`,
+    );
+    const n = Number(result.rows[0]?.nextval);
+    if (!Number.isFinite(n) || n < 1 || n > UID_MAX) {
+      throw new ConflictException('玩家 UID 已满（最多 999）');
+    }
+    return String(n).padStart(3, '0');
+  }
+
   async register(username: string, password: string): Promise<AuthSession> {
     const db = this.requireDb();
     const normalized = this.normalizeUsername(username);
@@ -101,15 +115,14 @@ export class AuthService {
       throw new ConflictException('用户名已被占用');
     }
 
-    const playerId = randomUUID();
+    const playerId = await this.allocateUid();
     await db.insert(players).values({
       id: playerId,
       username: normalized,
       passwordHash: this.hashPassword(password),
-      extra: {},
     });
 
-    this.logger.log(`Registered player username=${normalized} id=${playerId}`);
+    this.logger.log(`Registered player username=${normalized} uid=${playerId}`);
     return {
       playerId,
       username: normalized,
@@ -136,7 +149,7 @@ export class AuthService {
       throw new UnauthorizedException('用户名或密码错误');
     }
 
-    this.logger.log(`Login username=${normalized} id=${row.id}`);
+    this.logger.log(`Login username=${normalized} uid=${row.id}`);
     return {
       playerId: row.id,
       username: row.username ?? normalized,
@@ -164,6 +177,93 @@ export class AuthService {
       playerId: row.id,
       username: row.username,
       token,
+    };
+  }
+
+  async updateAccount(
+    playerId: string,
+    patch: {
+      username?: string;
+      currentPassword: string;
+      newPassword?: string;
+    },
+  ): Promise<AuthSession> {
+    const db = this.requireDb();
+    const rows = await db
+      .select({
+        id: players.id,
+        username: players.username,
+        passwordHash: players.passwordHash,
+      })
+      .from(players)
+      .where(eq(players.id, playerId))
+      .limit(1);
+
+    const row = rows[0];
+    if (!row?.passwordHash || !this.verifyPassword(patch.currentPassword, row.passwordHash)) {
+      throw new UnauthorizedException('当前密码不正确');
+    }
+
+    const set: Partial<typeof players.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+
+    let nextUsername = row.username ?? '';
+    if (patch.username !== undefined) {
+      const normalized = this.normalizeUsername(patch.username);
+      if (normalized !== row.username) {
+        const clash = await db
+          .select({ id: players.id })
+          .from(players)
+          .where(eq(players.username, normalized))
+          .limit(1);
+        if (clash.length > 0) {
+          throw new ConflictException('用户名已被占用');
+        }
+        set.username = normalized;
+        nextUsername = normalized;
+      }
+    }
+
+    if (patch.newPassword !== undefined) {
+      set.passwordHash = this.hashPassword(patch.newPassword);
+    }
+
+    await db.update(players).set(set).where(eq(players.id, playerId));
+    this.logger.log(`Account updated uid=${playerId} username=${nextUsername}`);
+
+    return {
+      playerId,
+      username: nextUsername,
+      token: this.signToken(playerId),
+    };
+  }
+
+  async getAccount(playerId: string): Promise<{
+    id: string;
+    username: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null> {
+    const db = this.dbService.isReady ? this.dbService.db : null;
+    if (!db) return null;
+    const rows = await db
+      .select({
+        id: players.id,
+        username: players.username,
+        createdAt: players.createdAt,
+        updatedAt: players.updatedAt,
+      })
+      .from(players)
+      .where(eq(players.id, playerId))
+      .limit(1);
+    const row = rows[0];
+    if (!row?.username) return null;
+    return {
+      id: row.id,
+      username: row.username,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     };
   }
 }

@@ -1,5 +1,5 @@
 /**
- * 校验 story-packs 下官方包（或指定目录）能否通过 Schema + 交叉引用。
+ * 校验 story-packs 下默认包（或指定目录）能否通过 Schema + 交叉引用。
  * 用法：npx ts-node -r tsconfig-paths/register scripts/validate-pack.ts
  *       npx ts-node -r tsconfig-paths/register scripts/validate-pack.ts ../story-packs/office/versions/official-mvp__20260710T1045
  */

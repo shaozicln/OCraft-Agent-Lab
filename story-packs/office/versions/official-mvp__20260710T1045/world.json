@@ -1,5 +1,4 @@
 {
-  "default_chapter": "daily",
   "chapters": [
     {
       "id": "daily",
@@ -73,7 +72,11 @@
       "name": "ch5_player_stance",
       "type": "enum",
       "description": "玩家站队（占位）",
-      "enum_values": ["help", "leave", "silence"],
+      "enum_values": [
+        "help",
+        "leave",
+        "silence"
+      ],
       "irreversible": true
     },
     {
@@ -83,6 +86,8 @@
       "irreversible": true
     }
   ],
+  "default_chapter": "daily",
+  "default_npc": "colleague_chenyu",
   "numeric_tools": {
     "fatigue_increase": {
       "triggers": [
@@ -106,5 +111,46 @@
       "fatigue_reason": "提到兴趣话题"
     }
   },
+  "animation_rules": [
+    {
+      "id": "fatigue_up_sleep",
+      "enabled": true,
+      "when": {
+        "fatigue_delta_gt": 0
+      },
+      "animation": "sleeping"
+    },
+    {
+      "id": "game_excited",
+      "enabled": true,
+      "when": {
+        "message_triggers": [
+          "游戏",
+          "steam",
+          "端游",
+          "开黑",
+          "网游",
+          "Steam"
+        ]
+      },
+      "animation": "excited_talk"
+    },
+    {
+      "id": "interest_talk",
+      "enabled": true,
+      "when": {
+        "interest_hit": true
+      },
+      "animation": "talk"
+    },
+    {
+      "id": "wake_from_sleep",
+      "enabled": true,
+      "when": {
+        "current_status": "sleeping"
+      },
+      "animation": "talk"
+    }
+  ],
   "endings": []
 }

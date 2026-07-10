@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "bond_daily",
+      "enabled": true,
+      "from_chapter": "daily",
+      "to_chapter": null,
+      "min_affinity": 40,
+      "require_flags": [],
+      "player_triggers": [],
+      "set_flags": [
+        {
+          "name": "ch1_bonded",
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "id": "daily_to_uneasy",
+      "enabled": true,
+      "from_chapter": "daily",
+      "to_chapter": "uneasy",
+      "min_affinity": 40,
+      "max_fatigue": 70,
+      "require_flags": [
+        "ch1_bonded"
+      ],
+      "player_triggers": [],
+      "set_flags": [
+        {
+          "name": "ch2_sleep_mentioned",
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "id": "floor_avoided",
+      "enabled": true,
+      "from_chapter": "uneasy",
+      "to_chapter": null,
+      "min_affinity": 0,
+      "require_flags": [],
+      "player_triggers": [],
+      "set_flags": [
+        {
+          "name": "ch2_floor_avoided",
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "id": "dream_partial",
+      "enabled": true,
+      "from_chapter": "uneasy",
+      "to_chapter": null,
+      "min_affinity": 0,
+      "require_flags": [
+        "ch2_sleep_mentioned"
+      ],
+      "player_triggers": [],
+      "set_flags": [
+        {
+          "name": "ch3_dream_partial",
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "id": "uneasy_to_dream_reveal",
+      "enabled": true,
+      "from_chapter": "uneasy",
+      "to_chapter": "dream_reveal",
+      "min_affinity": 45,
+      "require_flags": [
+        "ch2_sleep_mentioned"
+      ],
+      "player_triggers": [],
+      "set_flags": [
+        {
+          "name": "ch3_dream_full",
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "id": "colleague_hint",
+      "enabled": true,
+      "from_chapter": "dream_reveal",
+      "to_chapter": null,
+      "min_affinity": 55,
+      "require_flags": [
+        "ch3_dream_full"
+      ],
+      "player_triggers": [],
+      "set_flags": [
+        {
+          "name": "ch3_colleague_hint",
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "id": "ch4_ocraft_aware_placeholder",
+      "enabled": false,
+      "from_chapter": "dream_reveal",
+      "to_chapter": null,
+      "min_affinity": 70,
+      "require_flags": [
+        "ch3_dream_full"
+      ],
+      "player_triggers": [],
+      "set_flags": [
+        {
+          "name": "ch4_ocraft_aware",
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "id": "ch5_stance_placeholder",
+      "enabled": false,
+      "from_chapter": "dream_reveal",
+      "to_chapter": null,
+      "min_affinity": 0,
+      "require_flags": [
+        "ch4_ocraft_aware"
+      ],
+      "player_triggers": [],
+      "set_flags": []
+    }
+  ],
+  "npc_reply_flag_rules": [
+    {
+      "id": "admit_tired",
+      "enabled": true,
+      "when_chapter_in": [
+        "uneasy",
+        "dream_reveal"
+      ],
+      "set_flag": "ch2_npc_admitted_tired",
+      "value": "true",
+      "triggers": []
+    }
+  ]
+}

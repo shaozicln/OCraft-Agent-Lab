@@ -9,9 +9,9 @@ import type {
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { NpcStateUpdate } from '@ocraft/shared';
-import { DEFAULT_NPC_ID, GAME_SERVER_URL } from '@/config/game';
+import { GAME_SERVER_URL } from '@/config/game';
 
-export function useGameSocket(token: string, npcId = DEFAULT_NPC_ID) {
+export function useGameSocket(token: string, npcId: string) {
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [npcState, setNpcState] = useState<NpcStateUpdate | null>(null);
@@ -27,7 +27,7 @@ export function useGameSocket(token: string, npcId = DEFAULT_NPC_ID) {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !npcId) return;
 
     const socket = io(GAME_SERVER_URL, {
       auth: { token },

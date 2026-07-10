@@ -1,0 +1,34 @@
+{
+  "npc_id": "npc_suolunsen",
+  "name": "索伦森npc",
+  "meta": {
+    "avatar": "",
+    "model_path": "",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "spawn_position": [
+      3.2,
+      0,
+      -2.2
+    ]
+  },
+  "attributes": {
+    "fatigue": 30,
+    "max_fatigue": 100,
+    "affinity": 30,
+    "current_status": "sleeping",
+    "favorite_things": []
+  },
+  "system_prompt_template": "",
+  "memories": [
+    {
+      "id": "mem_daily_lunch",
+      "tags": [],
+      "keywords": [],
+      "content": ""
+    }
+  ]
+}
