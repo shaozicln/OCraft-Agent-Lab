@@ -62,8 +62,8 @@ export function PackPromptsForm({
 
       <SectionCard
         id="pack-sec-affinity"
-        title="Prompt · 好感区间"
-        hint="affinity &lt; max_exclusive 时命中；最后一档用很大的 max。"
+        title="Prompt · 好感区间（affinity）"
+        hint="当前好感 affinity &lt; max_exclusive 时命中该档；最后一档用很大的 max。"
         panelStyle={panelStyle}
         actions={
           <AddButton
@@ -123,8 +123,8 @@ export function PackPromptsForm({
 
       <SectionCard
         id="pack-sec-fatigue"
-        title="Prompt · 疲惫提示"
-        hint="fatigue &gt;= min 时命中。"
+        title="Prompt · 疲惫提示（fatigue）"
+        hint="当前疲惫 fatigue &gt;= min 时命中该档提示。"
         panelStyle={panelStyle}
         actions={
           <AddButton

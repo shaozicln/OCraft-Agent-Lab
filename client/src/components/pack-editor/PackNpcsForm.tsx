@@ -194,7 +194,7 @@ export function PackNpcsForm({
                   }}
                 />
               </FieldLabel>
-              <FieldLabel label="fatigue" format={FMT.num}>
+              <FieldLabel label="fatigue（疲惫值，初始）" format={FMT.num}>
                 <NumInput
                   value={npc.attributes.fatigue}
                   onChange={(fatigue) =>
@@ -205,7 +205,7 @@ export function PackNpcsForm({
                   }
                 />
               </FieldLabel>
-              <FieldLabel label="max_fatigue" format={FMT.num}>
+              <FieldLabel label="max_fatigue（疲惫上限）" format={FMT.num}>
                 <NumInput
                   value={npc.attributes.max_fatigue}
                   onChange={(max_fatigue) =>
@@ -216,7 +216,7 @@ export function PackNpcsForm({
                   }
                 />
               </FieldLabel>
-              <FieldLabel label="affinity" format={FMT.num}>
+              <FieldLabel label="affinity（好感度，初始）" format={FMT.num}>
                 <NumInput
                   value={npc.attributes.affinity}
                   onChange={(affinity) =>

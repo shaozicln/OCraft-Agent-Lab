@@ -303,7 +303,7 @@ export function PackWorldForm({
               />
             </FieldLabel>
           </div>
-          <FieldLabel label="疲惫 delta" format={FMT.num}>
+          <FieldLabel label="疲惫 delta（每次增加量）" format={FMT.num}>
             <NumInput
               value={w.numeric_tools.fatigue_increase.delta}
               onChange={(delta) =>
@@ -336,7 +336,7 @@ export function PackWorldForm({
               }
             />
           </FieldLabel>
-          <FieldLabel label="兴趣好感 delta" format={FMT.num}>
+          <FieldLabel label="兴趣好感 delta（命中兴趣时加减）" format={FMT.num}>
             <NumInput
               value={w.numeric_tools.interest_hit.affinity_delta}
               onChange={(affinity_delta) =>
@@ -352,7 +352,7 @@ export function PackWorldForm({
               }
             />
           </FieldLabel>
-          <FieldLabel label="兴趣疲惫 delta" format={FMT.num}>
+          <FieldLabel label="兴趣疲惫 delta（命中兴趣时加减）" format={FMT.num}>
             <NumInput
               value={w.numeric_tools.interest_hit.fatigue_delta}
               onChange={(fatigue_delta) =>
@@ -465,7 +465,7 @@ export function PackWorldForm({
                 onChange={(enabled) => updateAnim(i, { ...rule, enabled })}
               />
               <FieldLabel
-                label="when.fatigue_delta_gt"
+                label="when.fatigue_delta_gt（本轮疲惫增量大于）"
                 format={`${FMT.optional}·${FMT.num}`}
               >
                 <TextInput
@@ -487,7 +487,7 @@ export function PackWorldForm({
                 />
               </FieldLabel>
               <FieldLabel
-                label="when.fatigue_delta_lt"
+                label="when.fatigue_delta_lt（本轮疲惫增量小于）"
                 format={`${FMT.optional}·${FMT.num}`}
               >
                 <TextInput

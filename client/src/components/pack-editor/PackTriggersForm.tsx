@@ -129,7 +129,7 @@ export function PackTriggersForm({
                   }
                 />
               </FieldLabel>
-              <FieldLabel label="min_affinity" format={FMT.num}>
+              <FieldLabel label="min_affinity（最低好感）" format={FMT.num}>
                 <NumInput
                   value={rule.min_affinity}
                   onChange={(min_affinity) =>
@@ -138,7 +138,7 @@ export function PackTriggersForm({
                 />
               </FieldLabel>
               <FieldLabel
-                label="max_fatigue"
+                label="max_fatigue（最高疲惫，可选）"
                 format={`${FMT.optional}·${FMT.num}`}
               >
                 <TextInput
