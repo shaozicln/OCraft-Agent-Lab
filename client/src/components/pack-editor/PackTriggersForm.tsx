@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  PackExchangeEvent,
   PackNpcReplyFlagRule,
   PackTriggerRule,
 } from '@ocraft/shared';
@@ -34,6 +35,10 @@ export function PackTriggersForm({
     value: f.name,
     label: f.name,
   }));
+  const npcOpts = value.npcs.map((n) => ({
+    value: n.npc_id,
+    label: `${n.name || n.npc_id} (${n.npc_id})`,
+  }));
 
   const setTriggers = (patch: Partial<typeof t>) =>
     onChange({ ...value, triggers: { ...t, ...patch } });
@@ -48,6 +53,12 @@ export function PackTriggersForm({
     const npc_reply_flag_rules = [...(t.npc_reply_flag_rules ?? [])];
     npc_reply_flag_rules[i] = next;
     setTriggers({ npc_reply_flag_rules });
+  };
+
+  const updateExchange = (i: number, next: PackExchangeEvent) => {
+    const exchange_events = [...(t.exchange_events ?? [])];
+    exchange_events[i] = next;
+    setTriggers({ exchange_events });
   };
 
   return (
@@ -304,6 +315,167 @@ export function PackTriggersForm({
                     value={rule.triggers}
                     onChange={(triggers) =>
                       updateReply(i, { ...rule, triggers })
+                    }
+                  />
+                </FieldLabel>
+              </div>
+            </div>
+          </RowCard>
+        ))}
+      </SectionCard>
+
+      <SectionCard
+        id="pack-sec-exchange"
+        title="触发器 · 关系事件互聊"
+        hint="对话结束后：章+require_flags 满足且 once 时 set_flags 未置 → speakers 各跑一轮 LLM（旁听，不升章）"
+        panelStyle={panelStyle}
+        actions={
+          <AddButton
+            label="+ 互聊事件"
+            onClick={() =>
+              setTriggers({
+                exchange_events: [
+                  ...(t.exchange_events ?? []),
+                  {
+                    id: `ex_${(t.exchange_events?.length ?? 0) + 1}`,
+                    enabled: true,
+                    chapter: value.world.chapters[0]?.id ?? 'daily',
+                    require_flags: [],
+                    speakers: [
+                      value.npcs[0]?.npc_id ?? 'npc_a',
+                      value.npcs[1]?.npc_id ?? value.npcs[0]?.npc_id ?? 'npc_b',
+                    ],
+                    beat_hints: [],
+                    set_flags: [],
+                    once: true,
+                  },
+                ],
+              })
+            }
+          />
+        }
+      >
+        {(t.exchange_events ?? []).map((ev, i) => (
+          <RowCard
+            key={`${ev.id}-${i}`}
+            title={`互聊 ${i + 1}: ${ev.id}`}
+            onRemove={() =>
+              setTriggers({
+                exchange_events: (t.exchange_events ?? []).filter(
+                  (_, j) => j !== i,
+                ),
+              })
+            }
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              <FieldLabel label="id" format={FMT.free}>
+                <TextInput
+                  value={ev.id}
+                  placeholder={ex?.exchange_events?.[i]?.id}
+                  onChange={(id) => updateExchange(i, { ...ev, id })}
+                />
+              </FieldLabel>
+              <BoolCheck
+                label="启用"
+                checked={ev.enabled !== false}
+                onChange={(enabled) => updateExchange(i, { ...ev, enabled })}
+              />
+              <BoolCheck
+                label="once（set_flags 已置则不再触发）"
+                checked={ev.once !== false}
+                onChange={(once) => updateExchange(i, { ...ev, once })}
+              />
+              <FieldLabel label="chapter" format={FMT.id}>
+                <SelectInput
+                  value={ev.chapter}
+                  options={chapterOpts}
+                  onChange={(chapter) => updateExchange(i, { ...ev, chapter })}
+                />
+              </FieldLabel>
+              <FieldLabel label="speaker A" format={FMT.id}>
+                <SelectInput
+                  value={ev.speakers[0]}
+                  options={npcOpts}
+                  onChange={(a) =>
+                    updateExchange(i, {
+                      ...ev,
+                      speakers: [a, ev.speakers[1]],
+                    })
+                  }
+                />
+              </FieldLabel>
+              <FieldLabel label="speaker B" format={FMT.id}>
+                <SelectInput
+                  value={ev.speakers[1]}
+                  options={npcOpts}
+                  onChange={(b) =>
+                    updateExchange(i, {
+                      ...ev,
+                      speakers: [ev.speakers[0], b],
+                    })
+                  }
+                />
+              </FieldLabel>
+              <div className="sm:col-span-2">
+                <FieldLabel label="require_flags" format={FMT.listId}>
+                  <StringListInput
+                    value={ev.require_flags}
+                    placeholder={flagOpts.map((f) => f.value).join('\n')}
+                    onChange={(require_flags) =>
+                      updateExchange(i, { ...ev, require_flags })
+                    }
+                  />
+                </FieldLabel>
+              </div>
+              <div className="sm:col-span-2">
+                <FieldLabel
+                  label="beat_hints（软提示，一行一条）"
+                  format={FMT.listFree}
+                >
+                  <StringListInput
+                    value={ev.beat_hints ?? []}
+                    onChange={(beat_hints) =>
+                      updateExchange(i, { ...ev, beat_hints })
+                    }
+                  />
+                </FieldLabel>
+              </div>
+              <div className="sm:col-span-2">
+                <FieldLabel
+                  label="set_flags（name=value，一行一条）"
+                  format={FMT.listId}
+                >
+                  <StringListInput
+                    value={(ev.set_flags ?? []).map(
+                      (f) => `${f.name}=${f.value}`,
+                    )}
+                    onChange={(lines) => {
+                      const set_flags = lines
+                        .map((line) => {
+                          const eq = line.indexOf('=');
+                          if (eq <= 0) return null;
+                          return {
+                            name: line.slice(0, eq).trim(),
+                            value: line.slice(eq + 1).trim() || 'true',
+                          };
+                        })
+                        .filter(
+                          (x): x is { name: string; value: string } => !!x?.name,
+                        );
+                      updateExchange(i, { ...ev, set_flags });
+                    }}
+                  />
+                </FieldLabel>
+              </div>
+              <div className="sm:col-span-2">
+                <FieldLabel label="备注" format={`${FMT.optional}·${FMT.free}`}>
+                  <TextInput
+                    value={ev.notes ?? ''}
+                    onChange={(notes) =>
+                      updateExchange(i, {
+                        ...ev,
+                        notes: notes || undefined,
+                      })
                     }
                   />
                 </FieldLabel>

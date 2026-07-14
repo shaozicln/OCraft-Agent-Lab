@@ -68,7 +68,7 @@ export function PackNpcsForm({
     <SectionCard
       id="pack-sec-npcs"
       title="NPC"
-      hint="角色状态 current_status 为写死动画枚举；同义词格式：兴趣=同义词1,同义词2"
+      hint="出场：appear_from_chapter / appear_require_flags 控制场景刷人；current_status 为写死动画；同义词：兴趣=同义词1,同义词2"
       panelStyle={panelStyle}
       actions={
         <AddButton
@@ -96,6 +96,7 @@ export function PackNpcsForm({
                   },
                   system_prompt_template: '',
                   memories: [],
+                  appear_require_flags: [],
                 },
               ],
             })
@@ -192,6 +193,39 @@ export function PackNpcsForm({
                       });
                     }
                   }}
+                />
+              </FieldLabel>
+              <FieldLabel
+                label="出场起始章（空=开场即在）"
+                format={FMT.id}
+              >
+                <SelectInput
+                  value={npc.appear_from_chapter ?? ''}
+                  allowEmpty
+                  placeholder="（开场即在）"
+                  options={chapterOpts}
+                  onChange={(appear_from_chapter) =>
+                    updateNpc(i, {
+                      ...npc,
+                      appear_from_chapter: appear_from_chapter || undefined,
+                    })
+                  }
+                />
+              </FieldLabel>
+              <FieldLabel
+                label="出场所需 flags（全部置位才刷）"
+                format={FMT.id}
+              >
+                <StringListInput
+                  value={npc.appear_require_flags ?? []}
+                  placeholder={
+                    ex?.appear_require_flags?.length
+                      ? ex.appear_require_flags.join('\n')
+                      : 'flag_id_1\nflag_id_2'
+                  }
+                  onChange={(appear_require_flags) =>
+                    updateNpc(i, { ...npc, appear_require_flags })
+                  }
                 />
               </FieldLabel>
               <FieldLabel label="fatigue（疲惫值，初始）" format={FMT.num}>

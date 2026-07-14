@@ -60,6 +60,14 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
         name: z.ZodString;
         value: z.ZodString;
     }, z.core.$strip>>>;
+    exchange: z.ZodOptional<z.ZodObject<{
+        event_id: z.ZodString;
+        lines: z.ZodArray<z.ZodObject<{
+            npc_id: z.ZodString;
+            name: z.ZodString;
+            text: z.ZodString;
+        }, z.core.$strip>>;
+    }, z.core.$strip>>;
 }, z.core.$strip>;
 export type AgentTraceRecord = z.infer<typeof agentTraceRecordSchema>;
 export type AgentTraceTransition = z.infer<typeof agentTraceTransitionSchema>;
@@ -106,6 +114,14 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
             name: z.ZodString;
             value: z.ZodString;
         }, z.core.$strip>>>;
+        exchange: z.ZodOptional<z.ZodObject<{
+            event_id: z.ZodString;
+            lines: z.ZodArray<z.ZodObject<{
+                npc_id: z.ZodString;
+                name: z.ZodString;
+                text: z.ZodString;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
     }, z.core.$strip>>;
 }, z.core.$strip>;
 export type AgentTraceListResponse = z.infer<typeof agentTraceListResponseSchema>;

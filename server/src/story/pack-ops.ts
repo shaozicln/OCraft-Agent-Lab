@@ -169,6 +169,11 @@ export function blankifyStoryPack(
           triggers: [],
         }),
       ),
+      exchange_events: (pack.triggers.exchange_events ?? []).map((e) => ({
+        ...e,
+        beat_hints: [],
+        notes: undefined,
+      })),
     },
     prompts: {
       affinity_tiers: pack.prompts.affinity_tiers.map((t) => ({
@@ -299,6 +304,7 @@ export function createMinimalBlankPack(opts: {
           triggers: [],
         },
       ],
+      exchange_events: [],
     },
     prompts: {
       reply_instruction: '',
@@ -340,6 +346,7 @@ export function createMinimalBlankPack(opts: {
             min_chapter: ch0,
           },
         ],
+        appear_require_flags: [],
       },
     ],
   };

@@ -68,6 +68,10 @@ export const packRuntimeChapterSchema = z.object({
 export const packRuntimeNpcSchema = z.object({
   npc_id: packIdSchema,
   name: z.string().min(1),
+  spawn_position: z.tuple([z.number(), z.number(), z.number()]),
+  /** 省略 = 开场即出场 */
+  appear_from_chapter: packIdSchema.optional(),
+  appear_require_flags: z.array(z.string()).default([]),
 });
 
 /** 当前玩家生效包的运行时摘要（进场用） */
@@ -76,7 +80,7 @@ export const packRuntimeSchema = z.object({
   default_npc_id: packIdSchema,
   default_chapter: packIdSchema,
   chapters: z.array(packRuntimeChapterSchema),
-  /** chapterId → 展示名（hud_label 优先） */
+  /** chapterId → 展示名（display_name 优先） */
   chapter_labels: z.record(z.string(), z.string()),
   npcs: z.array(packRuntimeNpcSchema),
 });
@@ -94,13 +98,17 @@ export const packUpdatePayloadSchema = z.object({
 });
 export type PackUpdatePayload = z.infer<typeof packUpdatePayloadSchema>;
 
-/** 一句话生成可勾选块（不含包头；未勾选则保留 basePack 对应内容） */
+/**
+ * 一句话生成可勾选块（不含包头；未勾选则保留 basePack 对应内容）
+ * 顺序按依赖：章节/Flags → NPC/结局 → 数值/动画 → 触发 → Prompt → 个人信息
+ */
 export const packGenerateSectionKeys = [
   'chapters',
   'flags',
+  'npcs',
+  'endings',
   'numeric_tools',
   'animation_rules',
-  'endings',
   'chapter_triggers',
   'npc_reply_flags',
   'prompt_common',
@@ -108,7 +116,6 @@ export const packGenerateSectionKeys = [
   'fatigue_hints',
   'chapter_constraints',
   'flag_constraints',
-  'npcs',
   'pack_profile',
 ] as const;
 
@@ -117,9 +124,10 @@ export type PackGenerateSectionKey = (typeof packGenerateSectionKeys)[number];
 export const packGenerateSectionsSchema = z.object({
   chapters: z.boolean(),
   flags: z.boolean(),
+  npcs: z.boolean(),
+  endings: z.boolean(),
   numeric_tools: z.boolean(),
   animation_rules: z.boolean(),
-  endings: z.boolean(),
   chapter_triggers: z.boolean(),
   npc_reply_flags: z.boolean(),
   prompt_common: z.boolean(),
@@ -127,7 +135,6 @@ export const packGenerateSectionsSchema = z.object({
   fatigue_hints: z.boolean(),
   chapter_constraints: z.boolean(),
   flag_constraints: z.boolean(),
-  npcs: z.boolean(),
   pack_profile: z.boolean(),
 });
 export type PackGenerateSections = z.infer<typeof packGenerateSectionsSchema>;
@@ -144,9 +151,10 @@ export const PACK_GENERATE_SECTION_LABELS: Record<
 > = {
   chapters: '世界·章节',
   flags: '世界·Flags',
+  npcs: 'NPC',
+  endings: '世界·结局',
   numeric_tools: '世界·数值工具',
   animation_rules: '世界·动画规则',
-  endings: '世界·结局',
   chapter_triggers: '触发·章节触发',
   npc_reply_flags: '触发·回复置 Flag',
   prompt_common: 'Prompt·通用',
@@ -154,7 +162,6 @@ export const PACK_GENERATE_SECTION_LABELS: Record<
   fatigue_hints: 'Prompt·疲惫提示',
   chapter_constraints: 'Prompt·章节约束',
   flag_constraints: 'Prompt·Flag 约束',
-  npcs: 'NPC',
   pack_profile: '本世界个人信息',
 };
 
@@ -190,20 +197,55 @@ export const packGenerateStreamEventSchema = z.discriminatedUnion('type', [
         }),
       )
       .optional(),
+    /** 首轮+重试后仍失败的块 */
+    failedSections: z
+      .array(
+        z.object({
+          section: z.enum(packGenerateSectionKeys),
+          message: z.string(),
+        }),
+      )
+      .optional(),
+    /** 给人看的收尾总结 */
+    summary: z.string().optional(),
   }),
 ]);
 export type PackGenerateStreamEvent = z.infer<
   typeof packGenerateStreamEventSchema
 >;
 
-/** 一句话生成 Pack 草稿（不落盘） */
-export const packGenerateDraftPayloadSchema = z.object({
-  prompt: z.string().trim().min(4).max(500),
-  /** 当前编辑中的包（保留 world_id / version_dir / header） */
-  basePack: z.unknown(),
-  /** 省略则全部生成 */
-  sections: packGenerateSectionsSchema.optional(),
-});
+/** 梗概/摘要上限；全文大纲用 outline 字段 */
+export const PACK_GENERATE_PROMPT_MAX = 8000;
+/** 导入大纲全文上限 */
+export const PACK_GENERATE_OUTLINE_MAX = 50000;
+
+/** 生成 Pack 草稿（不落盘）：摘要 + 可选导入大纲 */
+export const packGenerateDraftPayloadSchema = z
+  .object({
+    /** 梗概或大纲摘要 */
+    prompt: z.string().trim().max(PACK_GENERATE_PROMPT_MAX).default(''),
+    /** 导入的完整大纲（与 prompt 分开，避免挤在摘要框） */
+    outline: z
+      .string()
+      .trim()
+      .max(PACK_GENERATE_OUTLINE_MAX)
+      .optional(),
+    /** 当前编辑中的包（保留 world_id / version_dir / header） */
+    basePack: z.unknown(),
+    /** 省略则全部生成 */
+    sections: packGenerateSectionsSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    const brief = data.prompt.trim();
+    const outline = (data.outline ?? '').trim();
+    if (brief.length < 4 && outline.length < 4) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '请填写至少 4 字的梗概/摘要，或导入大纲全文',
+        path: ['prompt'],
+      });
+    }
+  });
 export type PackGenerateDraftPayload = z.infer<
   typeof packGenerateDraftPayloadSchema
 >;

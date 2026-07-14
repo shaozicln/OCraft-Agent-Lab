@@ -82,11 +82,19 @@ export function ChatHistoryFullscreen({
                   ? 'text-right text-sky-300'
                   : item.role === 'system'
                     ? 'text-center text-amber-400'
-                    : 'text-left text-slate-200'
+                    : item.role === 'exchange'
+                      ? 'text-left text-violet-300'
+                      : 'text-left text-slate-200'
               }`}
             >
               <span className="text-slate-500 text-xs">
-                {item.role === 'player' ? '你' : item.role === 'system' ? '系统' : npcName}
+                {item.role === 'player'
+                  ? '你'
+                  : item.role === 'system'
+                    ? '系统'
+                    : item.role === 'exchange'
+                      ? `旁听·${item.speakerName ?? 'NPC'}`
+                      : npcName}
               </span>
               <p className="mt-1 whitespace-pre-wrap">{item.text}</p>
               {item.role === 'npc' && isStreaming && i === history.length - 1 && (

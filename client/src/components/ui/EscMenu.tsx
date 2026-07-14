@@ -6,10 +6,12 @@ import type {
   AuthSession,
   PlayerAccount,
   PlayerPackProfile,
+  StoryMapEvent,
 } from '@ocraft/shared';
 import { resolveProfileFields } from '@ocraft/shared';
 import { apiFetch } from '@/lib/api';
 import { useTheme } from '@/theme/ThemeProvider';
+import { StoryProgressMap } from './StoryProgressMap';
 
 const GENDER_LABEL: Record<string, string> = {
   male: '男',
@@ -25,9 +27,17 @@ interface EscMenuProps {
   packLabel?: string;
   worldId?: string;
   packVersionId?: string;
+  storyMap?: StoryMapEvent | null;
+  runBusy?: boolean;
   onClose: () => void;
   onLogout: () => void;
   onSessionUpdate?: (session: AuthSession) => void;
+  onRequestStoryMap?: () => void;
+  onStartNewRun?: (opts: {
+    chapterId?: string;
+    viaRuleId?: string;
+    displayName?: string;
+  }) => void;
 }
 
 export function EscMenu({
@@ -37,9 +47,13 @@ export function EscMenu({
   packLabel,
   worldId,
   packVersionId,
+  storyMap = null,
+  runBusy = false,
   onClose,
   onLogout,
   onSessionUpdate,
+  onRequestStoryMap,
+  onStartNewRun,
 }: EscMenuProps) {
   const { theme, setTheme } = useTheme();
   const [account, setAccount] = useState<PlayerAccount | null>(null);
@@ -52,6 +66,11 @@ export function EscMenu({
     currentPassword: '',
     newPassword: '',
   });
+
+  useEffect(() => {
+    if (!open) return;
+    onRequestStoryMap?.();
+  }, [open, onRequestStoryMap]);
 
   useEffect(() => {
     if (!open) return;
@@ -311,6 +330,20 @@ export function EscMenu({
               当前包：{packLabel || '—'}
             </p>
           </section>
+
+          {onStartNewRun && (
+            <section>
+              <h3 className="mb-2 font-medium">剧情</h3>
+              <StoryProgressMap
+                map={storyMap}
+                busy={runBusy}
+                onOpen={() => onRequestStoryMap?.()}
+                onRestart={(opts) => {
+                  onStartNewRun(opts);
+                }}
+              />
+            </section>
+          )}
 
           <section>
             <h3 className="mb-2 font-medium">外观</h3>

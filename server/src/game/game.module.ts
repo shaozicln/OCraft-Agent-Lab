@@ -5,6 +5,7 @@ import { GameGateway } from './game.gateway';
 import { ConversationService } from './conversation.service';
 import { ConversationArchiveService } from './conversation-archive.service';
 import { AgentHarnessService } from '../agent/agent-harness.service';
+import { NpcExchangeService } from '../agent/npc-exchange.service';
 import { AgentModule } from '../agent/agent.module';
 import { RagService } from '../agent/rag.service';
 import { NpcModule } from '../npc/npc.module';
@@ -18,6 +19,7 @@ import { StoryModule } from '../story/story.module';
     ConversationArchiveService,
     RagService,
     AgentHarnessService,
+    NpcExchangeService,
   ],
 })
 export class GameModule {}

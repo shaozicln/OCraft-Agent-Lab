@@ -57,6 +57,9 @@ export declare const packRuntimeChapterSchema: z.ZodObject<{
 export declare const packRuntimeNpcSchema: z.ZodObject<{
     npc_id: z.ZodString;
     name: z.ZodString;
+    spawn_position: z.ZodTuple<[z.ZodNumber, z.ZodNumber, z.ZodNumber], null>;
+    appear_from_chapter: z.ZodOptional<z.ZodString>;
+    appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 /** 当前玩家生效包的运行时摘要（进场用） */
 export declare const packRuntimeSchema: z.ZodObject<{
@@ -77,6 +80,9 @@ export declare const packRuntimeSchema: z.ZodObject<{
     npcs: z.ZodArray<z.ZodObject<{
         npc_id: z.ZodString;
         name: z.ZodString;
+        spawn_position: z.ZodTuple<[z.ZodNumber, z.ZodNumber, z.ZodNumber], null>;
+        appear_from_chapter: z.ZodOptional<z.ZodString>;
+        appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
     }, z.core.$strip>>;
 }, z.core.$strip>;
 export type PackVersionSummary = z.infer<typeof packVersionSummarySchema>;
@@ -90,15 +96,19 @@ export declare const packUpdatePayloadSchema: z.ZodObject<{
     pack: z.ZodUnknown;
 }, z.core.$strip>;
 export type PackUpdatePayload = z.infer<typeof packUpdatePayloadSchema>;
-/** 一句话生成可勾选块（不含包头；未勾选则保留 basePack 对应内容） */
-export declare const packGenerateSectionKeys: readonly ["chapters", "flags", "numeric_tools", "animation_rules", "endings", "chapter_triggers", "npc_reply_flags", "prompt_common", "affinity_tiers", "fatigue_hints", "chapter_constraints", "flag_constraints", "npcs", "pack_profile"];
+/**
+ * 一句话生成可勾选块（不含包头；未勾选则保留 basePack 对应内容）
+ * 顺序按依赖：章节/Flags → NPC/结局 → 数值/动画 → 触发 → Prompt → 个人信息
+ */
+export declare const packGenerateSectionKeys: readonly ["chapters", "flags", "npcs", "endings", "numeric_tools", "animation_rules", "chapter_triggers", "npc_reply_flags", "prompt_common", "affinity_tiers", "fatigue_hints", "chapter_constraints", "flag_constraints", "pack_profile"];
 export type PackGenerateSectionKey = (typeof packGenerateSectionKeys)[number];
 export declare const packGenerateSectionsSchema: z.ZodObject<{
     chapters: z.ZodBoolean;
     flags: z.ZodBoolean;
+    npcs: z.ZodBoolean;
+    endings: z.ZodBoolean;
     numeric_tools: z.ZodBoolean;
     animation_rules: z.ZodBoolean;
-    endings: z.ZodBoolean;
     chapter_triggers: z.ZodBoolean;
     npc_reply_flags: z.ZodBoolean;
     prompt_common: z.ZodBoolean;
@@ -106,7 +116,6 @@ export declare const packGenerateSectionsSchema: z.ZodObject<{
     fatigue_hints: z.ZodBoolean;
     chapter_constraints: z.ZodBoolean;
     flag_constraints: z.ZodBoolean;
-    npcs: z.ZodBoolean;
     pack_profile: z.ZodBoolean;
 }, z.core.$strip>;
 export type PackGenerateSections = z.infer<typeof packGenerateSectionsSchema>;
@@ -117,13 +126,13 @@ export declare const PACK_GENERATE_SECTION_LABELS: Record<PackGenerateSectionKey
 export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     type: z.ZodLiteral<"section_start">;
     section: z.ZodEnum<{
+        flags: "flags";
+        chapters: "chapters";
         affinity_tiers: "affinity_tiers";
         fatigue_hints: "fatigue_hints";
         chapter_constraints: "chapter_constraints";
         flag_constraints: "flag_constraints";
         numeric_tools: "numeric_tools";
-        chapters: "chapters";
-        flags: "flags";
         animation_rules: "animation_rules";
         endings: "endings";
         npcs: "npcs";
@@ -136,13 +145,13 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
 }, z.core.$strip>, z.ZodObject<{
     type: z.ZodLiteral<"section_done">;
     section: z.ZodEnum<{
+        flags: "flags";
+        chapters: "chapters";
         affinity_tiers: "affinity_tiers";
         fatigue_hints: "fatigue_hints";
         chapter_constraints: "chapter_constraints";
         flag_constraints: "flag_constraints";
         numeric_tools: "numeric_tools";
-        chapters: "chapters";
-        flags: "flags";
         animation_rules: "animation_rules";
         endings: "endings";
         npcs: "npcs";
@@ -156,13 +165,13 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
 }, z.core.$strip>, z.ZodObject<{
     type: z.ZodLiteral<"error">;
     section: z.ZodOptional<z.ZodEnum<{
+        flags: "flags";
+        chapters: "chapters";
         affinity_tiers: "affinity_tiers";
         fatigue_hints: "fatigue_hints";
         chapter_constraints: "chapter_constraints";
         flag_constraints: "flag_constraints";
         numeric_tools: "numeric_tools";
-        chapters: "chapters";
-        flags: "flags";
         animation_rules: "animation_rules";
         endings: "endings";
         npcs: "npcs";
@@ -184,18 +193,44 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
         label: z.ZodString;
         value: z.ZodString;
     }, z.core.$strip>>>;
+    failedSections: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        section: z.ZodEnum<{
+            flags: "flags";
+            chapters: "chapters";
+            affinity_tiers: "affinity_tiers";
+            fatigue_hints: "fatigue_hints";
+            chapter_constraints: "chapter_constraints";
+            flag_constraints: "flag_constraints";
+            numeric_tools: "numeric_tools";
+            animation_rules: "animation_rules";
+            endings: "endings";
+            npcs: "npcs";
+            chapter_triggers: "chapter_triggers";
+            npc_reply_flags: "npc_reply_flags";
+            prompt_common: "prompt_common";
+            pack_profile: "pack_profile";
+        }>;
+        message: z.ZodString;
+    }, z.core.$strip>>>;
+    summary: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>], "type">;
 export type PackGenerateStreamEvent = z.infer<typeof packGenerateStreamEventSchema>;
-/** 一句话生成 Pack 草稿（不落盘） */
+/** 梗概/摘要上限；全文大纲用 outline 字段 */
+export declare const PACK_GENERATE_PROMPT_MAX = 8000;
+/** 导入大纲全文上限 */
+export declare const PACK_GENERATE_OUTLINE_MAX = 50000;
+/** 生成 Pack 草稿（不落盘）：摘要 + 可选导入大纲 */
 export declare const packGenerateDraftPayloadSchema: z.ZodObject<{
-    prompt: z.ZodString;
+    prompt: z.ZodDefault<z.ZodString>;
+    outline: z.ZodOptional<z.ZodString>;
     basePack: z.ZodUnknown;
     sections: z.ZodOptional<z.ZodObject<{
         chapters: z.ZodBoolean;
         flags: z.ZodBoolean;
+        npcs: z.ZodBoolean;
+        endings: z.ZodBoolean;
         numeric_tools: z.ZodBoolean;
         animation_rules: z.ZodBoolean;
-        endings: z.ZodBoolean;
         chapter_triggers: z.ZodBoolean;
         npc_reply_flags: z.ZodBoolean;
         prompt_common: z.ZodBoolean;
@@ -203,7 +238,6 @@ export declare const packGenerateDraftPayloadSchema: z.ZodObject<{
         fatigue_hints: z.ZodBoolean;
         chapter_constraints: z.ZodBoolean;
         flag_constraints: z.ZodBoolean;
-        npcs: z.ZodBoolean;
         pack_profile: z.ZodBoolean;
     }, z.core.$strip>>;
 }, z.core.$strip>;

@@ -1,12 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.storyPackSchema = exports.worldManifestSchema = exports.packHeaderSchema = exports.packWorldFileSchema = exports.packEndingSchema = exports.packAnimationRuleSchema = exports.packAnimationRuleWhenSchema = exports.packAnimationIdSchema = exports.packNumericToolsSchema = exports.packPromptsFileSchema = exports.packFlagConstraintSchema = exports.packFlagConstraintWhenSchema = exports.packFatigueHintSchema = exports.packAffinityTierSchema = exports.packTriggersFileSchema = exports.packNpcReplyFlagRuleSchema = exports.packTriggerRuleSchema = exports.packFlagSetEntrySchema = exports.packNpcSchema = exports.packMemorySchema = exports.packFlagDefSchema = exports.packChapterSchema = exports.packIdSchema = void 0;
+exports.storyPackSchema = exports.worldManifestSchema = exports.packHeaderSchema = exports.packWorldFileSchema = exports.packEndingSchema = exports.packAnimationRuleSchema = exports.packAnimationRuleWhenSchema = exports.packAnimationIdSchema = exports.packNumericToolsSchema = exports.packPromptsFileSchema = exports.packFlagConstraintSchema = exports.packFlagConstraintWhenSchema = exports.packFatigueHintSchema = exports.packAffinityTierSchema = exports.packTriggersFileSchema = exports.packExchangeEventSchema = exports.packNpcReplyFlagRuleSchema = exports.packTriggerRuleSchema = exports.packFlagSetEntrySchema = exports.packNpcSchema = exports.packMemorySchema = exports.packFlagDefSchema = exports.packChapterSchema = exports.packIdSchema = void 0;
 exports.assertPackReferences = assertPackReferences;
 exports.getDefaultChapterId = getDefaultChapterId;
+exports.getFirstChapterId = getFirstChapterId;
 exports.getDefaultNpcId = getDefaultNpcId;
 exports.getChapterRankMap = getChapterRankMap;
 exports.getChapterLabelMap = getChapterLabelMap;
+exports.isNpcPresent = isNpcPresent;
 const zod_1 = require("zod");
+const chapter_util_1 = require("./chapter.util");
+const story_schema_1 = require("./story.schema");
 /** 包内 ID：章节 / flag / NPC 等，由 Pack 声明，代码不写死业务枚举 */
 exports.packIdSchema = zod_1.z
     .string()
@@ -59,6 +63,12 @@ exports.packNpcSchema = zod_1.z.object({
     }),
     system_prompt_template: zod_1.z.string(),
     memories: zod_1.z.array(exports.packMemorySchema).default([]),
+    /**
+     * 场景出场：当前章节 rank ≥ 该章，且 require_flags 均已置位时才刷小人。
+     * 省略 appear_from_chapter = 开场即在。
+     */
+    appear_from_chapter: exports.packIdSchema.optional(),
+    appear_require_flags: zod_1.z.array(exports.packIdSchema).default([]),
 });
 exports.packFlagSetEntrySchema = zod_1.z.object({
     name: exports.packIdSchema,
@@ -84,10 +94,32 @@ exports.packNpcReplyFlagRuleSchema = zod_1.z.object({
     value: zod_1.z.string().min(1).default('true'),
     triggers: zod_1.z.array(zod_1.z.string()).default([]),
 });
+/**
+ * 关系事件互聊：玩家对话结束后，章/flag 满足且（once 时）set_flags 尚未置位 →
+ * speakers 有序各跑一轮 LLM（不对玩家、不升章）。
+ */
+exports.packExchangeEventSchema = zod_1.z.object({
+    id: zod_1.z.string().min(1),
+    enabled: zod_1.z.boolean().default(true),
+    /** 当前进度章节须等于该章 */
+    chapter: exports.packIdSchema,
+    require_flags: zod_1.z.array(exports.packIdSchema).default([]),
+    /** 有序发言 NPC（P0 固定两人） */
+    speakers: zod_1.z.tuple([exports.packIdSchema, exports.packIdSchema]),
+    /** 软剧本提示，非逐字稿 */
+    beat_hints: zod_1.z.array(zod_1.z.string()).default([]),
+    set_flags: zod_1.z.array(exports.packFlagSetEntrySchema).default([]),
+    /**
+     * true（默认）：若 set_flags 中任一 flag 已置位则不再触发（一次）。
+     */
+    once: zod_1.z.boolean().default(true),
+    notes: zod_1.z.string().optional(),
+});
 exports.packTriggersFileSchema = zod_1.z.object({
     version: zod_1.z.number().int().positive().default(1),
     rules: zod_1.z.array(exports.packTriggerRuleSchema),
     npc_reply_flag_rules: zod_1.z.array(exports.packNpcReplyFlagRuleSchema).default([]),
+    exchange_events: zod_1.z.array(exports.packExchangeEventSchema).default([]),
 });
 /** 好感区间文案：affinity < max_exclusive 时命中（最后一档用极大 max） */
 exports.packAffinityTierSchema = zod_1.z.object({
@@ -255,6 +287,21 @@ function assertPackReferences(pack) {
         }
         needFlag(rule.set_flag, `npc_reply.${rule.id}`);
     }
+    const npcIds = new Set(pack.npcs.map((n) => n.npc_id));
+    for (const ev of pack.triggers.exchange_events ?? []) {
+        needChapter(ev.chapter, `exchange.${ev.id}`);
+        for (const f of ev.require_flags) {
+            needFlag(f, `exchange.${ev.id}.require`);
+        }
+        for (const f of ev.set_flags) {
+            needFlag(f.name, `exchange.${ev.id}.set`);
+        }
+        for (const sid of ev.speakers) {
+            if (!npcIds.has(sid)) {
+                throw new Error(`Pack 引用未知 NPC "${sid}" @ exchange.${ev.id}.speakers`);
+            }
+        }
+    }
     for (const fc of pack.prompts.flag_constraints) {
         needFlag(fc.when.flag, `flag_constraints.${fc.id}`);
         if (fc.when.chapter) {
@@ -283,6 +330,14 @@ function getDefaultChapterId(pack) {
     const sorted = [...pack.world.chapters].sort((a, b) => a.rank - b.rank);
     return sorted[0].id;
 }
+/** 剧情「第一章」：rank 最小的章（与 default_chapter 可能不同） */
+function getFirstChapterId(pack) {
+    const sorted = [...pack.world.chapters].sort((a, b) => a.rank - b.rank);
+    if (sorted.length === 0) {
+        throw new Error('pack has no chapters');
+    }
+    return sorted[0].id;
+}
 function getDefaultNpcId(pack) {
     if (pack.world.default_npc)
         return pack.world.default_npc;
@@ -295,11 +350,27 @@ function getChapterRankMap(pack) {
     }
     return map;
 }
-/** chapterId → HUD / 列表显示名（优先 hud_label） */
+/** chapterId → 展示名（优先章节名 display_name，其次 HUD 短名） */
 function getChapterLabelMap(pack) {
     const map = {};
     for (const c of pack.world.chapters) {
-        map[c.id] = c.hud_label || c.display_name || c.id;
+        map[c.id] = c.display_name || c.hud_label || c.id;
     }
     return map;
+}
+/**
+ * NPC 是否应在场景出场（章节门槛 + 可选 flags）。
+ * appear_from_chapter 省略 = 无章节门槛。
+ */
+function isNpcPresent(opts) {
+    const { appear_from_chapter, appear_require_flags = [], chapterState, flags, rankMap, } = opts;
+    if (appear_from_chapter &&
+        !(0, chapter_util_1.isChapterAtLeast)(chapterState, appear_from_chapter, rankMap)) {
+        return false;
+    }
+    for (const name of appear_require_flags) {
+        if (!(0, story_schema_1.isFlagSet)(flags, name))
+            return false;
+    }
+    return true;
 }

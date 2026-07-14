@@ -49,6 +49,19 @@ export const agentTraceRecordSchema = z.object({
       }),
     )
     .optional(),
+  /** 本轮结束后触发的关系事件互聊（异步补记） */
+  exchange: z
+    .object({
+      event_id: z.string(),
+      lines: z.array(
+        z.object({
+          npc_id: z.string(),
+          name: z.string(),
+          text: z.string(),
+        }),
+      ),
+    })
+    .optional(),
 });
 
 export type AgentTraceRecord = z.infer<typeof agentTraceRecordSchema>;

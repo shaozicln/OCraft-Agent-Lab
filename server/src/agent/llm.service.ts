@@ -58,17 +58,19 @@ export class LlmService {
     opts: {
       model?: string;
       temperature?: number;
+      maxTokens?: number;
       json?: boolean;
     } = {},
   ): Promise<string> {
     if (!this.client) {
-      throw new Error('LLM 未配置（MOCK 模式无 complete）');
+      return this.mockComplete(messages);
     }
     const model = opts.model ?? process.env.LLM_MODEL ?? 'qwen-plus';
     const res = await this.client.chat.completions.create({
       model,
       messages,
       temperature: opts.temperature ?? 0.4,
+      ...(opts.maxTokens != null ? { max_tokens: opts.maxTokens } : {}),
       ...(opts.json
         ? { response_format: { type: 'json_object' as const } }
         : {}),
@@ -136,6 +138,17 @@ export class LlmService {
       }
     }
     yield { text: '', done: true };
+  }
+
+  private mockComplete(messages: LlmMessage[]): string {
+    const system = messages.find((m) => m.role === 'system')?.content ?? '';
+    if (/对「希尔薇」/.test(system)) {
+      return '希尔薇？嗯……转校这事，我总觉得哪里不对劲。';
+    }
+    if (/对「索伦森」/.test(system)) {
+      return '……你好。听说你们班最近有点吵？';
+    }
+    return '（MOCK 互聊）嗯……你也感觉到了吗？';
   }
 
   /** MOCK：模拟一次「模型决定」的 tool_calls（非 Pack 关键词规则引擎） */

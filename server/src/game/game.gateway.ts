@@ -10,14 +10,20 @@ import {
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import {
+  getDefaultNpcId,
   listConversationArchivesPayloadSchema,
   loadConversationArchivePayloadSchema,
   playerChatPayloadSchema,
+  renameArchivePayloadSchema,
+  requestChatSuggestionsPayloadSchema,
   requestNpcStatePayloadSchema,
+  requestStoryMapPayloadSchema,
   saveConversationPayloadSchema,
+  startNewRunPayloadSchema,
 } from '@ocraft/shared';
 import { AuthService } from '../auth/auth.service';
 import { AgentHarnessService } from '../agent/agent-harness.service';
+import { NpcExchangeService } from '../agent/npc-exchange.service';
 import { PackService } from '../story/pack.service';
 import { ConversationService } from './conversation.service';
 import { NpcService } from '../npc/npc.service';
@@ -41,6 +47,7 @@ export class GameGateway implements OnGatewayConnection {
   constructor(
     private readonly authService: AuthService,
     private readonly agentHarness: AgentHarnessService,
+    private readonly npcExchange: NpcExchangeService,
     private readonly conversationService: ConversationService,
     private readonly npcService: NpcService,
     private readonly packService: PackService,
@@ -95,6 +102,7 @@ export class GameGateway implements OnGatewayConnection {
       animation: animation ?? state.current_status,
       current_status: state.current_status,
       chapter_state: this.conversationService.getChapterState(playerId, npcId),
+      story_flags: this.conversationService.getStoryFlags(playerId, npcId),
     };
   }
 
@@ -116,6 +124,38 @@ export class GameGateway implements OnGatewayConnection {
         'npc_state_update',
         this.buildStatePayload(playerId, npcId),
       );
+    });
+  }
+
+  @SubscribeMessage('request_chat_suggestions')
+  async handleRequestChatSuggestions(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: unknown,
+  ) {
+    const parsed = requestChatSuggestionsPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new WsException(parsed.error.message);
+    }
+
+    const playerId = this.requirePlayerId(client);
+    const { npcId } = parsed.data;
+
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      await this.conversationService.ensureSession(playerId, npcId);
+      try {
+        const suggestions = await this.agentHarness.suggestPlayerReplies(
+          playerId,
+          npcId,
+        );
+        client.emit('chat_suggestions', { npcId, suggestions });
+      } catch (err) {
+        this.logger.error(err);
+        client.emit('chat_suggestions', {
+          npcId,
+          suggestions: [],
+          error: err instanceof Error ? err.message : '生成建议失败',
+        });
+      }
     });
   }
 
@@ -161,6 +201,31 @@ export class GameGateway implements OnGatewayConnection {
           ...this.buildStatePayload(playerId, npcId, result.animation),
           toolCalls: result.toolCalls,
         });
+
+        const exchange = await this.npcExchange.tryRunAfterChat({
+          playerId,
+          chatNpcId: npcId,
+          playerMessage: message,
+          assistantReply: fullReply,
+          traceId: result.traceId,
+        });
+        if (exchange) {
+          client.emit('npc_exchange', exchange);
+          const progressNpcId = getDefaultNpcId(
+            this.packService.getPack(),
+          );
+          if (progressNpcId !== npcId) {
+            client.emit(
+              'npc_state_update',
+              this.buildStatePayload(playerId, progressNpcId),
+            );
+          } else {
+            client.emit(
+              'npc_state_update',
+              this.buildStatePayload(playerId, npcId),
+            );
+          }
+        }
       } catch (err) {
         this.logger.error(err);
         client.emit('npc_error', {
@@ -201,6 +266,10 @@ export class GameGateway implements OnGatewayConnection {
         filename: result.filename,
         snapshotIndex: result.snapshotIndex,
         savedAt: result.savedAt,
+        chapter_state: this.conversationService.getChapterState(
+          playerId,
+          npcId,
+        ),
       });
     });
   }
@@ -271,6 +340,109 @@ export class GameGateway implements OnGatewayConnection {
           restored.npcState.current_status,
         ),
       );
+    });
+  }
+
+  @SubscribeMessage('request_story_map')
+  async handleRequestStoryMap(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: unknown,
+  ) {
+    const parsed = requestStoryMapPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new WsException(parsed.error.message);
+    }
+    const playerId = this.requirePlayerId(client);
+    const { npcId } = parsed.data;
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      await this.conversationService.ensureSession(playerId, npcId);
+      client.emit(
+        'story_map',
+        this.conversationService.buildStoryMap(playerId, npcId),
+      );
+    });
+  }
+
+  @SubscribeMessage('start_new_run')
+  async handleStartNewRun(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: unknown,
+  ) {
+    const parsed = startNewRunPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new WsException(parsed.error.message);
+    }
+    const playerId = this.requirePlayerId(client);
+    const { npcId, ...opts } = parsed.data;
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      try {
+        const result = await this.conversationService.startNewRun(
+          playerId,
+          npcId,
+          opts,
+        );
+        client.emit('new_run_started', {
+          npcId,
+          filename: result.filename,
+          display_name: result.display_name,
+          chapter_state: result.chapterState,
+          story_flags: result.storyFlags,
+        });
+        client.emit(
+          'npc_state_update',
+          this.buildStatePayload(
+            playerId,
+            npcId,
+            result.npcState.current_status,
+          ),
+        );
+        client.emit('story_map', this.conversationService.buildStoryMap(playerId, npcId));
+        const archives = await this.conversationService.listArchives(
+          playerId,
+          npcId,
+        );
+        client.emit('conversation_archives_list', { npcId, archives });
+      } catch (err) {
+        throw new WsException(
+          err instanceof Error ? err.message : '新开一局失败',
+        );
+      }
+    });
+  }
+
+  @SubscribeMessage('rename_archive')
+  async handleRenameArchive(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: unknown,
+  ) {
+    const parsed = renameArchivePayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new WsException(parsed.error.message);
+    }
+    const playerId = this.requirePlayerId(client);
+    const { npcId, filename, displayName } = parsed.data;
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      try {
+        const result = await this.conversationService.renameArchive(
+          playerId,
+          filename,
+          displayName,
+        );
+        client.emit('archive_renamed', {
+          npcId,
+          filename: result.filename,
+          display_name: result.display_name,
+        });
+        const archives = await this.conversationService.listArchives(
+          playerId,
+          npcId,
+        );
+        client.emit('conversation_archives_list', { npcId, archives });
+      } catch (err) {
+        throw new WsException(
+          err instanceof Error ? err.message : '重命名失败',
+        );
+      }
     });
   }
 }

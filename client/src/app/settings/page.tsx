@@ -23,6 +23,8 @@ import type {
 } from '@ocraft/shared';
 import {
   DEFAULT_PACK_GENERATE_SECTIONS,
+  PACK_GENERATE_OUTLINE_MAX,
+  PACK_GENERATE_PROMPT_MAX,
   PACK_GENERATE_SECTION_LABELS,
   packGenerateSectionKeys,
   profileFieldsToPatch,
@@ -39,9 +41,10 @@ type Tab = 'appearance' | 'account' | 'packs' | 'editor' | 'traces';
 const SECTION_TO_TOC: Partial<Record<PackGenerateSectionKey, string>> = {
   chapters: 'pack-sec-chapters',
   flags: 'pack-sec-flags',
+  npcs: 'pack-sec-npcs',
+  endings: 'pack-sec-endings',
   numeric_tools: 'pack-sec-numeric',
   animation_rules: 'pack-sec-anim',
-  endings: 'pack-sec-endings',
   chapter_triggers: 'pack-sec-triggers',
   npc_reply_flags: 'pack-sec-reply-flags',
   prompt_common: 'pack-sec-prompts-common',
@@ -49,7 +52,6 @@ const SECTION_TO_TOC: Partial<Record<PackGenerateSectionKey, string>> = {
   fatigue_hints: 'pack-sec-fatigue',
   chapter_constraints: 'pack-sec-chapter-c',
   flag_constraints: 'pack-sec-flag-c',
-  npcs: 'pack-sec-npcs',
 };
 
 type GenToast = {
@@ -102,12 +104,17 @@ function SettingsInner({
   const [packDraft, setPackDraft] = useState<StoryPack | null>(null);
   const [examplePack, setExamplePack] = useState<StoryPack | null>(null);
   const [genPrompt, setGenPrompt] = useState('');
+  const [genOutline, setGenOutline] = useState('');
+  const [showOutlineImport, setShowOutlineImport] = useState(false);
   const [genSections, setGenSections] = useState<PackGenerateSections>(
     () => ({ ...DEFAULT_PACK_GENERATE_SECTIONS }),
   );
   const [genActiveSection, setGenActiveSection] =
     useState<PackGenerateSectionKey | null>(null);
   const [genDoneSections, setGenDoneSections] = useState<
+    Set<PackGenerateSectionKey>
+  >(() => new Set());
+  const [genFailedSections, setGenFailedSections] = useState<
     Set<PackGenerateSectionKey>
   >(() => new Set());
   const [genToasts, setGenToasts] = useState<GenToast[]>([]);
@@ -321,7 +328,33 @@ function SettingsInner({
   }, [tab, refreshTraces]);
 
   const generatePackDraft = async () => {
-    if (!packDraft || !genPrompt.trim()) return;
+    if (!packDraft) return;
+    const prompt = genPrompt.trim();
+    const outline = genOutline.trim();
+    if (prompt.length < 4 && outline.length < 4) {
+      pushGenToast({
+        kind: 'err',
+        title: '无法开始生成',
+        detail: '请填写至少 4 字的梗概/摘要，或导入大纲全文',
+      });
+      return;
+    }
+    if (prompt.length > PACK_GENERATE_PROMPT_MAX) {
+      pushGenToast({
+        kind: 'err',
+        title: '摘要过长',
+        detail: `梗概/摘要最多 ${PACK_GENERATE_PROMPT_MAX} 字`,
+      });
+      return;
+    }
+    if (outline.length > PACK_GENERATE_OUTLINE_MAX) {
+      pushGenToast({
+        kind: 'err',
+        title: '大纲过长',
+        detail: `导入大纲最多 ${PACK_GENERATE_OUTLINE_MAX} 字`,
+      });
+      return;
+    }
     const anyChecked = packGenerateSectionKeys.some((k) => genSections[k]);
     if (!anyChecked) {
       pushGenToast({
@@ -336,12 +369,14 @@ function SettingsInner({
     setMessage(null);
     setGenActiveSection(null);
     setGenDoneSections(new Set());
+    setGenFailedSections(new Set());
     let finished = false;
     try {
       await apiFetchSse('/packs/generate-draft/stream', {
         token,
         body: {
-          prompt: genPrompt.trim(),
+          prompt,
+          outline: outline || undefined,
           basePack: packDraft,
           sections: genSections,
         },
@@ -359,6 +394,11 @@ function SettingsInner({
           }
           if (ev.type === 'section_done') {
             setGenDoneSections((prev) => new Set(prev).add(ev.section));
+            setGenFailedSections((prev) => {
+              const next = new Set(prev);
+              next.delete(ev.section);
+              return next;
+            });
             setGenActiveSection(null);
             if (ev.pack) {
               const parsed = storyPackSchema.safeParse(ev.pack);
@@ -372,14 +412,16 @@ function SettingsInner({
           }
           if (ev.type === 'error') {
             setGenActiveSection(null);
+            if (ev.section) {
+              setGenFailedSections((prev) => new Set(prev).add(ev.section!));
+            }
             pushGenToast({
               kind: 'err',
               title: ev.section
                 ? `${PACK_GENERATE_SECTION_LABELS[ev.section]}生成失败`
-                : '生成失败',
+                : '生成警告',
               detail: ev.message,
             });
-            setError(ev.message);
             return;
           }
           if (ev.type === 'done') {
@@ -388,11 +430,36 @@ function SettingsInner({
             if (parsed.success) setPackDraft(parsed.data);
             if (ev.profileFields) setProfileFields(ev.profileFields);
             setGenActiveSection(null);
-            setMessage(
-              ev.source === 'mock'
+            if (ev.failedSections?.length) {
+              setGenFailedSections(
+                new Set(ev.failedSections.map((f) => f.section)),
+              );
+            }
+            const summary =
+              ev.summary ??
+              (ev.source === 'mock'
                 ? '流式生成完成（MOCK）。请检查后保存并选用。'
-                : '流式生成完成。请检查后保存并选用；个人信息需再点保存。',
-            );
+                : '流式生成完成。请检查后保存并选用；个人信息需再点保存。');
+            setMessage(summary);
+            if (ev.failedSections?.length) {
+              setError(
+                `仍失败：${ev.failedSections
+                  .map((f) => PACK_GENERATE_SECTION_LABELS[f.section])
+                  .join('、')}`,
+              );
+              pushGenToast({
+                kind: 'err',
+                title: '生成结束（部分失败）',
+                detail: summary,
+              });
+            } else {
+              setError(null);
+              pushGenToast({
+                kind: 'ok',
+                title: '生成全部完成',
+                detail: summary,
+              });
+            }
           }
         },
       });
@@ -1164,24 +1231,112 @@ function SettingsInner({
 
               {packDraft && (
                 <div className="rounded-2xl border p-5" style={panelStyle}>
-                  <h2 className="text-base font-semibold">一句话生成草稿</h2>
+                  <h2 className="text-base font-semibold">生成 Pack 草稿</h2>
                   <p
                     className="mt-1 text-sm"
                     style={{ color: 'var(--ui-fg-muted)' }}
                   >
-                    勾选要生成的目录项；未勾选保留当前内容。按块串行生成（真进度）：黄底=正在生成，绿底=已完成。失败会弹窗说明原因。本世界个人信息只填表单，需再保存。
+                    先写「梗概或大纲摘要」；完整设定请用「导入大纲」。勾选生成项；未勾选保留当前内容。按依赖顺序串行生成（黄=进行中，绿=完成，红=失败）；单项失败会继续并在末尾重试一次。本世界个人信息只填表单，需再保存。
                   </p>
+                  <label className="mt-3 block text-sm font-medium">
+                    梗概或大纲摘要
+                    <span
+                      className="ml-2 font-normal"
+                      style={{ color: 'var(--ui-fg-muted)' }}
+                    >
+                      {genPrompt.length}/{PACK_GENERATE_PROMPT_MAX}
+                    </span>
+                  </label>
                   <textarea
-                    className="mt-3 min-h-[4.5rem] w-full rounded-lg border px-3 py-2 text-sm outline-none placeholder:text-[color:var(--ui-fg-muted)]"
+                    className="mt-1 min-h-[4.5rem] w-full rounded-lg border px-3 py-2 text-sm outline-none placeholder:text-[color:var(--ui-fg-muted)]"
                     style={{
                       background: 'var(--ui-input)',
                       borderColor: 'var(--ui-border)',
                       color: 'var(--ui-fg)',
                     }}
                     value={genPrompt}
+                    maxLength={PACK_GENERATE_PROMPT_MAX}
                     onChange={(e) => setGenPrompt(e.target.value)}
-                    placeholder="例：咖啡店店员发现自己是被写入程序的 NPC，两章后崩溃想逃出店门"
+                    placeholder="例：校园双 NPC 索伦森与希尔薇；四章无好感门槛；信/不信分叉；地震后三结局"
                   />
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg border px-3 py-1.5 text-xs"
+                      style={{
+                        borderColor: 'var(--ui-border)',
+                        color: 'var(--ui-accent)',
+                      }}
+                      onClick={() => setShowOutlineImport((v) => !v)}
+                    >
+                      {showOutlineImport ? '收起导入大纲' : '导入大纲'}
+                    </button>
+                    <span
+                      className="text-xs"
+                      style={{ color: 'var(--ui-fg-muted)' }}
+                    >
+                      粘贴 Docs/Story 全文等，上限 {PACK_GENERATE_OUTLINE_MAX}{' '}
+                      字
+                    </span>
+                  </div>
+                  {showOutlineImport && (
+                    <div className="mt-2">
+                      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-sm font-medium">
+                          大纲全文
+                          <span
+                            className="ml-2 font-normal"
+                            style={{ color: 'var(--ui-fg-muted)' }}
+                          >
+                            {genOutline.length}/{PACK_GENERATE_OUTLINE_MAX}
+                          </span>
+                        </label>
+                        <label
+                          className="cursor-pointer text-xs underline"
+                          style={{ color: 'var(--ui-accent)' }}
+                        >
+                          从文件读入
+                          <input
+                            type="file"
+                            accept=".md,.txt,text/plain,text/markdown"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = '';
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                const text = String(reader.result ?? '');
+                                if (text.length > PACK_GENERATE_OUTLINE_MAX) {
+                                  pushGenToast({
+                                    kind: 'err',
+                                    title: '文件过长',
+                                    detail: `超过 ${PACK_GENERATE_OUTLINE_MAX} 字，请截断后再导入`,
+                                  });
+                                  return;
+                                }
+                                setGenOutline(text);
+                                setShowOutlineImport(true);
+                              };
+                              reader.readAsText(file, 'utf-8');
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <textarea
+                        className="min-h-[12rem] w-full rounded-lg border px-3 py-2 font-mono text-xs outline-none placeholder:text-[color:var(--ui-fg-muted)]"
+                        style={{
+                          background: 'var(--ui-input)',
+                          borderColor: 'var(--ui-border)',
+                          color: 'var(--ui-fg)',
+                        }}
+                        value={genOutline}
+                        maxLength={PACK_GENERATE_OUTLINE_MAX}
+                        onChange={(e) => setGenOutline(e.target.value)}
+                        placeholder="粘贴完整大纲 Markdown / 纯文本…"
+                      />
+                    </div>
+                  )}
                   <div className="mt-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-sm font-medium">配置生成项目</h3>
@@ -1216,6 +1371,7 @@ function SettingsInner({
                       {packGenerateSectionKeys.map((key) => {
                         const active = genActiveSection === key;
                         const done = genDoneSections.has(key);
+                        const failed = genFailedSections.has(key) && !done;
                         return (
                           <label
                             key={key}
@@ -1223,9 +1379,11 @@ function SettingsInner({
                             style={{
                               background: active
                                 ? 'rgba(250, 204, 21, 0.55)'
-                                : done
-                                  ? 'rgba(34, 197, 94, 0.15)'
-                                  : undefined,
+                                : failed
+                                  ? 'rgba(239, 68, 68, 0.18)'
+                                  : done
+                                    ? 'rgba(34, 197, 94, 0.15)'
+                                    : undefined,
                               outline: active
                                 ? '1px solid rgba(202, 138, 4, 0.8)'
                                 : undefined,
@@ -1244,7 +1402,13 @@ function SettingsInner({
                             />
                             <span>
                               {PACK_GENERATE_SECTION_LABELS[key]}
-                              {active ? ' · 生成中' : done ? ' · 完成' : ''}
+                              {active
+                                ? ' · 生成中'
+                                : failed
+                                  ? ' · 失败'
+                                  : done
+                                    ? ' · 完成'
+                                    : ''}
                             </span>
                           </label>
                         );
@@ -1253,7 +1417,11 @@ function SettingsInner({
                   </div>
                   <button
                     type="button"
-                    disabled={busy || !genPrompt.trim()}
+                    disabled={
+                      busy ||
+                      (genPrompt.trim().length < 4 &&
+                        genOutline.trim().length < 4)
+                    }
                     onClick={() => void generatePackDraft()}
                     className="mt-3 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
                     style={{
@@ -1524,6 +1692,14 @@ function SettingsInner({
                           .map((h) => `${h.memory_id}(${h.score.toFixed(2)})`)
                           .join(', ')}
                   </p>
+                  {t.exchange && (
+                    <p className="mt-1">
+                      exchange [{t.exchange.event_id}]:{' '}
+                      {t.exchange.lines
+                        .map((l) => `${l.name}「${l.text.slice(0, 40)}${l.text.length > 40 ? '…' : ''}」`)
+                        .join(' → ')}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

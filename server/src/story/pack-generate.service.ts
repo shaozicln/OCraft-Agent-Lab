@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   assertPackReferences,
   DEFAULT_PACK_GENERATE_SECTIONS,
+  PACK_GENERATE_OUTLINE_MAX,
+  PACK_GENERATE_PROMPT_MAX,
   PACK_GENERATE_SECTION_LABELS,
   packGenerateSectionKeys,
   storyPackSchema,
@@ -27,8 +29,11 @@ chapters 项含 id, display_name, hud_label?, rank（从 0 递增）。按提示
 when 可含 message_triggers / interest_hit / fatigue_delta_gt 等。`,
   endings: `只输出：{ "endings": [ { id, display_name, notes?, performance_hint? } ] }；可不需要时给 []。`,
   chapter_triggers: `只输出：{ "rules": [ { id, enabled, from_chapter, to_chapter, min_affinity, require_flags, player_triggers, set_flags, notes? } ] }
-必须引用摘要中的章节/flag；至少覆盖提示词中的升章路径。`,
-  npc_reply_flags: `只输出：{ "npc_reply_flag_rules": [ { id, enabled, when_chapter_in, set_flag, value, triggers } ] }；可不需要时给 []。`,
+必须引用摘要中的章节/flag；至少覆盖提示词中的升章路径。
+set_flags 必须是对象数组，例如 [{"name":"flag_id","value":"true"}]，禁止写成字符串数组如 ["flag_id"]。
+require_flags 才是字符串 id 数组。无置位时 set_flags 用 []。`,
+  npc_reply_flags: `只输出：{ "npc_reply_flag_rules": [ { id, enabled, when_chapter_in, set_flag, value, triggers } ] }；可不需要时给 []。
+value 必须是字符串（如 "true" / "false" / 枚举字面量），禁止用布尔 true/false。`,
   prompt_common: `只输出：{ "reply_instruction": "..." }`,
   affinity_tiers: `只输出：{ "affinity_tiers": [ { max_exclusive, text } ] }；最后一档 max_exclusive 用大数如 999。`,
   fatigue_hints: `只输出：{ "fatigue_hints": [ { min, text } ] }`,
@@ -49,6 +54,7 @@ export class PackGenerateService {
   /** 非流式：收集流式结果（兼容旧接口） */
   async generateDraft(opts: {
     prompt: string;
+    outline?: string;
     basePack: StoryPack;
     sections?: PackGenerateSections;
   }): Promise<{
@@ -85,16 +91,30 @@ export class PackGenerateService {
    */
   async *generateDraftStream(opts: {
     prompt: string;
+    outline?: string;
     basePack: StoryPack;
     sections?: PackGenerateSections;
   }): AsyncGenerator<PackGenerateStreamEvent, void, unknown> {
-    const prompt = opts.prompt.trim();
-    if (prompt.length < 4) {
-      yield { type: 'error', message: '请至少写一句故事描述（4 字以上）' };
+    const brief = this.buildAuthorBrief(opts.prompt, opts.outline);
+    if (brief.length < 4) {
+      yield {
+        type: 'error',
+        message: '请填写至少 4 字的梗概/摘要，或导入大纲全文',
+      };
       return;
     }
-    if (prompt.length > 500) {
-      yield { type: 'error', message: '描述过长（最多 500 字）' };
+    if ((opts.prompt ?? '').trim().length > PACK_GENERATE_PROMPT_MAX) {
+      yield {
+        type: 'error',
+        message: `梗概/摘要过长（最多 ${PACK_GENERATE_PROMPT_MAX} 字）`,
+      };
+      return;
+    }
+    if ((opts.outline ?? '').trim().length > PACK_GENERATE_OUTLINE_MAX) {
+      yield {
+        type: 'error',
+        message: `导入大纲过长（最多 ${PACK_GENERATE_OUTLINE_MAX} 字）`,
+      };
       return;
     }
 
@@ -112,17 +132,22 @@ export class PackGenerateService {
         ...opts.basePack.header,
         notes: opts.basePack.header.notes
           ? `AI 草稿｜${opts.basePack.header.notes}`.slice(0, 500)
-          : 'AI 一句话生成草稿',
+          : 'AI 生成草稿',
       },
     };
     let profileFields: PlayerProfileField[] | undefined;
+    const mockSeed =
+      (opts.prompt ?? '').trim() ||
+      (opts.outline ?? '').trim().slice(0, 200) ||
+      'story';
     const mockFull =
-      source === 'mock' ? this.buildMockDraft(prompt, opts.basePack) : null;
+      source === 'mock' ? this.buildMockDraft(mockSeed, opts.basePack) : null;
 
-    for (const section of queue) {
-      const label = PACK_GENERATE_SECTION_LABELS[section];
-      yield { type: 'section_start', section, label };
+    const failed = new Map<PackGenerateSectionKey, string>();
 
+    const runOne = async (
+      section: PackGenerateSectionKey,
+    ): Promise<{ ok: true } | { ok: false; message: string }> => {
       try {
         if (mockFull) {
           await this.delay(280);
@@ -137,44 +162,107 @@ export class PackGenerateService {
           }
         } else {
           const fragment = await this.generateOneSection({
-            prompt,
+            brief,
             section,
             current,
           });
           if (section === 'pack_profile') {
             profileFields = this.normalizeProfileFields(
               fragment.profile_fields,
-              prompt,
+              mockSeed,
             );
           } else {
             current = this.applyFragment(current, section, fragment);
           }
         }
+        return { ok: true };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, message };
+      }
+    };
 
+    for (const section of queue) {
+      const label = PACK_GENERATE_SECTION_LABELS[section];
+      yield { type: 'section_start', section, label };
+
+      const result = await runOne(section);
+      if (result.ok) {
+        failed.delete(section);
         yield {
           type: 'section_done',
           section,
           label,
           pack: current,
         };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger.warn(`section ${section} failed: ${message}`);
-        yield { type: 'error', section, message: `${label} 生成失败：${message}` };
-        return;
+      } else {
+        this.logger.warn(`section ${section} failed: ${result.message}`);
+        failed.set(section, result.message);
+        yield {
+          type: 'error',
+          section,
+          message: `${label} 生成失败：${result.message}`,
+        };
       }
     }
 
+    const retryQueue = [...failed.keys()];
+    if (retryQueue.length > 0) {
+      for (const section of retryQueue) {
+        const label = PACK_GENERATE_SECTION_LABELS[section];
+        yield {
+          type: 'section_start',
+          section,
+          label: `${label}（重试）`,
+        };
+        const result = await runOne(section);
+        if (result.ok) {
+          failed.delete(section);
+          yield {
+            type: 'section_done',
+            section,
+            label: `${label}（重试成功）`,
+            pack: current,
+          };
+        } else {
+          this.logger.warn(`section ${section} retry failed: ${result.message}`);
+          failed.set(section, result.message);
+          yield {
+            type: 'error',
+            section,
+            message: `${label} 重试仍失败：${result.message}`,
+          };
+        }
+      }
+    }
+
+    let mergeWarning = '';
     try {
       current = storyPackSchema.parse(current);
       assertPackReferences(current);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      mergeWarning = `合并后校验有问题：${message}`;
       yield {
         type: 'error',
-        message: `合并后校验失败：${message}。请检查章节/Flags 与触发、约束的交叉引用。`,
+        message: `${mergeWarning}。已保留已生成部分，请检查交叉引用后手动改。`,
       };
-      return;
+    }
+
+    const failedList = [...failed.entries()].map(([section, message]) => ({
+      section,
+      message,
+    }));
+    const okCount = queue.length - failedList.length;
+    const failLabels = failedList
+      .map((f) => PACK_GENERATE_SECTION_LABELS[f.section])
+      .join('、');
+    let summary =
+      failedList.length === 0
+        ? `全部 ${queue.length} 项生成成功`
+        : `成功 ${okCount}/${queue.length}；仍失败：${failLabels || '无'}`;
+    if (mergeWarning) {
+      summary += `。${mergeWarning}`;
     }
 
     yield {
@@ -182,11 +270,22 @@ export class PackGenerateService {
       source,
       pack: current,
       profileFields: sections.pack_profile ? profileFields : undefined,
+      failedSections: failedList.length > 0 ? failedList : undefined,
+      summary,
     };
   }
 
+  private buildAuthorBrief(prompt?: string, outline?: string): string {
+    const p = (prompt ?? '').trim();
+    const o = (outline ?? '').trim();
+    const parts: string[] = [];
+    if (p) parts.push(`【梗概或大纲摘要】\n${p}`);
+    if (o) parts.push(`【导入大纲全文】\n${o}`);
+    return parts.join('\n\n');
+  }
+
   private async generateOneSection(opts: {
-    prompt: string;
+    brief: string;
     section: PackGenerateSectionKey;
     current: StoryPack;
   }): Promise<Record<string, unknown>> {
@@ -204,8 +303,8 @@ export class PackGenerateService {
               role: 'user',
               content:
                 attempt === 0
-                  ? `用户提示词：${opts.prompt}\n\n当前包摘要：\n${summary}\n\n请输出本步 JSON。`
-                  : `用户提示词：${opts.prompt}\n\n当前包摘要：\n${summary}\n\n上次失败：${lastError}\n请修复并只输出本步 JSON。`,
+                  ? `${opts.brief}\n\n当前包摘要：\n${summary}\n\n请严格依据上述梗概/大纲输出本步 JSON。`
+                  : `${opts.brief}\n\n当前包摘要：\n${summary}\n\n上次失败：${lastError}\n请修复并只输出本步 JSON。`,
             },
           ],
           { json: true, temperature: 0.35 },
@@ -285,7 +384,9 @@ export class PackGenerateService {
         next.triggers = {
           ...next.triggers,
           version: next.triggers.version ?? 1,
-          rules: fragment.rules as StoryPack['triggers']['rules'],
+          rules: this.normalizeTriggerRules(
+            fragment.rules,
+          ) as StoryPack['triggers']['rules'],
         };
         break;
       }
@@ -295,8 +396,9 @@ export class PackGenerateService {
         }
         next.triggers = {
           ...next.triggers,
-          npc_reply_flag_rules:
-            fragment.npc_reply_flag_rules as StoryPack['triggers']['npc_reply_flag_rules'],
+          npc_reply_flag_rules: this.normalizeNpcReplyFlagRules(
+            fragment.npc_reply_flag_rules,
+          ) as StoryPack['triggers']['npc_reply_flag_rules'],
         };
         break;
       }
@@ -386,6 +488,58 @@ export class PackGenerateService {
       throw new Error('JSON 根节点必须是对象');
     }
     return parsed as Record<string, unknown>;
+  }
+
+  /**
+   * Pack 里 flag value 一律是字符串；模型常给 boolean / number。
+   */
+  private coerceFlagValue(raw: unknown, fallback = 'true'): string {
+    if (typeof raw === 'string' && raw.length > 0) return raw;
+    if (typeof raw === 'boolean') return raw ? 'true' : 'false';
+    if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw);
+    return fallback;
+  }
+
+  /**
+   * 模型常把 set_flags 写成字符串数组；规范成 { name, value }。
+   */
+  private normalizeTriggerRules(rules: unknown[]): unknown[] {
+    return rules.map((rule) => {
+      if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return rule;
+      const r = { ...(rule as Record<string, unknown>) };
+      if (Array.isArray(r.set_flags)) {
+        r.set_flags = r.set_flags.map((f) => {
+          if (typeof f === 'string') {
+            return { name: f, value: 'true' };
+          }
+          if (f && typeof f === 'object' && !Array.isArray(f)) {
+            const entry = f as Record<string, unknown>;
+            const name =
+              typeof entry.name === 'string'
+                ? entry.name
+                : typeof entry.flag === 'string'
+                  ? entry.flag
+                  : undefined;
+            if (!name) return f;
+            return {
+              name,
+              value: this.coerceFlagValue(entry.value, 'true'),
+            };
+          }
+          return f;
+        });
+      }
+      return r;
+    });
+  }
+
+  private normalizeNpcReplyFlagRules(rules: unknown[]): unknown[] {
+    return rules.map((rule) => {
+      if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return rule;
+      const r = { ...(rule as Record<string, unknown>) };
+      r.value = this.coerceFlagValue(r.value, 'true');
+      return r;
+    });
   }
 
   private delay(ms: number) {

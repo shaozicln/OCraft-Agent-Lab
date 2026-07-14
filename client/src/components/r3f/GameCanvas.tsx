@@ -3,15 +3,23 @@
 import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OfficeScene } from './OfficeScene';
-import { Player } from './Player';
-import { Humanoid, HumanoidAnimation } from './Humanoid';
-import type { NpcPublicResponse } from '@ocraft/shared';
-import * as THREE from 'three';
+import { Player, type NearbyNpc } from './Player';
+import { Humanoid, type HumanoidAnimation } from './Humanoid';
+
+export type SceneNpc = {
+  npcId: string;
+  name: string;
+  spawn: [number, number, number];
+  color: string;
+  headColor: string;
+  animation: HumanoidAnimation;
+};
+
+export type { NearbyNpc };
 
 interface GameCanvasProps {
-  npc: NpcPublicResponse;
-  npcAnimation: HumanoidAnimation;
-  onPlayerMove: (pos: THREE.Vector3, distanceToNpc: number) => void;
+  npcs: SceneNpc[];
+  onPlayerMove: (nearby: NearbyNpc[]) => void;
   movementEnabled: boolean;
   lookEnabled: boolean;
   onPointerLockChange: (locked: boolean) => void;
@@ -19,16 +27,13 @@ interface GameCanvasProps {
 }
 
 export function GameCanvas({
-  npc,
-  npcAnimation,
+  npcs,
   onPlayerMove,
   movementEnabled,
   lookEnabled,
   onPointerLockChange,
   uiOverlayActive = false,
 }: GameCanvasProps) {
-  const spawn = npc.meta.spawn_position;
-
   return (
     <div
       className="absolute inset-0"
@@ -37,7 +42,7 @@ export function GameCanvas({
       <Canvas
         shadows
         camera={{ position: [0, 1.6, 6], fov: 60 }}
-        className="w-full h-full"
+        className="h-full w-full"
         style={{ background: '#FFFFFF' }}
       >
         <color attach="background" args={['#FFFFFF']} />
@@ -56,14 +61,20 @@ export function GameCanvas({
         />
         <Suspense fallback={null}>
           <OfficeScene />
-          <Humanoid
-            color="#93C5FD"
-            headColor="#BFDBFE"
-            position={spawn}
-            animation={npcAnimation}
-          />
+          {npcs.map((n) => (
+            <Humanoid
+              key={n.npcId}
+              color={n.color}
+              headColor={n.headColor}
+              position={n.spawn}
+              animation={n.animation}
+            />
+          ))}
           <Player
-            npcSpawn={spawn}
+            npcSpawns={npcs.map((n) => ({
+              npcId: n.npcId,
+              position: n.spawn,
+            }))}
             onMove={onPlayerMove}
             movementEnabled={movementEnabled}
             lookEnabled={lookEnabled}

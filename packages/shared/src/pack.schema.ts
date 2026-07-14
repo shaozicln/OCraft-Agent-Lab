@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { isChapterAtLeast } from './chapter.util';
+import { isFlagSet, type StoryFlagsSnapshot } from './story.schema';
 
 /** 包内 ID：章节 / flag / NPC 等，由 Pack 声明，代码不写死业务枚举 */
 export const packIdSchema = z
@@ -56,6 +58,12 @@ export const packNpcSchema = z.object({
   }),
   system_prompt_template: z.string(),
   memories: z.array(packMemorySchema).default([]),
+  /**
+   * 场景出场：当前章节 rank ≥ 该章，且 require_flags 均已置位时才刷小人。
+   * 省略 appear_from_chapter = 开场即在。
+   */
+  appear_from_chapter: packIdSchema.optional(),
+  appear_require_flags: z.array(packIdSchema).default([]),
 });
 
 export const packFlagSetEntrySchema = z.object({
@@ -85,10 +93,33 @@ export const packNpcReplyFlagRuleSchema = z.object({
   triggers: z.array(z.string()).default([]),
 });
 
+/**
+ * 关系事件互聊：玩家对话结束后，章/flag 满足且（once 时）set_flags 尚未置位 →
+ * speakers 有序各跑一轮 LLM（不对玩家、不升章）。
+ */
+export const packExchangeEventSchema = z.object({
+  id: z.string().min(1),
+  enabled: z.boolean().default(true),
+  /** 当前进度章节须等于该章 */
+  chapter: packIdSchema,
+  require_flags: z.array(packIdSchema).default([]),
+  /** 有序发言 NPC（P0 固定两人） */
+  speakers: z.tuple([packIdSchema, packIdSchema]),
+  /** 软剧本提示，非逐字稿 */
+  beat_hints: z.array(z.string()).default([]),
+  set_flags: z.array(packFlagSetEntrySchema).default([]),
+  /**
+   * true（默认）：若 set_flags 中任一 flag 已置位则不再触发（一次）。
+   */
+  once: z.boolean().default(true),
+  notes: z.string().optional(),
+});
+
 export const packTriggersFileSchema = z.object({
   version: z.number().int().positive().default(1),
   rules: z.array(packTriggerRuleSchema),
   npc_reply_flag_rules: z.array(packNpcReplyFlagRuleSchema).default([]),
+  exchange_events: z.array(packExchangeEventSchema).default([]),
 });
 
 /** 好感区间文案：affinity < max_exclusive 时命中（最后一档用极大 max） */
@@ -236,6 +267,7 @@ export type PackMemory = z.infer<typeof packMemorySchema>;
 export type PackNpc = z.infer<typeof packNpcSchema>;
 export type PackTriggerRule = z.infer<typeof packTriggerRuleSchema>;
 export type PackNpcReplyFlagRule = z.infer<typeof packNpcReplyFlagRuleSchema>;
+export type PackExchangeEvent = z.infer<typeof packExchangeEventSchema>;
 export type PackTriggersFile = z.infer<typeof packTriggersFileSchema>;
 export type PackAffinityTier = z.infer<typeof packAffinityTierSchema>;
 export type PackFatigueHint = z.infer<typeof packFatigueHintSchema>;
@@ -304,6 +336,24 @@ export function assertPackReferences(pack: StoryPack): void {
     needFlag(rule.set_flag, `npc_reply.${rule.id}`);
   }
 
+  const npcIds = new Set(pack.npcs.map((n) => n.npc_id));
+  for (const ev of pack.triggers.exchange_events ?? []) {
+    needChapter(ev.chapter, `exchange.${ev.id}`);
+    for (const f of ev.require_flags) {
+      needFlag(f, `exchange.${ev.id}.require`);
+    }
+    for (const f of ev.set_flags) {
+      needFlag(f.name, `exchange.${ev.id}.set`);
+    }
+    for (const sid of ev.speakers) {
+      if (!npcIds.has(sid)) {
+        throw new Error(
+          `Pack 引用未知 NPC "${sid}" @ exchange.${ev.id}.speakers`,
+        );
+      }
+    }
+  }
+
   for (const fc of pack.prompts.flag_constraints) {
     needFlag(fc.when.flag, `flag_constraints.${fc.id}`);
     if (fc.when.chapter) {
@@ -335,6 +385,15 @@ export function getDefaultChapterId(pack: StoryPack): string {
   return sorted[0].id;
 }
 
+/** 剧情「第一章」：rank 最小的章（与 default_chapter 可能不同） */
+export function getFirstChapterId(pack: StoryPack): string {
+  const sorted = [...pack.world.chapters].sort((a, b) => a.rank - b.rank);
+  if (sorted.length === 0) {
+    throw new Error('pack has no chapters');
+  }
+  return sorted[0].id;
+}
+
 export function getDefaultNpcId(pack: StoryPack): string {
   if (pack.world.default_npc) return pack.world.default_npc;
   return pack.npcs[0].npc_id;
@@ -348,11 +407,41 @@ export function getChapterRankMap(pack: StoryPack): Record<string, number> {
   return map;
 }
 
-/** chapterId → HUD / 列表显示名（优先 hud_label） */
+/** chapterId → 展示名（优先章节名 display_name，其次 HUD 短名） */
 export function getChapterLabelMap(pack: StoryPack): Record<string, string> {
   const map: Record<string, string> = {};
   for (const c of pack.world.chapters) {
-    map[c.id] = c.hud_label || c.display_name || c.id;
+    map[c.id] = c.display_name || c.hud_label || c.id;
   }
   return map;
+}
+
+/**
+ * NPC 是否应在场景出场（章节门槛 + 可选 flags）。
+ * appear_from_chapter 省略 = 无章节门槛。
+ */
+export function isNpcPresent(opts: {
+  appear_from_chapter?: string;
+  appear_require_flags?: string[];
+  chapterState: string;
+  flags: StoryFlagsSnapshot;
+  rankMap: Record<string, number>;
+}): boolean {
+  const {
+    appear_from_chapter,
+    appear_require_flags = [],
+    chapterState,
+    flags,
+    rankMap,
+  } = opts;
+  if (
+    appear_from_chapter &&
+    !isChapterAtLeast(chapterState, appear_from_chapter, rankMap)
+  ) {
+    return false;
+  }
+  for (const name of appear_require_flags) {
+    if (!isFlagSet(flags, name)) return false;
+  }
+  return true;
 }

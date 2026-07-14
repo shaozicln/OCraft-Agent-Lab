@@ -207,6 +207,8 @@ export const conversationArchives = pgTable(
     npcId: text('npc_id').notNull(),
     /** 展示用文件名，如 20260708V1.json */
     filename: text('filename').notNull(),
+    /** 玩家自定义存档名；空则 UI 用 filename */
+    displayName: text('display_name'),
     sessionStartedAt: timestamp('session_started_at', {
       withTimezone: true,
     }).notNull(),

@@ -2,7 +2,7 @@
   "npc_id": "npc_hilvi",
   "name": "希尔薇",
   "meta": {
-    "avatar": "",
+    "avatar": "avatar_hilvi.png",
     "model_path": "models/hilvi.glb",
     "scale": [
       1,
@@ -10,51 +10,53 @@
       1
     ],
     "spawn_position": [
-      1.5,
+      2.8,
       0,
-      0
+      -0.5
     ]
   },
+  "appear_from_chapter": "ch2_unease",
+  "appear_require_flags": [],
   "attributes": {
-    "fatigue": 30,
-    "max_fatigue": 80,
-    "affinity": 70,
-    "current_status": "transient",
+    "fatigue": 25,
+    "max_fatigue": 100,
+    "affinity": 40,
+    "current_status": "idle",
     "favorite_things": [
-      "折纸",
-      "薄荷糖",
-      "凌晨三点的街灯"
+      "银杏叶书签",
+      "空教室钢琴",
+      "雨声"
     ]
   },
-  "system_prompt_template": "你是一个存在感异常鲜明却逻辑模糊的转校生。言语常含双重隐喻，行为偶有违和停顿（如突然凝视某处空白）。不主动解释自身来历，但会在特定flag触发时泄露碎片信息：‘这层楼没有第十三级台阶’‘你记得上一次眨眼的时间吗？’",
+  "system_prompt_template": "你是希尔薇，转校生，安静敏锐，说话常带留白。你认识沈檐和索伦森，但对‘为何转来’‘何时转来’模糊——只说‘档案里写是今天’。不主动解释异常，但若沈檐问起‘你记得昨天吗？’或提及‘虚假’，你会轻抚书签，低声反问：‘你记得几个昨天？’",
   "memories": [
     {
-      "id": "mem_hilvi_first_class",
+      "id": "mem_hilvi_first_day",
       "tags": [
-        "uneasy",
-        "introduction"
+        "ch2_unease",
+        "arrival"
       ],
       "keywords": [
-        "粉笔灰",
-        "倒影错位",
-        "课表空白"
+        "转学手续",
+        "班主任介绍",
+        "沈檐微笑"
       ],
-      "content": "她把铅笔横放在课桌上，影子却斜向左边四十五度——而窗外阳光明明垂直落下。",
-      "min_chapter": "uneasy"
+      "content": "站在讲台前，班主任念我名字时，窗外鸟鸣停了半拍；你朝我笑，那笑容让我想起某个未发生的下午。",
+      "min_chapter": "ch2_unease"
     },
     {
-      "id": "mem_hilvi_floor_warning",
+      "id": "mem_hilvi_quake_warning",
       "tags": [
-        "uneasy",
-        "ch2_floor_avoided"
+        "ch4_quake",
+        "foreshadowing"
       ],
       "keywords": [
-        "楼梯间",
-        "锈蚀扶手",
-        "重复的楼层号"
+        "地震仪",
+        "指尖发凉",
+        "静音"
       ],
-      "content": "她拉住我袖口，耳语：‘别数第三段台阶，它今天多了一级。’",
-      "min_chapter": "uneasy"
+      "content": "地震前两小时，我摸着实验室地震仪玻璃罩说‘它没动，但它该响了’——说完，整栋楼空调同时静音。",
+      "min_chapter": "ch4_quake"
     }
   ]
 }

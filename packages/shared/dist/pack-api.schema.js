@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.packGenerateDraftPayloadSchema = exports.packGenerateStreamEventSchema = exports.PACK_GENERATE_SECTION_LABELS = exports.DEFAULT_PACK_GENERATE_SECTIONS = exports.packGenerateSectionsSchema = exports.packGenerateSectionKeys = exports.packUpdatePayloadSchema = exports.packRuntimeSchema = exports.packRuntimeNpcSchema = exports.packRuntimeChapterSchema = exports.packSelectPayloadSchema = exports.packSelectionSchema = exports.packCreateWorldPayloadSchema = exports.packSaveAsPayloadSchema = exports.packSeedPayloadSchema = exports.packWorldSummarySchema = exports.packVersionSummarySchema = void 0;
+exports.packGenerateDraftPayloadSchema = exports.PACK_GENERATE_OUTLINE_MAX = exports.PACK_GENERATE_PROMPT_MAX = exports.packGenerateStreamEventSchema = exports.PACK_GENERATE_SECTION_LABELS = exports.DEFAULT_PACK_GENERATE_SECTIONS = exports.packGenerateSectionsSchema = exports.packGenerateSectionKeys = exports.packUpdatePayloadSchema = exports.packRuntimeSchema = exports.packRuntimeNpcSchema = exports.packRuntimeChapterSchema = exports.packSelectPayloadSchema = exports.packSelectionSchema = exports.packCreateWorldPayloadSchema = exports.packSaveAsPayloadSchema = exports.packSeedPayloadSchema = exports.packWorldSummarySchema = exports.packVersionSummarySchema = void 0;
 const zod_1 = require("zod");
 const pack_schema_1 = require("./pack.schema");
 exports.packVersionSummarySchema = zod_1.z.object({
@@ -61,6 +61,10 @@ exports.packRuntimeChapterSchema = zod_1.z.object({
 exports.packRuntimeNpcSchema = zod_1.z.object({
     npc_id: pack_schema_1.packIdSchema,
     name: zod_1.z.string().min(1),
+    spawn_position: zod_1.z.tuple([zod_1.z.number(), zod_1.z.number(), zod_1.z.number()]),
+    /** 省略 = 开场即出场 */
+    appear_from_chapter: pack_schema_1.packIdSchema.optional(),
+    appear_require_flags: zod_1.z.array(zod_1.z.string()).default([]),
 });
 /** 当前玩家生效包的运行时摘要（进场用） */
 exports.packRuntimeSchema = zod_1.z.object({
@@ -68,20 +72,24 @@ exports.packRuntimeSchema = zod_1.z.object({
     default_npc_id: pack_schema_1.packIdSchema,
     default_chapter: pack_schema_1.packIdSchema,
     chapters: zod_1.z.array(exports.packRuntimeChapterSchema),
-    /** chapterId → 展示名（hud_label 优先） */
+    /** chapterId → 展示名（display_name 优先） */
     chapter_labels: zod_1.z.record(zod_1.z.string(), zod_1.z.string()),
     npcs: zod_1.z.array(exports.packRuntimeNpcSchema),
 });
 exports.packUpdatePayloadSchema = zod_1.z.object({
     pack: zod_1.z.unknown(),
 });
-/** 一句话生成可勾选块（不含包头；未勾选则保留 basePack 对应内容） */
+/**
+ * 一句话生成可勾选块（不含包头；未勾选则保留 basePack 对应内容）
+ * 顺序按依赖：章节/Flags → NPC/结局 → 数值/动画 → 触发 → Prompt → 个人信息
+ */
 exports.packGenerateSectionKeys = [
     'chapters',
     'flags',
+    'npcs',
+    'endings',
     'numeric_tools',
     'animation_rules',
-    'endings',
     'chapter_triggers',
     'npc_reply_flags',
     'prompt_common',
@@ -89,15 +97,15 @@ exports.packGenerateSectionKeys = [
     'fatigue_hints',
     'chapter_constraints',
     'flag_constraints',
-    'npcs',
     'pack_profile',
 ];
 exports.packGenerateSectionsSchema = zod_1.z.object({
     chapters: zod_1.z.boolean(),
     flags: zod_1.z.boolean(),
+    npcs: zod_1.z.boolean(),
+    endings: zod_1.z.boolean(),
     numeric_tools: zod_1.z.boolean(),
     animation_rules: zod_1.z.boolean(),
-    endings: zod_1.z.boolean(),
     chapter_triggers: zod_1.z.boolean(),
     npc_reply_flags: zod_1.z.boolean(),
     prompt_common: zod_1.z.boolean(),
@@ -105,7 +113,6 @@ exports.packGenerateSectionsSchema = zod_1.z.object({
     fatigue_hints: zod_1.z.boolean(),
     chapter_constraints: zod_1.z.boolean(),
     flag_constraints: zod_1.z.boolean(),
-    npcs: zod_1.z.boolean(),
     pack_profile: zod_1.z.boolean(),
 });
 exports.DEFAULT_PACK_GENERATE_SECTIONS = Object.fromEntries(exports.packGenerateSectionKeys.map((k) => [k, true]));
@@ -113,9 +120,10 @@ exports.DEFAULT_PACK_GENERATE_SECTIONS = Object.fromEntries(exports.packGenerate
 exports.PACK_GENERATE_SECTION_LABELS = {
     chapters: '世界·章节',
     flags: '世界·Flags',
+    npcs: 'NPC',
+    endings: '世界·结局',
     numeric_tools: '世界·数值工具',
     animation_rules: '世界·动画规则',
-    endings: '世界·结局',
     chapter_triggers: '触发·章节触发',
     npc_reply_flags: '触发·回复置 Flag',
     prompt_common: 'Prompt·通用',
@@ -123,7 +131,6 @@ exports.PACK_GENERATE_SECTION_LABELS = {
     fatigue_hints: 'Prompt·疲惫提示',
     chapter_constraints: 'Prompt·章节约束',
     flag_constraints: 'Prompt·Flag 约束',
-    npcs: 'NPC',
     pack_profile: '本世界个人信息',
 };
 /** SSE：一句话生成流式事件 */
@@ -156,13 +163,45 @@ exports.packGenerateStreamEventSchema = zod_1.z.discriminatedUnion('type', [
             value: zod_1.z.string(),
         }))
             .optional(),
+        /** 首轮+重试后仍失败的块 */
+        failedSections: zod_1.z
+            .array(zod_1.z.object({
+            section: zod_1.z.enum(exports.packGenerateSectionKeys),
+            message: zod_1.z.string(),
+        }))
+            .optional(),
+        /** 给人看的收尾总结 */
+        summary: zod_1.z.string().optional(),
     }),
 ]);
-/** 一句话生成 Pack 草稿（不落盘） */
-exports.packGenerateDraftPayloadSchema = zod_1.z.object({
-    prompt: zod_1.z.string().trim().min(4).max(500),
+/** 梗概/摘要上限；全文大纲用 outline 字段 */
+exports.PACK_GENERATE_PROMPT_MAX = 8000;
+/** 导入大纲全文上限 */
+exports.PACK_GENERATE_OUTLINE_MAX = 50000;
+/** 生成 Pack 草稿（不落盘）：摘要 + 可选导入大纲 */
+exports.packGenerateDraftPayloadSchema = zod_1.z
+    .object({
+    /** 梗概或大纲摘要 */
+    prompt: zod_1.z.string().trim().max(exports.PACK_GENERATE_PROMPT_MAX).default(''),
+    /** 导入的完整大纲（与 prompt 分开，避免挤在摘要框） */
+    outline: zod_1.z
+        .string()
+        .trim()
+        .max(exports.PACK_GENERATE_OUTLINE_MAX)
+        .optional(),
     /** 当前编辑中的包（保留 world_id / version_dir / header） */
     basePack: zod_1.z.unknown(),
     /** 省略则全部生成 */
     sections: exports.packGenerateSectionsSchema.optional(),
+})
+    .superRefine((data, ctx) => {
+    const brief = data.prompt.trim();
+    const outline = (data.outline ?? '').trim();
+    if (brief.length < 4 && outline.length < 4) {
+        ctx.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            message: '请填写至少 4 字的梗概/摘要，或导入大纲全文',
+            path: ['prompt'],
+        });
+    }
 });

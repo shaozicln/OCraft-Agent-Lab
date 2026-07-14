@@ -12,9 +12,10 @@ const TOC = [
   { id: 'pack-sec-header', label: '包头' },
   { id: 'pack-sec-chapters', label: '章节' },
   { id: 'pack-sec-flags', label: 'Flags' },
+  { id: 'pack-sec-endings', label: '结局' },
   { id: 'pack-sec-numeric', label: '数值工具' },
   { id: 'pack-sec-anim', label: '动画规则' },
-  { id: 'pack-sec-endings', label: '结局' },
+  { id: 'pack-sec-npcs', label: 'NPC' },
   { id: 'pack-sec-triggers', label: '章节触发' },
   { id: 'pack-sec-reply-flags', label: '回复置 Flag' },
   { id: 'pack-sec-prompts-common', label: 'Prompt 通用' },
@@ -22,7 +23,6 @@ const TOC = [
   { id: 'pack-sec-fatigue', label: '疲惫提示（fatigue）' },
   { id: 'pack-sec-chapter-c', label: '章节约束' },
   { id: 'pack-sec-flag-c', label: 'Flag 约束' },
-  { id: 'pack-sec-npcs', label: 'NPC' },
 ] as const;
 
 export function PackEditor({
@@ -45,9 +45,9 @@ export function PackEditor({
       <div className="min-w-0 flex-1 space-y-4">
         <PackHeaderForm {...props} />
         <PackWorldForm {...props} />
+        <PackNpcsForm {...props} />
         <PackTriggersForm {...props} />
         <PackPromptsForm {...props} />
-        <PackNpcsForm {...props} />
       </div>
       <nav
         className="sticky top-20 hidden h-fit w-40 shrink-0 rounded-xl border p-3 lg:block"

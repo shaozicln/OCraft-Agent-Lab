@@ -2,145 +2,202 @@
   "version": 1,
   "rules": [
     {
-      "id": "bond_daily",
+      "id": "ch1_to_ch2",
       "enabled": true,
-      "from_chapter": "daily",
-      "to_chapter": null,
-      "min_affinity": 40,
-      "require_flags": [],
-      "player_triggers": [],
-      "set_flags": [
-        {
-          "name": "ch1_bonded",
-          "value": "true"
-        }
-      ]
-    },
-    {
-      "id": "daily_to_uneasy",
-      "enabled": true,
-      "from_chapter": "daily",
-      "to_chapter": "uneasy",
-      "min_affinity": 40,
-      "max_fatigue": 70,
-      "require_flags": [
-        "ch1_bonded"
-      ],
-      "player_triggers": [],
-      "set_flags": [
-        {
-          "name": "ch2_sleep_mentioned",
-          "value": "true"
-        }
-      ]
-    },
-    {
-      "id": "floor_avoided",
-      "enabled": true,
-      "from_chapter": "uneasy",
-      "to_chapter": null,
+      "from_chapter": "ch1_daily",
+      "to_chapter": "ch2_unease",
       "min_affinity": 0,
       "require_flags": [],
-      "player_triggers": [],
+      "player_triggers": [
+        "转校生",
+        "希尔薇",
+        "转学"
+      ],
       "set_flags": [
         {
-          "name": "ch2_floor_avoided",
+          "name": "met_hook",
           "value": "true"
         }
-      ]
+      ],
+      "notes": "第一章升章：触发关键词即进入第二章，置met_hook"
     },
     {
-      "id": "dream_partial",
+      "id": "ch2_to_ch3a",
       "enabled": true,
-      "from_chapter": "uneasy",
-      "to_chapter": null,
+      "from_chapter": "ch2_unease",
+      "to_chapter": "ch3_investigate",
+      "min_affinity": 0,
+      "require_flags": [],
+      "player_triggers": [
+        "相信",
+        "我信你",
+        "一起查"
+      ],
+      "set_flags": [
+        {
+          "name": "path_trust",
+          "value": "true"
+        }
+      ],
+      "notes": "第二章选择信任路径，进入第三章A"
+    },
+    {
+      "id": "ch2_to_ch3b",
+      "enabled": true,
+      "from_chapter": "ch2_unease",
+      "to_chapter": "ch3_alone",
+      "min_affinity": 0,
+      "require_flags": [],
+      "player_triggers": [
+        "无所谓",
+        "别想了",
+        "你想多了"
+      ],
+      "set_flags": [
+        {
+          "name": "path_dismiss",
+          "value": "true"
+        }
+      ],
+      "notes": "第二章选择忽视路径，进入第三章B"
+    },
+    {
+      "id": "ch3b_to_ch3a_merge",
+      "enabled": true,
+      "from_chapter": "ch3_alone",
+      "to_chapter": "ch3_investigate",
       "min_affinity": 0,
       "require_flags": [
-        "ch2_sleep_mentioned"
+        "path_dismiss"
       ],
-      "player_triggers": [],
+      "player_triggers": [
+        "关心",
+        "想加入",
+        "我帮你查"
+      ],
       "set_flags": [
         {
-          "name": "ch3_dream_partial",
+          "name": "path_merged_a",
           "value": "true"
         }
-      ]
+      ],
+      "notes": "第三章B中主动合流，保留path_dismiss但启用path_merged_a，后续按A规则执行"
     },
     {
-      "id": "uneasy_to_dream_reveal",
+      "id": "ch3_to_ch4",
       "enabled": true,
-      "from_chapter": "uneasy",
-      "to_chapter": "dream_reveal",
-      "min_affinity": 45,
-      "require_flags": [
-        "ch2_sleep_mentioned"
-      ],
-      "player_triggers": [],
-      "set_flags": [
-        {
-          "name": "ch3_dream_full",
-          "value": "true"
-        }
-      ]
-    },
-    {
-      "id": "colleague_hint",
-      "enabled": true,
-      "from_chapter": "dream_reveal",
-      "to_chapter": null,
-      "min_affinity": 55,
-      "require_flags": [
-        "ch3_dream_full"
-      ],
-      "player_triggers": [],
-      "set_flags": [
-        {
-          "name": "ch3_colleague_hint",
-          "value": "true"
-        }
-      ]
-    },
-    {
-      "id": "ch4_ocraft_aware_placeholder",
-      "enabled": false,
-      "from_chapter": "dream_reveal",
-      "to_chapter": null,
-      "min_affinity": 70,
-      "require_flags": [
-        "ch3_dream_full"
-      ],
-      "player_triggers": [],
-      "set_flags": [
-        {
-          "name": "ch4_ocraft_aware",
-          "value": "true"
-        }
-      ]
-    },
-    {
-      "id": "ch5_stance_placeholder",
-      "enabled": false,
-      "from_chapter": "dream_reveal",
-      "to_chapter": null,
+      "from_chapter": "ch3_investigate",
+      "to_chapter": "ch4_quake",
       "min_affinity": 0,
-      "require_flags": [
-        "ch4_ocraft_aware"
+      "require_flags": [],
+      "player_triggers": [
+        "地震",
+        "晃动",
+        "警报"
       ],
-      "player_triggers": [],
-      "set_flags": []
+      "set_flags": [],
+      "notes": "第三章（A或B合流后）触发地震类词，进入第四章"
     }
   ],
   "npc_reply_flag_rules": [
     {
-      "id": "admit_tired",
+      "id": "rule_ch1_to_ch2",
       "enabled": true,
       "when_chapter_in": [
-        "uneasy",
-        "dream_reveal"
+        "ch1_daily"
       ],
-      "set_flag": "ch2_npc_admitted_tired",
+      "set_flag": "met_hook",
       "value": "true",
-      "triggers": []
+      "triggers": [
+        "转校生",
+        "希尔薇",
+        "转学",
+        "新同学",
+        "要来新人"
+      ]
+    },
+    {
+      "id": "rule_ch2_trust_path",
+      "enabled": true,
+      "when_chapter_in": [
+        "ch2_unease"
+      ],
+      "set_flag": "path_trust",
+      "value": "true",
+      "triggers": [
+        "我相信你",
+        "我信",
+        "一起查",
+        "查清楚",
+        "你说得对",
+        "我也觉得奇怪"
+      ]
+    },
+    {
+      "id": "rule_ch2_dismiss_path",
+      "enabled": true,
+      "when_chapter_in": [
+        "ch2_unease"
+      ],
+      "set_flag": "path_dismiss",
+      "value": "true",
+      "triggers": [
+        "别想了",
+        "你想多了",
+        "无所谓",
+        "瞎操心",
+        "哪有那么玄乎"
+      ]
+    },
+    {
+      "id": "rule_ch2_merge_to_a",
+      "enabled": true,
+      "when_chapter_in": [
+        "ch2_unease",
+        "ch3_alone"
+      ],
+      "set_flag": "path_merged_a",
+      "value": "true",
+      "triggers": [
+        "关心你",
+        "我想帮你",
+        "我加入",
+        "我们一起",
+        "别一个人扛"
+      ]
+    },
+    {
+      "id": "rule_ch4_silvie_dead",
+      "enabled": true,
+      "when_chapter_in": [
+        "ch4_quake"
+      ],
+      "set_flag": "silvie_dead",
+      "value": "true",
+      "triggers": [
+        "地震",
+        "晃动",
+        "警报",
+        "塌了",
+        "地面裂开",
+        "天摇地动"
+      ]
+    }
+  ],
+  "exchange_events": [
+    {
+      "id": "ex_ch2_first_meet",
+      "enabled": true,
+      "chapter": "ch2_unease",
+      "require_flags": ["met_hook"],
+      "speakers": ["npc_suolunsen", "npc_hilvi"],
+      "beat_hints": [
+        "索伦森试探转校传闻与异常感，语气压低",
+        "希尔薇礼貌但疏离，不直接点破"
+      ],
+      "set_flags": [{ "name": "ex_ch2_meet_done", "value": "true" }],
+      "once": true,
+      "notes": "进裂痕且已听闻希尔薇后，首次旁听互聊"
     }
   ]
 }

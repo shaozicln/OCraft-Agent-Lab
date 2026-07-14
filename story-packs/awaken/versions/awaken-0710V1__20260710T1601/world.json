@@ -1,124 +1,174 @@
 {
   "chapters": [
     {
-      "id": "daily",
-      "display_name": "",
+      "id": "ch1_daily",
+      "display_name": "日常",
       "rank": 0
     },
     {
-      "id": "uneasy",
-      "display_name": "",
+      "id": "ch2_unease",
+      "display_name": "裂痕",
       "rank": 1
     },
     {
-      "id": "dream_reveal",
-      "display_name": "",
+      "id": "ch3_investigate",
+      "display_name": "共查",
       "rank": 2
+    },
+    {
+      "id": "ch3_alone",
+      "display_name": "独行",
+      "rank": 3
+    },
+    {
+      "id": "ch4_quake",
+      "display_name": "地震之后",
+      "rank": 4
     }
   ],
   "flags": [
     {
-      "name": "ch1_bonded",
+      "name": "met_hook",
       "type": "bool",
+      "description": "已听闻转校/希尔薇传闻",
       "irreversible": true
     },
     {
-      "name": "ch2_sleep_mentioned",
+      "name": "path_trust",
       "type": "bool",
+      "description": "玩家选择相信索伦森并愿共同调查",
       "irreversible": true
     },
     {
-      "name": "ch2_npc_admitted_tired",
+      "name": "path_dismiss",
       "type": "bool",
+      "description": "玩家选择不信或淡化索伦森的怀疑",
       "irreversible": true
     },
     {
-      "name": "ch2_floor_avoided",
+      "name": "path_merged_a",
       "type": "bool",
+      "description": "从第三章B合流至第三章A路径",
       "irreversible": true
     },
     {
-      "name": "ch3_dream_partial",
+      "name": "player_hinted_meta",
       "type": "bool",
+      "description": "玩家曾暗示世界虚假（如‘模拟’‘游戏’等），但未完成坦白改结局",
       "irreversible": true
     },
     {
-      "name": "ch3_dream_full",
+      "name": "silvie_dead",
       "type": "bool",
+      "description": "希尔薇在地震中死亡（默认四章事件，结局甲可覆盖）",
       "irreversible": true
     },
     {
-      "name": "ch3_colleague_hint",
+      "name": "deja_vu",
       "type": "bool",
+      "description": "索伦森明确表达既视感（如‘好像经历过好几次’）",
       "irreversible": true
     },
     {
-      "name": "ch4_ocraft_aware",
+      "name": "ending_jia",
       "type": "bool",
+      "description": "已触发结局甲（改写结局，希尔薇存活）",
       "irreversible": true
     },
     {
-      "name": "ch5_player_stance",
-      "type": "enum",
-      "enum_values": [
-        "help",
-        "leave",
-        "silence"
-      ],
+      "name": "ending_yi",
+      "type": "bool",
+      "description": "已触发结局乙（追杀玩家）",
       "irreversible": true
     },
     {
-      "name": "ending_locked",
+      "name": "ending_bing",
       "type": "bool",
+      "description": "已触发结局丙（索伦森独活或殉情）",
+      "irreversible": true
+    },
+    {
+      "name": "ex_ch2_meet_done",
+      "type": "bool",
+      "description": "裂痕章首次索伦森↔希尔薇关系互聊已触发",
       "irreversible": true
     }
   ],
-  "default_chapter": "uneasy",
+  "default_chapter": "ch2_unease",
   "default_npc": "npc_suolunsen",
   "numeric_tools": {
     "fatigue_increase": {
-      "triggers": [],
-      "delta": 15,
-      "reason": ""
+      "triggers": [
+        "转校生",
+        "希尔薇",
+        "转学",
+        "这世界是假的",
+        "游戏",
+        "模拟",
+        "存档",
+        "我改结局",
+        "地震",
+        "晃动",
+        "警报",
+        "虚假"
+      ],
+      "delta": 1,
+      "reason": "认知负荷上升：接触异常线索、元叙事提示或高张力事件触发潜意识疲惫积累"
     },
     "interest_hit": {
-      "affinity_delta": 10,
-      "affinity_reason": "",
-      "fatigue_delta": -15,
-      "fatigue_reason": ""
+      "affinity_delta": 2,
+      "affinity_reason": "共鸣确认：玩家主动使用元叙事关键词（如‘游戏’‘存档’）或明确支持调查，强化与索伦森/希尔薇的价值同盟感",
+      "fatigue_delta": -1,
+      "fatigue_reason": "认知释放：当玩家精准回应NPC核心焦虑（如坦白世界虚假），短暂缓解其存在性压力"
     }
   },
   "animation_rules": [
     {
-      "id": "fatigue_up_sleep",
+      "id": "suolunsen_idle_ch1",
       "enabled": true,
-      "when": {
-        "fatigue_delta_gt": 0
-      },
-      "animation": "sleeping"
+      "when": {},
+      "animation": "idle"
     },
     {
-      "id": "game_excited",
+      "id": "suolunsen_talk_ch2_suspicious",
+      "enabled": true,
+      "when": {},
+      "animation": "talk"
+    },
+    {
+      "id": "suolunsen_excited_talk_ch3_a",
       "enabled": true,
       "when": {},
       "animation": "excited_talk"
     },
     {
-      "id": "interest_talk",
+      "id": "suolunsen_sleeping_ch3_b",
       "enabled": true,
-      "when": {
-        "interest_hit": true
-      },
-      "animation": "talk"
+      "when": {},
+      "animation": "sleeping"
     },
     {
-      "id": "wake_from_sleep",
+      "id": "suolunsen_excited_talk_ch4_meta",
       "enabled": true,
-      "when": {
-        "current_status": "sleeping"
-      },
-      "animation": "talk"
+      "when": {},
+      "animation": "excited_talk"
     }
   ],
-  "endings": []
+  "endings": [
+    {
+      "id": "ending_jia",
+      "display_name": "甲 · 改",
+      "notes": "玩家向索伦森且希尔薇坦白世界虚假，并声明要改结局/改写；清 silvie_dead，希尔薇存活"
+    },
+    {
+      "id": "ending_yi",
+      "display_name": "乙 · 常",
+      "notes": "走路径 A（path_trust 或 path_merged_a）但未完成坦白改结局；希尔薇死亡，索伦森识破存档循环并追杀玩家"
+    },
+    {
+      "id": "ending_bing",
+      "display_name": "丙 · 哀",
+      "notes": "停留路径 B 且未合流（即 path_dismiss 为真且 path_merged_a 为假），且未坦白改结局；希尔薇死亡，索伦森归咎自身，抑郁独活或殉情倾向"
+    }
+  ]
 }

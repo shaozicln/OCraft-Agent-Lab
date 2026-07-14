@@ -219,6 +219,119 @@ export class AgentHarnessService {
     return { toolCalls, finalState, animation, stream, traceId };
   }
 
+  /**
+   * 按需生成玩家可选回复（不入档、不改状态）。供 UI「查看建议」使用。
+   */
+  async suggestPlayerReplies(
+    playerId: string,
+    npcId: string,
+  ): Promise<string[]> {
+    const pack = this.packService.getPack();
+    const chapterState = this.conversationService.getChapterState(
+      playerId,
+      npcId,
+    );
+    const chapterMeta = pack.world.chapters.find((c) => c.id === chapterState);
+    const chapterLabel =
+      chapterMeta?.hud_label || chapterMeta?.display_name || chapterState;
+    const preState = this.npcService.getRuntimeState(playerId, npcId);
+    const storyFlags = this.storyFlagService.getFlags(playerId, npcId);
+    const npcDef = this.npcService.getDefinition(npcId);
+    const history = this.conversationService.getRecentTurns(playerId, npcId);
+    const recent = history.slice(-8);
+
+    if (this.llmService.isMockMode()) {
+      return this.mockPlayerSuggestions(npcDef.name, chapterLabel, recent);
+    }
+
+    const systemPrompt = this.npcService.buildSystemPrompt(npcId, {
+      chapterState,
+      affinity: preState.affinity,
+      fatigue: preState.fatigue,
+      currentStatus: preState.current_status,
+      storyFlags,
+    });
+
+    const transcript = recent
+      .map((m) =>
+        m.role === 'user'
+          ? `玩家：${m.content}`
+          : `${npcDef.name}：${m.content}`,
+      )
+      .join('\n');
+
+    const flagLine =
+      Object.keys(storyFlags).length > 0
+        ? Object.entries(storyFlags)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(', ')
+        : '（无）';
+
+    const messages: LlmMessage[] = [
+      {
+        role: 'system',
+        content: [
+          '你是剧情对话助手。根据当前章节、旗标与近期对白，为「玩家」生成接下来可以说的短句选项。',
+          '要求：贴合剧情推进；语气像玩家在和 NPC 说话；每条独立、可直接发送；不要剧透未发生事件；不要解释。',
+          '只输出 JSON：{"suggestions":["...","...","..."]}，恰好 3 条，每条不超过 40 字。',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: [
+          `【NPC】${npcDef.name}`,
+          `【当前章节】${chapterLabel}（${chapterState}）`,
+          `【好感】${preState.affinity} 【疲惫】${preState.fatigue} 【状态】${preState.current_status}`,
+          `【故事旗标】${flagLine}`,
+          `【人设摘要】\n${systemPrompt.slice(0, 1200)}`,
+          `【近期对白】\n${transcript || '（尚无对白，生成开场可用的试探/问候）'}`,
+          '请生成 3 条玩家下一句可选回复。',
+        ].join('\n\n'),
+      },
+    ];
+
+    try {
+      const raw = await this.llmService.complete(messages, {
+        temperature: 0.7,
+        json: true,
+      });
+      const parsed = JSON.parse(raw) as { suggestions?: unknown };
+      const list = Array.isArray(parsed.suggestions)
+        ? parsed.suggestions
+            .filter((s): s is string => typeof s === 'string')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0 && s.length <= 200)
+            .slice(0, 4)
+        : [];
+      if (list.length >= 2) return list;
+      this.logger.warn('suggestPlayerReplies: invalid JSON shape, using mock');
+    } catch (err) {
+      this.logger.warn(
+        `suggestPlayerReplies failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+    return this.mockPlayerSuggestions(npcDef.name, chapterLabel, recent);
+  }
+
+  private mockPlayerSuggestions(
+    npcName: string,
+    chapterLabel: string,
+    recent: LlmMessage[],
+  ): string[] {
+    const lastNpc = [...recent]
+      .reverse()
+      .find((m) => m.role === 'assistant')?.content;
+    const hint = lastNpc
+      ? `关于「${lastNpc.slice(0, 16)}${lastNpc.length > 16 ? '…' : ''}」`
+      : '';
+
+    return [
+      hint ? `${hint}，我想再听听你的想法。` : `你好，${npcName}。最近怎么样？`,
+      `关于「${chapterLabel}」，你觉得我们接下来该怎么做？`,
+      '我想帮你，但不确定从哪里开始——能指个方向吗？',
+    ];
+  }
+
   async recordAssistantReply(
     playerId: string,
     npcId: string,

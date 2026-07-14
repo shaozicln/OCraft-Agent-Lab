@@ -37,6 +37,7 @@ export class ConversationArchiveService {
     npcId: string,
     sessionStartedAt: string,
     snapshot: ConversationSnapshot,
+    displayName?: string,
   ): Promise<string> {
     const started = new Date(sessionStartedAt);
     const stamp = this.formatFileStamp(started);
@@ -49,6 +50,7 @@ export class ConversationArchiveService {
         playerId,
         npcId,
         filename,
+        displayName: displayName?.trim() || null,
         sessionStartedAt: started,
       })
       .returning();
@@ -65,6 +67,30 @@ export class ConversationArchiveService {
       `Created archive player=${playerId} npc=${npcId} → ${filename} (snapshot 0)`,
     );
     return filename;
+  }
+
+  async renameArchive(
+    playerId: string,
+    filename: string,
+    displayName: string,
+  ): Promise<{ filename: string; display_name: string }> {
+    const archive = await this.playerStateRepo.findArchiveByFilename(
+      playerId,
+      filename,
+    );
+    if (!archive) {
+      throw new NotFoundException(`Archive not found: ${filename}`);
+    }
+    const name = displayName.trim();
+    if (!name) {
+      throw new Error('存档名不能为空');
+    }
+    const db = this.requireDb();
+    await db
+      .update(conversationArchives)
+      .set({ displayName: name })
+      .where(eq(conversationArchives.id, archive.id));
+    return { filename, display_name: name };
   }
 
   async appendSnapshot(
@@ -129,6 +155,7 @@ export class ConversationArchiveService {
 
       summaries.push({
         filename: archive.filename,
+        display_name: archive.displayName ?? undefined,
         session_started_at: archive.sessionStartedAt.toISOString(),
         snapshots: snapshots.map((snap) => ({
           index: snap.snapshotIndex,

@@ -1,18 +1,38 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isNpcPresent } from '@ocraft/shared';
 import { AuthGate } from '@/components/ui/AuthGate';
-import { GameCanvas } from '@/components/r3f/GameCanvas';
+import { GameCanvas, type SceneNpc } from '@/components/r3f/GameCanvas';
+import { type HumanoidAnimation } from '@/components/r3f/Humanoid';
 import { ChatBox } from '@/components/ui/ChatBox';
 import { EscMenu } from '@/components/ui/EscMenu';
 import { HUD } from '@/components/ui/HUD';
 import { InteractionPrompt } from '@/components/ui/InteractionPrompt';
-import { HumanoidAnimation } from '@/components/r3f/Humanoid';
-import { INTERACTION_DISTANCE } from '@/config/game';
 import { useGameSocket } from '@/hooks/useGameSocket';
 import { useNpcConfig } from '@/hooks/useNpcConfig';
 import { usePackRuntime } from '@/hooks/usePackRuntime';
-import * as THREE from 'three';
+import type { NearbyNpc } from '@/components/r3f/Player';
+
+const NPC_PALETTE = [
+  { color: '#93C5FD', headColor: '#BFDBFE' },
+  { color: '#F9A8D4', headColor: '#FBCFE8' },
+  { color: '#86EFAC', headColor: '#BBF7D0' },
+  { color: '#FCD34D', headColor: '#FDE68A' },
+  { color: '#C4B5FD', headColor: '#DDD6FE' },
+] as const;
+
+function asAnim(v: string | undefined): HumanoidAnimation {
+  if (
+    v === 'idle' ||
+    v === 'sleeping' ||
+    v === 'talk' ||
+    v === 'excited_talk'
+  ) {
+    return v;
+  }
+  return 'idle';
+}
 
 function GamePageInner({
   token,
@@ -30,56 +50,156 @@ function GamePageInner({
     loading: packLoading,
     error: packError,
   } = usePackRuntime(token);
-  const npcId = runtime?.default_npc_id ?? '';
+
+  const defaultNpcId = runtime?.default_npc_id ?? '';
   const chapterLabels = runtime?.chapter_labels ?? {};
   const defaultChapter = runtime?.default_chapter ?? '';
-
-  const { npc, loading: npcLoading, error: npcError } = useNpcConfig(
-    npcId,
-    token,
+  const allNpcIds = useMemo(
+    () => runtime?.npcs.map((n) => n.npc_id) ?? [],
+    [runtime?.npcs],
   );
-  const [nearNpc, setNearNpc] = useState(false);
+  const rankMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const c of runtime?.chapters ?? []) m[c.id] = c.rank;
+    return m;
+  }, [runtime?.chapters]);
+
+  const [activeNpcId, setActiveNpcId] = useState(defaultNpcId);
+  const [nearbyNpcs, setNearbyNpcs] = useState<NearbyNpc[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pointerLocked, setPointerLocked] = useState(false);
-  const [npcAnimation, setNpcAnimation] = useState<HumanoidAnimation>('idle');
   const prevStateRef = useRef({ affinity: 0, fatigue: 0 });
-  const [deltas, setDeltas] = useState<{ affinity?: number; fatigue?: number }>({});
+  const [deltas, setDeltas] = useState<{ affinity?: number; fatigue?: number }>(
+    {},
+  );
+
+  useEffect(() => {
+    if (defaultNpcId) setActiveNpcId((id) => id || defaultNpcId);
+  }, [defaultNpcId]);
+
+  const { npc, error: npcError } = useNpcConfig(
+    activeNpcId || defaultNpcId,
+    token,
+  );
 
   const {
     connected,
     npcState,
+    npcStates,
+    progressChapter,
+    progressFlags,
     streamText,
     isStreaming,
     lastSaved,
+    lastExchange,
     archivesList,
     loadedConversation,
     saveError,
     loadError,
     requestNpcState,
     sendChat,
+    requestSuggestions,
+    clearSuggestions,
+    suggestions,
+    suggestionsLoading,
+    suggestionsError,
     saveConversation,
     listArchives,
     loadArchive,
+    renameArchive,
+    startNewRun,
+    requestStoryMap,
+    storyMap,
+    lastNewRun,
     clearLoadedConversation,
     clearLastSaved,
-  } = useGameSocket(token, npcId);
+    clearLastNewRun,
+    clearLastExchange,
+  } = useGameSocket(token, activeNpcId || defaultNpcId, {
+    progressNpcId: defaultNpcId,
+    trackNpcIds: allNpcIds.length ? allNpcIds : [defaultNpcId],
+  });
+
+  const worldChapter = progressChapter ?? defaultChapter;
+  const nearNpc = nearbyNpcs.length > 0;
+  const primaryNearNpcId = nearbyNpcs[0]?.npcId ?? null;
+
+  const visibleNpcs = useMemo(() => {
+    if (!runtime) return [];
+    return runtime.npcs.filter((n) =>
+      isNpcPresent({
+        appear_from_chapter: n.appear_from_chapter,
+        appear_require_flags: n.appear_require_flags,
+        chapterState: worldChapter,
+        flags: progressFlags,
+        rankMap,
+      }),
+    );
+  }, [runtime, worldChapter, progressFlags, rankMap]);
+
+  const sceneNpcs: SceneNpc[] = useMemo(
+    () =>
+      visibleNpcs.map((n, i) => {
+        const palette = NPC_PALETTE[i % NPC_PALETTE.length];
+        const st = npcStates[n.npc_id];
+        return {
+          npcId: n.npc_id,
+          name: n.name,
+          spawn: n.spawn_position,
+          color: palette.color,
+          headColor: palette.headColor,
+          animation: asAnim(st?.animation ?? st?.current_status),
+        };
+      }),
+    [visibleNpcs, npcStates],
+  );
+
+  const interactTargets = useMemo(
+    () =>
+      nearbyNpcs.map((n) => ({
+        npcId: n.npcId,
+        name:
+          visibleNpcs.find((v) => v.npc_id === n.npcId)?.name ??
+          npcStates[n.npcId]?.name ??
+          n.npcId,
+      })),
+    [nearbyNpcs, visibleNpcs, npcStates],
+  );
 
   const uiBlocking = chatOpen || menuOpen;
   const movementEnabled = !uiBlocking;
   const lookEnabled = !uiBlocking;
 
-  const handlePlayerMove = useCallback((_pos: THREE.Vector3, distance: number) => {
-    const isNear = distance < INTERACTION_DISTANCE;
-    setNearNpc((prev) => (prev === isNear ? prev : isNear));
+  const handlePlayerMove = useCallback((nearby: NearbyNpc[]) => {
+    setNearbyNpcs((prev) => {
+      if (
+        prev.length === nearby.length &&
+        prev.every(
+          (p, i) =>
+            p.npcId === nearby[i]?.npcId &&
+            Math.abs(p.distance - (nearby[i]?.distance ?? 0)) < 0.05,
+        )
+      ) {
+        return prev;
+      }
+      return nearby;
+    });
   }, []);
 
-  const openChat = useCallback(() => {
-    document.exitPointerLock();
-    setMenuOpen(false);
-    setChatOpen(true);
-    requestNpcState();
-  }, [requestNpcState]);
+  const openChat = useCallback(
+    (npcId?: string) => {
+      const target =
+        npcId || primaryNearNpcId || activeNpcId || defaultNpcId;
+      if (!target) return;
+      setActiveNpcId(target);
+      document.exitPointerLock();
+      setMenuOpen(false);
+      setChatOpen(true);
+      requestNpcState(target);
+    },
+    [primaryNearNpcId, activeNpcId, defaultNpcId, requestNpcState],
+  );
 
   const closeChat = useCallback(() => {
     document.exitPointerLock();
@@ -89,6 +209,25 @@ function GamePageInner({
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
   }, []);
+
+  const handleRequestStoryMap = useCallback(() => {
+    requestStoryMap();
+  }, [requestStoryMap]);
+
+  const handleStartNewRun = useCallback(
+    (opts: {
+      chapterId?: string;
+      viaRuleId?: string;
+      displayName?: string;
+    }) => {
+      const ok = startNewRun(opts);
+      if (ok) {
+        setMenuOpen(false);
+        setChatOpen(true);
+      }
+    },
+    [startNewRun],
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -118,7 +257,6 @@ function GamePageInner({
         affinity: npc.runtime.affinity,
         fatigue: npc.runtime.fatigue,
       };
-      setNpcAnimation(npc.runtime.current_status as HumanoidAnimation);
     }
   }, [npc]);
 
@@ -128,7 +266,10 @@ function GamePageInner({
     const affDelta = npcState.affinity - prevStateRef.current.affinity;
     const fatDelta = npcState.fatigue - prevStateRef.current.fatigue;
     if (affDelta !== 0 || fatDelta !== 0) {
-      setDeltas({ affinity: affDelta || undefined, fatigue: fatDelta || undefined });
+      setDeltas({
+        affinity: affDelta || undefined,
+        fatigue: fatDelta || undefined,
+      });
       const timer = setTimeout(() => setDeltas({}), 2000);
       prevStateRef.current = {
         affinity: npcState.affinity,
@@ -143,16 +284,11 @@ function GamePageInner({
     };
   }, [npcState, chatOpen]);
 
-  useEffect(() => {
-    if (npcState?.animation) {
-      setNpcAnimation(npcState.animation as HumanoidAnimation);
-    }
-  }, [npcState?.animation]);
-
-  if (packLoading || (npcId && npcLoading)) {
+  // 包加载完后不再因切换 NPC 整页卸载 Canvas（否则玩家位置/视角会被重置）
+  if (packLoading) {
     return (
       <main
-        className="flex w-screen h-screen items-center justify-center"
+        className="flex h-screen w-screen items-center justify-center"
         style={{ background: 'var(--ui-bg)', color: 'var(--ui-fg-muted)' }}
       >
         加载剧情包…
@@ -163,7 +299,7 @@ function GamePageInner({
   if (packError || !runtime) {
     return (
       <main
-        className="flex w-screen h-screen items-center justify-center"
+        className="flex h-screen w-screen items-center justify-center"
         style={{ background: 'var(--ui-bg)', color: 'var(--ui-danger)' }}
       >
         无法加载剧情包：{packError ?? 'unknown'}（请确认 server 已启动）
@@ -171,28 +307,36 @@ function GamePageInner({
     );
   }
 
-  if (npcError || !npc) {
-    return (
-      <main
-        className="flex w-screen h-screen items-center justify-center"
-        style={{ background: 'var(--ui-bg)', color: 'var(--ui-danger)' }}
-      >
-        无法加载 NPC：{npcError ?? 'unknown'}（请确认 server 已启动）
-      </main>
-    );
-  }
+  const runtimeNpcName =
+    runtime.npcs.find((n) => n.npc_id === (activeNpcId || defaultNpcId))
+      ?.name ?? 'NPC';
+  const chatNpcName = npcState?.name ?? npc?.name ?? runtimeNpcName;
 
-  const affinity = npcState?.affinity ?? npc.runtime.affinity;
-  const fatigue = npcState?.fatigue ?? npc.runtime.fatigue;
-  const maxFatigue = npcState?.maxFatigue ?? npc.max_fatigue;
-  const chapterId = npcState?.chapter_state ?? defaultChapter;
-  const chapterLabel = chapterLabels[chapterId] ?? chapterId;
+  const affinity = npcState?.affinity ?? npc?.runtime.affinity ?? 0;
+  const fatigue = npcState?.fatigue ?? npc?.runtime.fatigue ?? 0;
+  const maxFatigue = npcState?.maxFatigue ?? npc?.max_fatigue ?? 100;
+  const chapterId = worldChapter;
+  const chapterMeta = runtime.chapters.find((c) => c.id === chapterId);
+  const chapterDisplayName =
+    chapterMeta?.display_name ||
+    chapterMeta?.hud_label ||
+    chapterLabels[chapterId] ||
+    chapterId;
+  const chapterOrdinal =
+    chapterMeta != null ? chapterMeta.rank + 1 : undefined;
+  const chapterHudText =
+    chapterOrdinal != null
+      ? `第${chapterOrdinal}章：${chapterDisplayName}`
+      : chapterDisplayName
+        ? `章节：${chapterDisplayName}`
+        : null;
+
+  const hintNames = visibleNpcs.map((n) => n.name).join(' / ') || chatNpcName;
 
   return (
-    <main className="relative w-screen h-screen overflow-hidden bg-white">
+    <main className="relative h-screen w-screen overflow-hidden bg-white">
       <GameCanvas
-        npc={npc}
-        npcAnimation={npcAnimation}
+        npcs={sceneNpcs}
         onPlayerMove={handlePlayerMove}
         movementEnabled={movementEnabled}
         lookEnabled={lookEnabled}
@@ -200,75 +344,100 @@ function GamePageInner({
         uiOverlayActive={uiBlocking}
       />
 
-      <div className="absolute top-4 left-4 z-20 pointer-events-none space-y-1">
-        <h1 className="text-gray-800 text-lg font-bold">
-          {runtime.selection.world_id}/{runtime.selection.pack_version_id}
-        </h1>
-        <p className="text-gray-500 text-xs">
-          WASD 移动 · Esc 菜单 · 靠近 {npc.name} 按 F
-        </p>
-        <p className={`text-xs ${connected ? 'text-emerald-600' : 'text-red-500'}`}>
-          {connected ? '● 已连接服务器' : '○ 未连接服务器 (3010)'}
-        </p>
-        <p className="text-xs text-gray-400">当前账号：{username}</p>
+      <div className="absolute top-4 left-4 z-30 space-y-2">
+        <div className="pointer-events-none space-y-1">
+          <h1 className="text-lg font-bold text-gray-800">
+            {runtime.selection.world_id}/{runtime.selection.pack_version_id}
+          </h1>
+          <p className="text-xs text-gray-500">
+            WASD 移动 · Esc 菜单 · 靠近 {hintNames} 按 F
+          </p>
+          <p
+            className={`text-xs ${connected ? 'text-emerald-600' : 'text-red-500'}`}
+          >
+            {connected ? '● 已连接服务器' : '○ 未连接服务器 (3010)'}
+          </p>
+          <p className="text-xs text-gray-400">当前账号：{username}</p>
+          {npcError ? (
+            <p className="text-xs text-amber-600">NPC 配置暂不可用：{npcError}</p>
+          ) : null}
+        </div>
+
+        <HUD
+          visible={chatOpen}
+          name={chatNpcName}
+          affinity={affinity}
+          fatigue={fatigue}
+          maxFatigue={maxFatigue}
+          affinityDelta={deltas.affinity}
+          fatigueDelta={deltas.fatigue}
+        />
       </div>
 
-      <button
-        type="button"
-        onClick={() => {
-          if (chatOpen) return;
-          document.exitPointerLock();
-          setMenuOpen((v) => !v);
-        }}
-        className="absolute top-4 right-4 z-20 rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs text-gray-600 shadow-sm hover:bg-gray-50"
-      >
-        Esc
-      </button>
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        {chapterHudText ? (
+          <p className="pointer-events-none rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-amber-800 shadow-sm">
+            {chapterHudText}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            if (chatOpen) return;
+            document.exitPointerLock();
+            setMenuOpen((v) => !v);
+          }}
+          className="rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs text-gray-600 shadow-sm hover:bg-gray-50"
+        >
+          Esc
+        </button>
+      </div>
 
       {!pointerLocked && !uiBlocking && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
-          <p className="text-gray-400/80 text-sm bg-white/70 px-4 py-2 rounded-full border border-gray-200">
+        <div className="pointer-events-none absolute top-1/2 left-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+          <p className="rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-sm text-gray-400/80">
             点击画面锁定鼠标 · Esc 打开菜单
           </p>
         </div>
       )}
 
-      <HUD
-        visible={chatOpen}
-        name={npcState?.name ?? npc.name}
-        affinity={affinity}
-        fatigue={fatigue}
-        maxFatigue={maxFatigue}
-        chapterLabel={chapterLabel}
-        affinityDelta={deltas.affinity}
-        fatigueDelta={deltas.fatigue}
-      />
-
       <InteractionPrompt
         visible={nearNpc && !uiBlocking}
-        npcName={npcState?.name ?? npc.name}
+        targets={interactTargets}
         onInteract={openChat}
       />
 
       <ChatBox
         open={chatOpen}
-        npcName={npc.name}
+        npcName={chatNpcName}
         streamText={streamText}
         isStreaming={isStreaming}
         connected={connected}
         lastSaved={lastSaved}
+        lastExchange={lastExchange}
         archivesList={archivesList}
         loadedConversation={loadedConversation}
         saveError={saveError}
         loadError={loadError}
         chapterLabels={chapterLabels}
+        chapterDisplayName={chapterDisplayName}
+        lastNewRun={lastNewRun}
+        suggestions={suggestions}
+        suggestionsLoading={suggestionsLoading}
+        suggestionsError={suggestionsError}
         onClose={closeChat}
         onSend={sendChat}
+        onRequestSuggestions={requestSuggestions}
+        onClearSuggestions={clearSuggestions}
         onSave={saveConversation}
         onListArchives={listArchives}
         onLoadArchive={loadArchive}
+        onRenameArchive={renameArchive}
+        onNewRunFromStart={() => startNewRun({})}
         onClearLoadedConversation={clearLoadedConversation}
         onClearLastSaved={clearLastSaved}
+        onClearLastNewRun={clearLastNewRun}
+        onClearLastExchange={clearLastExchange}
       />
 
       <EscMenu
@@ -278,9 +447,12 @@ function GamePageInner({
         packLabel={`${runtime.selection.world_id}/${runtime.selection.pack_version_id}`}
         worldId={runtime.selection.world_id}
         packVersionId={runtime.selection.pack_version_id}
+        storyMap={storyMap}
         onClose={closeMenu}
         onLogout={logout}
         onSessionUpdate={updateSession}
+        onRequestStoryMap={handleRequestStoryMap}
+        onStartNewRun={handleStartNewRun}
       />
     </main>
   );

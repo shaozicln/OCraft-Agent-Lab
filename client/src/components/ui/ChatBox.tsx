@@ -8,6 +8,8 @@ import type {
   ConversationArchiveSummary,
   ConversationLoadedEvent,
   ConversationSavedEvent,
+  NewRunStartedEvent,
+  NpcExchangeEvent,
 } from '@ocraft/shared';
 
 interface ChatBoxProps {
@@ -17,18 +19,31 @@ interface ChatBoxProps {
   isStreaming: boolean;
   connected: boolean;
   lastSaved: ConversationSavedEvent | null;
+  lastExchange?: NpcExchangeEvent | null;
   archivesList: ConversationArchiveSummary[] | null;
   loadedConversation: ConversationLoadedEvent | null;
   saveError: string | null;
   loadError: string | null;
   chapterLabels?: Record<string, string>;
+  /** 当前章节展示名（display_name） */
+  chapterDisplayName?: string;
+  lastNewRun?: NewRunStartedEvent | null;
+  suggestions: string[] | null;
+  suggestionsLoading: boolean;
+  suggestionsError: string | null;
   onClose: () => void;
   onSend: (message: string) => boolean;
+  onRequestSuggestions: () => boolean;
+  onClearSuggestions: () => void;
   onSave: () => boolean;
   onListArchives: () => boolean;
   onLoadArchive: (filename: string, snapshotIndex: number) => boolean;
+  onRenameArchive?: (filename: string, displayName: string) => boolean;
+  onNewRunFromStart?: () => boolean;
   onClearLoadedConversation: () => void;
   onClearLastSaved: () => void;
+  onClearLastNewRun?: () => void;
+  onClearLastExchange?: () => void;
 }
 
 function archivedToChatMessages(
@@ -47,24 +62,37 @@ export function ChatBox({
   isStreaming,
   connected,
   lastSaved,
+  lastExchange,
   archivesList,
   loadedConversation,
   saveError,
   loadError,
   chapterLabels,
+  chapterDisplayName,
+  lastNewRun,
+  suggestions,
+  suggestionsLoading,
+  suggestionsError,
   onClose,
   onSend,
+  onRequestSuggestions,
+  onClearSuggestions,
   onSave,
   onListArchives,
   onLoadArchive,
+  onRenameArchive,
+  onNewRunFromStart,
   onClearLoadedConversation,
   onClearLastSaved,
+  onClearLastNewRun,
+  onClearLastExchange,
 }: ChatBoxProps) {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [historyFullscreen, setHistoryFullscreen] = useState(false);
   const [loadPanelOpen, setLoadPanelOpen] = useState(false);
   const [archivesLoading, setArchivesLoading] = useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastStreamRef = useRef('');
@@ -79,6 +107,8 @@ export function ChatBox({
       setInput('');
       setHistoryFullscreen(false);
       setLoadPanelOpen(false);
+      setSuggestionsOpen(false);
+      onClearSuggestions();
       lastStreamRef.current = '';
       return;
     }
@@ -86,7 +116,7 @@ export function ChatBox({
     document.exitPointerLock();
     const timer = window.setTimeout(() => inputRef.current?.focus(), 80);
     return () => window.clearTimeout(timer);
-  }, [open]);
+  }, [open, onClearSuggestions]);
 
   useEffect(() => {
     if (!loadedConversation) return;
@@ -97,15 +127,50 @@ export function ChatBox({
 
   useEffect(() => {
     if (!lastSaved) return;
+    const savedChapterId = lastSaved.chapter_state;
+    const savedChapterLabel = savedChapterId
+      ? (chapterLabels?.[savedChapterId] ?? savedChapterId)
+      : chapterDisplayName;
     setHistory((prev) => [
       ...prev,
       {
         role: 'system',
-        text: `已存档：${lastSaved.filename} #${lastSaved.snapshotIndex + 1}`,
+        text: savedChapterLabel
+          ? `已存档：${lastSaved.filename} #${lastSaved.snapshotIndex + 1} · 章节 ${savedChapterLabel}`
+          : `已存档：${lastSaved.filename} #${lastSaved.snapshotIndex + 1}`,
       },
     ]);
     onClearLastSaved();
-  }, [lastSaved, onClearLastSaved]);
+  }, [lastSaved, chapterLabels, chapterDisplayName, onClearLastSaved]);
+
+  useEffect(() => {
+    if (!lastNewRun) return;
+    setHistory([
+      {
+        role: 'system',
+        text: `已新开存档槽「${lastNewRun.display_name || lastNewRun.filename}」，从当前节点开始。`,
+      },
+    ]);
+    lastStreamRef.current = '';
+    onClearLastNewRun?.();
+  }, [lastNewRun, onClearLastNewRun]);
+
+  useEffect(() => {
+    if (!lastExchange) return;
+    setHistory((prev) => [
+      ...prev,
+      {
+        role: 'system',
+        text: '—— 旁听 · 关系事件 ——',
+      },
+      ...lastExchange.lines.map((line) => ({
+        role: 'exchange' as const,
+        text: line.text,
+        speakerName: line.name,
+      })),
+    ]);
+    onClearLastExchange?.();
+  }, [lastExchange, onClearLastExchange]);
 
   useEffect(() => {
     if (!saveError) return;
@@ -189,6 +254,7 @@ export function ChatBox({
       ]);
     }
     setInput('');
+    setSuggestionsOpen(false);
     lastStreamRef.current = '';
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [connected, input, isStreaming, onSend]);
@@ -226,6 +292,24 @@ export function ChatBox({
     [onLoadArchive],
   );
 
+  const handleViewSuggestions = useCallback(() => {
+    if (!connected || isStreaming || suggestionsLoading) return;
+    setSuggestionsOpen(true);
+    const ok = onRequestSuggestions();
+    if (!ok) {
+      setHistory((prev) => [
+        ...prev,
+        { role: 'system', text: '获取建议失败：未连接服务器' },
+      ]);
+      setSuggestionsOpen(false);
+    }
+  }, [connected, isStreaming, suggestionsLoading, onRequestSuggestions]);
+
+  const handlePickSuggestion = useCallback((text: string) => {
+    setInput(text);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
   if (!open) return null;
 
   return (
@@ -246,6 +330,8 @@ export function ChatBox({
         chapterLabels={chapterLabels}
         onClose={() => setLoadPanelOpen(false)}
         onLoad={handleLoad}
+        onRename={onRenameArchive}
+        onNewRunFromStart={onNewRunFromStart}
       />
 
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4 pointer-events-auto">
@@ -349,10 +435,18 @@ export function ChatBox({
                     ? 'text-sky-300 text-right'
                     : item.role === 'system'
                       ? 'text-amber-400 text-center'
-                      : 'text-slate-200'
+                      : item.role === 'exchange'
+                        ? 'text-violet-300'
+                        : 'text-slate-200'
                 }`}
               >
-                {item.role === 'player' ? '你：' : item.role === 'system' ? '' : `${npcName}：`}
+                {item.role === 'player'
+                  ? '你：'
+                  : item.role === 'system'
+                    ? ''
+                    : item.role === 'exchange'
+                      ? `旁听·${item.speakerName ?? 'NPC'}：`
+                      : `${npcName}：`}
                 {item.text}
                 {item.role === 'npc' && isStreaming && i === history.length - 1 && (
                   <span className="inline-block w-1.5 h-4 ml-0.5 bg-slate-400 animate-pulse align-middle" />
@@ -361,6 +455,60 @@ export function ChatBox({
             ))}
           </div>
 
+          {suggestionsOpen && (
+            <div className="px-4 py-2 border-t border-slate-700 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-400">剧情建议（点击填入）</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSuggestionsOpen(false);
+                    onClearSuggestions();
+                  }}
+                  className="text-xs text-slate-500 hover:text-slate-300"
+                >
+                  收起
+                </button>
+              </div>
+              {suggestionsLoading && (
+                <p className="text-xs text-slate-500">正在根据剧情生成建议…</p>
+              )}
+              {!suggestionsLoading && suggestionsError && (
+                <p className="text-xs text-amber-400">{suggestionsError}</p>
+              )}
+              {!suggestionsLoading &&
+                !suggestionsError &&
+                suggestions &&
+                suggestions.length === 0 && (
+                  <p className="text-xs text-slate-500">暂无可用建议</p>
+                )}
+              {!suggestionsLoading && suggestions && suggestions.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={`${i}-${s.slice(0, 12)}`}
+                      type="button"
+                      onClick={() => handlePickSuggestion(s)}
+                      className="text-left text-sm text-slate-200 bg-slate-800/80 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 transition-colors"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!suggestionsLoading && suggestions && suggestions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleViewSuggestions}
+                  disabled={!connected || isStreaming}
+                  className="text-xs text-sky-400 hover:text-sky-300 disabled:text-slate-600"
+                >
+                  换一批
+                </button>
+              )}
+            </div>
+          )}
+
           <form
             className="flex gap-2 px-4 py-3 border-t border-slate-700"
             onSubmit={(e) => {
@@ -368,6 +516,15 @@ export function ChatBox({
               handleSend();
             }}
           >
+            <button
+              type="button"
+              onClick={handleViewSuggestions}
+              disabled={!connected || isStreaming || suggestionsLoading}
+              title="根据当前剧情生成可选回复"
+              className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed border border-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              {suggestionsLoading ? '生成中…' : '查看建议'}
+            </button>
             <input
               ref={inputRef}
               type="text"

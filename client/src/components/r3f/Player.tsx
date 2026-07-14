@@ -9,12 +9,15 @@ import {
   CAMERA_DISTANCE_MAX,
   CAMERA_DISTANCE_MIN,
   CAMERA_ZOOM_STEP,
+  INTERACTION_DISTANCE,
   PLAYER_SPEED,
 } from '@/config/game';
 
+export type NearbyNpc = { npcId: string; distance: number };
+
 interface PlayerProps {
-  npcSpawn: [number, number, number];
-  onMove: (pos: THREE.Vector3, distanceToNpc: number) => void;
+  npcSpawns: { npcId: string; position: [number, number, number] }[];
+  onMove: (nearby: NearbyNpc[]) => void;
   movementEnabled: boolean;
   lookEnabled: boolean;
   onPointerLockChange: (locked: boolean) => void;
@@ -28,7 +31,7 @@ function lerpAngle(from: number, to: number, t: number) {
 }
 
 export function Player({
-  npcSpawn,
+  npcSpawns,
   onMove,
   movementEnabled,
   lookEnabled,
@@ -46,10 +49,12 @@ export function Player({
   const idealCamera = useRef(new THREE.Vector3());
   const movementEnabledRef = useRef(movementEnabled);
   const lookEnabledRef = useRef(lookEnabled);
+  const npcSpawnsRef = useRef(npcSpawns);
   const { camera, gl } = useThree();
 
   movementEnabledRef.current = movementEnabled;
   lookEnabledRef.current = lookEnabled;
+  npcSpawnsRef.current = npcSpawns;
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -211,8 +216,18 @@ export function Player({
     camera.position.copy(cameraPos.current);
     camera.lookAt(lookTarget.current);
 
-    const npcPos = new THREE.Vector3(...npcSpawn);
-    onMove(groupRef.current.position.clone(), groupRef.current.position.distanceTo(npcPos));
+    const playerPos = groupRef.current.position;
+    const nearby: NearbyNpc[] = [];
+    for (const n of npcSpawnsRef.current) {
+      const d = playerPos.distanceTo(
+        new THREE.Vector3(n.position[0], n.position[1], n.position[2]),
+      );
+      if (d < INTERACTION_DISTANCE) {
+        nearby.push({ npcId: n.npcId, distance: d });
+      }
+    }
+    nearby.sort((a, b) => a.distance - b.distance);
+    onMove(nearby);
   });
 
   return (

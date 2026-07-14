@@ -37,6 +37,42 @@ export class AgentTraceService {
     }
   }
 
+  /** 补记关系事件互聊（优先挂到指定 traceId，否则最近一条） */
+  appendExchange(
+    playerId: string,
+    npcId: string,
+    exchange: {
+      event_id: string;
+      lines: Array<{ npc_id: string; name: string; text: string }>;
+      traceId?: string;
+    },
+  ): void {
+    const { traceId, ...payload } = exchange;
+    if (traceId) {
+      const hit = this.buffer.find((t) => t.id === traceId);
+      if (hit) {
+        hit.exchange = payload;
+        this.logger.log(
+          `[agent-trace] exchange id=${hit.id} event=${payload.event_id}`,
+        );
+        return;
+      }
+    }
+    for (let i = this.buffer.length - 1; i >= 0; i--) {
+      const t = this.buffer[i];
+      if (t.player_id === playerId && t.npc_id === npcId) {
+        t.exchange = payload;
+        this.logger.log(
+          `[agent-trace] exchange id=${t.id} event=${payload.event_id}`,
+        );
+        return;
+      }
+    }
+    this.logger.warn(
+      `[agent-trace] exchange orphan player=${playerId} event=${payload.event_id}`,
+    );
+  }
+
   list(opts: {
     playerId?: string;
     npcId?: string;

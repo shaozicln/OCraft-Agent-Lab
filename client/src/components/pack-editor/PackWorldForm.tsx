@@ -276,6 +276,75 @@ export function PackWorldForm({
       </SectionCard>
 
       <SectionCard
+        id="pack-sec-endings"
+        title="世界 · 结局（占位）"
+        panelStyle={panelStyle}
+        actions={
+          <AddButton
+            label="+ 结局"
+            onClick={() =>
+              setWorld({
+                endings: [
+                  ...(w.endings ?? []),
+                  {
+                    id: `ending_${(w.endings?.length ?? 0) + 1}`,
+                    display_name: '',
+                  },
+                ],
+              })
+            }
+          />
+        }
+      >
+        {(w.endings ?? []).length === 0 && (
+          <p className="text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
+            暂无结局条目
+          </p>
+        )}
+        {(w.endings ?? []).map((e, i) => (
+          <RowCard
+            key={`${e.id}-${i}`}
+            title={`结局 ${i + 1}`}
+            onRemove={() =>
+              setWorld({
+                endings: (w.endings ?? []).filter((_, j) => j !== i),
+              })
+            }
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              <FieldLabel label="id" format={FMT.id}>
+                <TextInput
+                  value={e.id}
+                  onChange={(id) => updateEnding(i, { ...e, id })}
+                />
+              </FieldLabel>
+              <FieldLabel label="显示名" format={FMT.free}>
+                <TextInput
+                  value={e.display_name}
+                  onChange={(display_name) =>
+                    updateEnding(i, { ...e, display_name })
+                  }
+                />
+              </FieldLabel>
+              <div className="sm:col-span-2">
+                <FieldLabel
+                  label="备注"
+                  format={`${FMT.optional}·${FMT.free}`}
+                >
+                  <TextAreaInput
+                    value={e.notes ?? ''}
+                    onChange={(notes) =>
+                      updateEnding(i, { ...e, notes: notes || undefined })
+                    }
+                  />
+                </FieldLabel>
+              </div>
+            </div>
+          </RowCard>
+        ))}
+      </SectionCard>
+
+      <SectionCard
         id="pack-sec-numeric"
         title="世界 · 数值工具"
         hint="疲惫触发词 / 兴趣命中加减值。"
@@ -578,75 +647,6 @@ export function PackWorldForm({
                               : undefined,
                         },
                       })
-                    }
-                  />
-                </FieldLabel>
-              </div>
-            </div>
-          </RowCard>
-        ))}
-      </SectionCard>
-
-      <SectionCard
-        id="pack-sec-endings"
-        title="世界 · 结局（占位）"
-        panelStyle={panelStyle}
-        actions={
-          <AddButton
-            label="+ 结局"
-            onClick={() =>
-              setWorld({
-                endings: [
-                  ...(w.endings ?? []),
-                  {
-                    id: `ending_${(w.endings?.length ?? 0) + 1}`,
-                    display_name: '',
-                  },
-                ],
-              })
-            }
-          />
-        }
-      >
-        {(w.endings ?? []).length === 0 && (
-          <p className="text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
-            暂无结局条目
-          </p>
-        )}
-        {(w.endings ?? []).map((e, i) => (
-          <RowCard
-            key={`${e.id}-${i}`}
-            title={`结局 ${i + 1}`}
-            onRemove={() =>
-              setWorld({
-                endings: (w.endings ?? []).filter((_, j) => j !== i),
-              })
-            }
-          >
-            <div className="grid gap-2 sm:grid-cols-2">
-              <FieldLabel label="id" format={FMT.id}>
-                <TextInput
-                  value={e.id}
-                  onChange={(id) => updateEnding(i, { ...e, id })}
-                />
-              </FieldLabel>
-              <FieldLabel label="显示名" format={FMT.free}>
-                <TextInput
-                  value={e.display_name}
-                  onChange={(display_name) =>
-                    updateEnding(i, { ...e, display_name })
-                  }
-                />
-              </FieldLabel>
-              <div className="sm:col-span-2">
-                <FieldLabel
-                  label="备注"
-                  format={`${FMT.optional}·${FMT.free}`}
-                >
-                  <TextAreaInput
-                    value={e.notes ?? ''}
-                    onChange={(notes) =>
-                      updateEnding(i, { ...e, notes: notes || undefined })
                     }
                   />
                 </FieldLabel>

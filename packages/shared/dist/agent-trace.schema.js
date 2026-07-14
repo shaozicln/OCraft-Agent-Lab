@@ -44,6 +44,17 @@ exports.agentTraceRecordSchema = zod_1.z.object({
         value: zod_1.z.string(),
     }))
         .optional(),
+    /** 本轮结束后触发的关系事件互聊（异步补记） */
+    exchange: zod_1.z
+        .object({
+        event_id: zod_1.z.string(),
+        lines: zod_1.z.array(zod_1.z.object({
+            npc_id: zod_1.z.string(),
+            name: zod_1.z.string(),
+            text: zod_1.z.string(),
+        })),
+    })
+        .optional(),
 });
 exports.agentTraceListResponseSchema = zod_1.z.object({
     traces: zod_1.z.array(exports.agentTraceRecordSchema),

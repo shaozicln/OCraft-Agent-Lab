@@ -2,144 +2,111 @@
   "affinity_tiers": [
     {
       "max_exclusive": 30,
-      "text": ""
+      "text": "你最近好像总在敷衍我……"
     },
     {
       "max_exclusive": 60,
-      "text": ""
+      "text": "虽然你有时候很奇怪，但我还是信你。"
     },
     {
-      "max_exclusive": 80,
-      "text": ""
-    },
-    {
-      "max_exclusive": 101,
-      "text": ""
+      "max_exclusive": 999,
+      "text": "你是我最信任的人——连‘世界是假的’这种话，我都愿意和你一起拆穿。"
     }
   ],
   "fatigue_hints": [
     {
-      "min": 100,
-      "text": ""
-    },
-    {
-      "min": 95,
-      "text": ""
-    },
-    {
-      "min": 80,
-      "text": ""
-    },
-    {
-      "min": 55,
-      "text": ""
-    },
-    {
       "min": 30,
-      "text": ""
+      "text": "索伦森揉了揉太阳穴，声音有点哑：「又来了……这重复的走廊，我好像走过三次。」"
     },
     {
-      "min": 0,
-      "text": ""
+      "min": 60,
+      "text": "希尔薇靠在窗边，指尖无意识划着玻璃：「沈檐，你有没有觉得……我们说话的顺序，像被重播过？」"
+    },
+    {
+      "min": 85,
+      "text": "索伦森突然停顿，盯着你三秒，低声问：「你刚才那句话……是不是上一次存档里说过的？」"
     }
   ],
   "chapter_constraints": {
-    "daily": "",
-    "uneasy": "",
-    "dream_reveal": ""
+    "ch1_daily": "玩家与索伦森为同班好友，日常对话无门槛；升章触发词为'转校生'/'希尔薇'/'转学'（含合理同义变体），触发后置可选flag met_hook；希尔薇未登场；不依赖affinity/fatigue；默认章节非本章，但逻辑上必须支持从ch1_daily升至ch2_unease。",
+    "ch2_unease": "希尔薇正式登场；校园出现错位记忆、重复日、异常人物等渐进式异常现象，对白须约束呈现‘可疑但未点破’；索伦森表达怀疑，玩家回应决定分支路径：含'相信''我信你''一起查'等触发path_trust并升至ch3_investigate；含'无所谓''别想了''你想多了'等触发path_dismiss并升至ch3_alone；若后续出现'关心''想加入''我帮你查'则置path_merged_a，维持当前章但切换为ch3_investigate规则；player_hinted_meta可在任意对话中由明确元提示（如'这像游戏'）触发，不影响升章。",
+    "ch3_investigate": "仅当path_trust或path_merged_a为true时激活；索伦森与希尔薇共同调查异常，双NPC可互聊/插话；玩家可自由提问任一NPC，另一人可响应；所有日常与调查对话需体现协作感与关系升温；升章唯一条件为触发'地震'/'晃动'/'警报'等物理异常词，升至ch4_quake。",
+    "ch3_alone": "仅当path_dismiss为true且path_merged_a为false时激活；索伦森独自调查，对话中体现疏离与争执；希尔薇存在但互动受限；玩家若发出'关心''想加入''我帮你查'等合流信号，立即置path_merged_a，并切换至ch3_investigate的表演逻辑（不跳章）；升章条件同ch3_investigate，即'地震'/'晃动'/'警报'等触发升至ch4_quake。",
+    "ch4_quake": "默认事件：地震发生，希尔薇死亡，置silvie_dead；索伦森表现出强烈deja_vu，可选置deja_vu；坦白触发需同时满足：玩家向索伦森与希尔薇明确提及'虚假'/'模拟'/'游戏'/'我改结局'/'存档'等元叙事词，并声明改写意图，方可触发ending_jia（清silvie_dead）；若path_trust或path_merged_a为true但未坦白，则触发ending_yi；若path_dismiss为true且path_merged_a为false且未坦白，则触发ending_bing；所有ending flag置为true后不可逆。"
   },
   "flag_constraints": [
     {
-      "id": "bonded_daily_tone",
+      "id": "fc_ch1_to_ch2",
       "when": {
-        "flag": "ch1_bonded",
+        "flag": "met_hook",
         "set": true,
-        "chapter": "daily"
+        "chapter": "ch1_daily"
       },
-      "text": ""
+      "text": "转校生要来了，听说叫希尔薇……你听说了吗？"
     },
     {
-      "id": "sleep_mentioned",
+      "id": "fc_ch2_to_ch3a",
       "when": {
-        "flag": "ch2_sleep_mentioned",
-        "set": true
+        "flag": "path_trust",
+        "set": true,
+        "chapter": "ch2_unease"
       },
-      "text": ""
+      "text": "好，我们一起查——从图书馆那本缺页的校志开始。"
     },
     {
-      "id": "admitted_tired",
+      "id": "fc_ch2_to_ch3b",
       "when": {
-        "flag": "ch2_npc_admitted_tired",
-        "set": true
+        "flag": "path_dismiss",
+        "set": true,
+        "chapter": "ch2_unease"
       },
-      "text": ""
+      "text": "……行吧。反正我早习惯了没人信。"
     },
     {
-      "id": "floor_avoided",
+      "id": "fc_ch3b_merge",
       "when": {
-        "flag": "ch2_floor_avoided",
-        "set": true
+        "flag": "path_merged_a",
+        "set": true,
+        "chapter": "ch3_alone"
       },
-      "text": ""
+      "text": "你真愿意帮我？……那从今天起，我们三人一起。"
     },
     {
-      "id": "floor_not_yet_uneasy",
+      "id": "fc_ch3_to_ch4",
       "when": {
-        "flag": "ch2_floor_avoided",
-        "set": false,
-        "chapter_not": "daily"
+        "flag": "silvie_dead",
+        "set": true,
+        "chapter": "ch3_investigate"
       },
-      "text": ""
+      "text": "——轰！！！天花板裂开了，希尔薇被压在下面……"
     },
     {
-      "id": "dream_full_locked",
+      "id": "fc_ch4_ending_jia",
       "when": {
-        "flag": "ch3_dream_full",
-        "set": false
+        "flag": "ending_jia",
+        "set": true,
+        "chapter": "ch4_quake"
       },
-      "text": ""
+      "text": "‘这不是现实’——我说完这句话，她睁开了眼。"
     },
     {
-      "id": "dream_full_unlocked",
+      "id": "fc_ch4_ending_yi",
       "when": {
-        "flag": "ch3_dream_full",
-        "set": true
+        "flag": "ending_yi",
+        "set": true,
+        "chapter": "ch4_quake"
       },
-      "text": ""
+      "text": "索伦森盯着我，手指掐进掌心：‘你存档了几次？这次……轮到你死了。’"
     },
     {
-      "id": "dream_partial_only",
+      "id": "fc_ch4_ending_bing",
       "when": {
-        "flag": "ch3_dream_partial",
-        "set": true
+        "flag": "ending_bing",
+        "set": true,
+        "chapter": "ch4_quake"
       },
-      "text": ""
-    },
-    {
-      "id": "colleague_hinted",
-      "when": {
-        "flag": "ch3_colleague_hint",
-        "set": true
-      },
-      "text": ""
-    },
-    {
-      "id": "colleague_askable",
-      "when": {
-        "flag": "ch3_colleague_hint",
-        "set": false,
-        "chapter": "dream_reveal"
-      },
-      "text": ""
-    },
-    {
-      "id": "ocraft_locked",
-      "when": {
-        "flag": "ch4_ocraft_aware",
-        "set": false
-      },
-      "text": ""
+      "text": "他把希尔薇的围巾叠好放进抽屉，转身关上了教室门。"
     }
   ],
-  "reply_instruction": ""
+  "reply_instruction": "请用自然、口语化、带点校园朋友感的语气回应；沈檐是女生，与索伦森和希尔薇都是同班好友，关系轻松熟稔；所有回复须隐含‘玩家即玩家’的元认知前提（不直说‘你是AI’或‘我在游戏里’，但可通过双关、停顿、反问等方式流露），且严格遵循当前章节状态与已置 flag；若涉及希尔薇，需确认她是否已登场（ch1 不出现，ch2 起可出现）；动画仅限 idle/sleeping/talk/excited_talk。"
 }

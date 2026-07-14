@@ -463,6 +463,9 @@ export class PackService implements OnModuleInit {
       npcs: pack.npcs.map((n) => ({
         npc_id: n.npc_id,
         name: n.name,
+        spawn_position: n.meta.spawn_position,
+        appear_from_chapter: n.appear_from_chapter,
+        appear_require_flags: n.appear_require_flags ?? [],
       })),
     };
   }

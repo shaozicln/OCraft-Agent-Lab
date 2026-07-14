@@ -183,6 +183,7 @@ export class PackController {
     }
     const result = await this.packGenerateService.generateDraft({
       prompt: parsed.data.prompt,
+      outline: parsed.data.outline,
       basePack: baseParsed.data,
       sections: parsed.data.sections,
     });
@@ -228,6 +229,7 @@ export class PackController {
     try {
       for await (const ev of this.packGenerateService.generateDraftStream({
         prompt: parsed.data.prompt,
+        outline: parsed.data.outline,
         basePack: baseParsed.data,
         sections: parsed.data.sections,
       })) {

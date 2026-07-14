@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { type StoryFlagsSnapshot } from './story.schema';
 /** 包内 ID：章节 / flag / NPC 等，由 Pack 声明，代码不写死业务枚举 */
 export declare const packIdSchema: z.ZodString;
 export declare const packChapterSchema: z.ZodObject<{
@@ -49,6 +50,8 @@ export declare const packNpcSchema: z.ZodObject<{
         content: z.ZodString;
         min_chapter: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>>>;
+    appear_from_chapter: z.ZodOptional<z.ZodString>;
+    appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 export declare const packFlagSetEntrySchema: z.ZodObject<{
     name: z.ZodString;
@@ -77,6 +80,24 @@ export declare const packNpcReplyFlagRuleSchema: z.ZodObject<{
     value: z.ZodDefault<z.ZodString>;
     triggers: z.ZodDefault<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
+/**
+ * 关系事件互聊：玩家对话结束后，章/flag 满足且（once 时）set_flags 尚未置位 →
+ * speakers 有序各跑一轮 LLM（不对玩家、不升章）。
+ */
+export declare const packExchangeEventSchema: z.ZodObject<{
+    id: z.ZodString;
+    enabled: z.ZodDefault<z.ZodBoolean>;
+    chapter: z.ZodString;
+    require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    speakers: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+    beat_hints: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        value: z.ZodDefault<z.ZodString>;
+    }, z.core.$strip>>>;
+    once: z.ZodDefault<z.ZodBoolean>;
+    notes: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
 export declare const packTriggersFileSchema: z.ZodObject<{
     version: z.ZodDefault<z.ZodNumber>;
     rules: z.ZodArray<z.ZodObject<{
@@ -101,6 +122,20 @@ export declare const packTriggersFileSchema: z.ZodObject<{
         set_flag: z.ZodString;
         value: z.ZodDefault<z.ZodString>;
         triggers: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    }, z.core.$strip>>>;
+    exchange_events: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        enabled: z.ZodDefault<z.ZodBoolean>;
+        chapter: z.ZodString;
+        require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        speakers: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+        beat_hints: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            value: z.ZodDefault<z.ZodString>;
+        }, z.core.$strip>>>;
+        once: z.ZodDefault<z.ZodBoolean>;
+        notes: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>>>;
 }, z.core.$strip>;
 /** 好感区间文案：affinity < max_exclusive 时命中（最后一档用极大 max） */
@@ -372,6 +407,20 @@ export declare const storyPackSchema: z.ZodObject<{
             value: z.ZodDefault<z.ZodString>;
             triggers: z.ZodDefault<z.ZodArray<z.ZodString>>;
         }, z.core.$strip>>>;
+        exchange_events: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            enabled: z.ZodDefault<z.ZodBoolean>;
+            chapter: z.ZodString;
+            require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            speakers: z.ZodTuple<[z.ZodString, z.ZodString], null>;
+            beat_hints: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                name: z.ZodString;
+                value: z.ZodDefault<z.ZodString>;
+            }, z.core.$strip>>>;
+            once: z.ZodDefault<z.ZodBoolean>;
+            notes: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>>;
     }, z.core.$strip>;
     prompts: z.ZodObject<{
         affinity_tiers: z.ZodArray<z.ZodObject<{
@@ -420,6 +469,8 @@ export declare const storyPackSchema: z.ZodObject<{
             content: z.ZodString;
             min_chapter: z.ZodOptional<z.ZodString>;
         }, z.core.$strip>>>;
+        appear_from_chapter: z.ZodOptional<z.ZodString>;
+        appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
     }, z.core.$strip>>;
     version_dir: z.ZodString;
 }, z.core.$strip>;
@@ -429,6 +480,7 @@ export type PackMemory = z.infer<typeof packMemorySchema>;
 export type PackNpc = z.infer<typeof packNpcSchema>;
 export type PackTriggerRule = z.infer<typeof packTriggerRuleSchema>;
 export type PackNpcReplyFlagRule = z.infer<typeof packNpcReplyFlagRuleSchema>;
+export type PackExchangeEvent = z.infer<typeof packExchangeEventSchema>;
 export type PackTriggersFile = z.infer<typeof packTriggersFileSchema>;
 export type PackAffinityTier = z.infer<typeof packAffinityTierSchema>;
 export type PackFatigueHint = z.infer<typeof packFatigueHintSchema>;
@@ -447,7 +499,20 @@ export type StoryPack = z.infer<typeof storyPackSchema>;
 /** 交叉校验：触发/记忆/约束引用的章节与 flag 必须在 world 中声明 */
 export declare function assertPackReferences(pack: StoryPack): void;
 export declare function getDefaultChapterId(pack: StoryPack): string;
+/** 剧情「第一章」：rank 最小的章（与 default_chapter 可能不同） */
+export declare function getFirstChapterId(pack: StoryPack): string;
 export declare function getDefaultNpcId(pack: StoryPack): string;
 export declare function getChapterRankMap(pack: StoryPack): Record<string, number>;
-/** chapterId → HUD / 列表显示名（优先 hud_label） */
+/** chapterId → 展示名（优先章节名 display_name，其次 HUD 短名） */
 export declare function getChapterLabelMap(pack: StoryPack): Record<string, string>;
+/**
+ * NPC 是否应在场景出场（章节门槛 + 可选 flags）。
+ * appear_from_chapter 省略 = 无章节门槛。
+ */
+export declare function isNpcPresent(opts: {
+    appear_from_chapter?: string;
+    appear_require_flags?: string[];
+    chapterState: string;
+    flags: StoryFlagsSnapshot;
+    rankMap: Record<string, number>;
+}): boolean;

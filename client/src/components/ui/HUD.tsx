@@ -11,8 +11,8 @@ interface StatBarProps {
 function StatBar({ label, value, max, color, delta }: StatBarProps) {
   const pct = Math.min(100, Math.round((value / max) * 100));
   return (
-    <div className="mb-3">
-      <div className="flex justify-between text-xs text-slate-300 mb-1">
+    <div className="mb-3 last:mb-0">
+      <div className="mb-1 flex justify-between text-xs text-slate-300">
         <span>{label}</span>
         <span className="flex items-center gap-1">
           {value}/{max}
@@ -24,7 +24,7 @@ function StatBar({ label, value, max, color, delta }: StatBarProps) {
           )}
         </span>
       </div>
-      <div className="h-2.5 bg-slate-700 rounded-full overflow-hidden">
+      <div className="h-2.5 overflow-hidden rounded-full bg-slate-700">
         <div
           className="h-full rounded-full transition-all duration-700 ease-out"
           style={{ width: `${pct}%`, backgroundColor: color }}
@@ -40,26 +40,25 @@ interface HUDProps {
   affinity: number;
   fatigue: number;
   maxFatigue: number;
-  chapterLabel?: string;
   affinityDelta?: number;
   fatigueDelta?: number;
 }
 
+/** 好感/疲惫进度条；定位由父级负责（左上角） */
 export function HUD({
   visible,
   name,
   affinity,
   fatigue,
   maxFatigue,
-  chapterLabel,
   affinityDelta,
   fatigueDelta,
 }: HUDProps) {
   if (!visible) return null;
 
   return (
-    <div className="absolute top-4 right-4 z-30 w-56 bg-slate-900/85 backdrop-blur border border-slate-600 rounded-xl p-4 shadow-xl">
-      <h3 className="text-sm font-semibold text-white mb-3">{name}</h3>
+    <div className="w-56 rounded-xl border border-slate-600 bg-slate-900/85 p-4 shadow-xl backdrop-blur">
+      <h3 className="mb-3 text-sm font-semibold text-white">{name}</h3>
       <StatBar
         label="好感度"
         value={affinity}
@@ -74,11 +73,6 @@ export function HUD({
         color="#60A5FA"
         delta={fatigueDelta}
       />
-      {chapterLabel && (
-        <p className="text-xs text-slate-400 mt-1">
-          章节：<span className="text-amber-300">{chapterLabel}</span>
-        </p>
-      )}
     </div>
   );
 }
