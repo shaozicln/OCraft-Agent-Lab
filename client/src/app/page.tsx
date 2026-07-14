@@ -175,11 +175,7 @@ function GamePageInner({
     setNearbyNpcs((prev) => {
       if (
         prev.length === nearby.length &&
-        prev.every(
-          (p, i) =>
-            p.npcId === nearby[i]?.npcId &&
-            Math.abs(p.distance - (nearby[i]?.distance ?? 0)) < 0.05,
-        )
+        prev.every((p, i) => p.npcId === nearby[i]?.npcId)
       ) {
         return prev;
       }

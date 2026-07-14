@@ -23,11 +23,19 @@ interface PlayerProps {
   onPointerLockChange: (locked: boolean) => void;
 }
 
+/** 单次 mousemove 异常尖峰上限（指针锁定偶发巨量 movement） */
+const MOUSE_DELTA_CLAMP = 64;
+const LOOK_SENSITIVITY = 0.0022;
+
 function lerpAngle(from: number, to: number, t: number) {
   let delta = to - from;
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
   return from + delta * t;
+}
+
+function nearbySignature(list: NearbyNpc[]) {
+  return list.map((n) => n.npcId).join('\0');
 }
 
 export function Player({
@@ -44,17 +52,23 @@ export function Player({
   const pitch = useRef(0.22);
   const modelYaw = useRef(Math.PI);
   const cameraDistance = useRef(CAMERA_DISTANCE_DEFAULT);
-  const cameraPos = useRef(new THREE.Vector3(0, 2, 8));
   const lookTarget = useRef(new THREE.Vector3());
   const idealCamera = useRef(new THREE.Vector3());
+  const forward = useRef(new THREE.Vector3());
+  const right = useRef(new THREE.Vector3());
+  const move = useRef(new THREE.Vector3());
+  const npcScratch = useRef(new THREE.Vector3());
+  const lastNearbySig = useRef('');
   const movementEnabledRef = useRef(movementEnabled);
   const lookEnabledRef = useRef(lookEnabled);
   const npcSpawnsRef = useRef(npcSpawns);
+  const onMoveRef = useRef(onMove);
   const { camera, gl } = useThree();
 
   movementEnabledRef.current = movementEnabled;
   lookEnabledRef.current = lookEnabled;
   npcSpawnsRef.current = npcSpawns;
+  onMoveRef.current = onMove;
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -114,9 +128,11 @@ export function Player({
 
     const onMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return;
-      yaw.current -= e.movementX * 0.0022;
+      const mx = THREE.MathUtils.clamp(e.movementX, -MOUSE_DELTA_CLAMP, MOUSE_DELTA_CLAMP);
+      const my = THREE.MathUtils.clamp(e.movementY, -MOUSE_DELTA_CLAMP, MOUSE_DELTA_CLAMP);
+      yaw.current -= mx * LOOK_SENSITIVITY;
       pitch.current = THREE.MathUtils.clamp(
-        pitch.current + e.movementY * 0.0022,
+        pitch.current + my * LOOK_SENSITIVITY,
         -0.3,
         0.45,
       );
@@ -168,27 +184,19 @@ export function Player({
     if (!groupRef.current) return;
 
     if (movementEnabled) {
-      const forward = new THREE.Vector3(
-        Math.sin(yaw.current),
-        0,
-        Math.cos(yaw.current),
-      );
-      const right = new THREE.Vector3(
-        Math.cos(yaw.current),
-        0,
-        -Math.sin(yaw.current),
-      );
+      forward.current.set(Math.sin(yaw.current), 0, Math.cos(yaw.current));
+      right.current.set(Math.cos(yaw.current), 0, -Math.sin(yaw.current));
 
-      const move = new THREE.Vector3();
-      if (keys.current['KeyW'] || keys.current['ArrowUp']) move.add(forward);
-      if (keys.current['KeyS'] || keys.current['ArrowDown']) move.sub(forward);
-      if (keys.current['KeyA'] || keys.current['ArrowLeft']) move.add(right);
-      if (keys.current['KeyD'] || keys.current['ArrowRight']) move.sub(right);
+      move.current.set(0, 0, 0);
+      if (keys.current['KeyW'] || keys.current['ArrowUp']) move.current.add(forward.current);
+      if (keys.current['KeyS'] || keys.current['ArrowDown']) move.current.sub(forward.current);
+      if (keys.current['KeyA'] || keys.current['ArrowLeft']) move.current.add(right.current);
+      if (keys.current['KeyD'] || keys.current['ArrowRight']) move.current.sub(right.current);
 
-      if (move.lengthSq() > 0.0001) {
-        move.normalize().multiplyScalar(PLAYER_SPEED * delta);
-        groupRef.current.position.add(move);
-        const targetFacing = Math.atan2(move.x, move.z);
+      if (move.current.lengthSq() > 0.0001) {
+        move.current.normalize().multiplyScalar(PLAYER_SPEED * delta);
+        groupRef.current.position.add(move.current);
+        const targetFacing = Math.atan2(move.current.x, move.current.z);
         modelYaw.current = lerpAngle(modelYaw.current, targetFacing, 0.18);
       }
     }
@@ -205,30 +213,34 @@ export function Player({
 
     const dist = cameraDistance.current;
     const horizontal = dist * Math.cos(pitch.current);
+    // 轨道相机：yaw/pitch 变化时位置必须瞬时跟上，否则 lookAt 会与滞后位置打架产生「一跳一跳」
     idealCamera.current.set(
       px - Math.sin(yaw.current) * horizontal,
       py + 1.0 + dist * Math.sin(pitch.current),
       pz - Math.cos(yaw.current) * horizontal,
     );
-
-    const smooth = 1 - Math.exp(-14 * delta);
-    cameraPos.current.lerp(idealCamera.current, smooth);
-    camera.position.copy(cameraPos.current);
+    camera.position.copy(idealCamera.current);
     camera.lookAt(lookTarget.current);
 
     const playerPos = groupRef.current.position;
     const nearby: NearbyNpc[] = [];
     for (const n of npcSpawnsRef.current) {
       const d = playerPos.distanceTo(
-        new THREE.Vector3(n.position[0], n.position[1], n.position[2]),
+        npcScratch.current.set(n.position[0], n.position[1], n.position[2]),
       );
       if (d < INTERACTION_DISTANCE) {
         nearby.push({ npcId: n.npcId, distance: d });
       }
     }
     nearby.sort((a, b) => a.distance - b.distance);
-    onMove(nearby);
-  });
+
+    // 仅在附近 NPC 集合变化时通知 React，避免走路时每帧 setState 卡顿
+    const sig = nearbySignature(nearby);
+    if (sig !== lastNearbySig.current) {
+      lastNearbySig.current = sig;
+      onMoveRef.current(nearby);
+    }
+  }, -1);
 
   return (
     <group ref={groupRef} position={[0, 0, 4]}>
