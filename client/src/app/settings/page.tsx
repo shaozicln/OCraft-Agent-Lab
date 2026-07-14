@@ -9,6 +9,7 @@ import {
   type CSSProperties,
 } from 'react';
 import type {
+  AgentTraceRecord,
   AuthSession,
   PackGenerateSectionKey,
   PackGenerateSections,
@@ -33,7 +34,7 @@ import { PackEditor } from '@/components/pack-editor/PackEditor';
 import { apiFetch, apiFetchSse } from '@/lib/api';
 import { useTheme } from '@/theme/ThemeProvider';
 
-type Tab = 'appearance' | 'account' | 'packs' | 'editor';
+type Tab = 'appearance' | 'account' | 'packs' | 'editor' | 'traces';
 
 const SECTION_TO_TOC: Partial<Record<PackGenerateSectionKey, string>> = {
   chapters: 'pack-sec-chapters',
@@ -114,6 +115,8 @@ function SettingsInner({
   const [profileFields, setProfileFields] = useState<PlayerProfileField[]>([]);
   const [busy, setBusy] = useState(false);
   const [pendingAutoload, setPendingAutoload] = useState(false);
+  const [traces, setTraces] = useState<AgentTraceRecord[]>([]);
+  const [tracesBusy, setTracesBusy] = useState(false);
 
   const currentWorld = useMemo(
     () => worlds.find((w) => w.world_id === selectedWorldId) ?? worlds[0],
@@ -170,7 +173,13 @@ function SettingsInner({
     if (typeof window === 'undefined') return;
     const q = new URLSearchParams(window.location.search);
     const t = q.get('tab');
-    if (t === 'appearance' || t === 'account' || t === 'packs' || t === 'editor') {
+    if (
+      t === 'appearance' ||
+      t === 'account' ||
+      t === 'packs' ||
+      t === 'editor' ||
+      t === 'traces'
+    ) {
       setTab(t);
     }
     const w = q.get('worldId');
@@ -271,6 +280,45 @@ function SettingsInner({
   const dismissGenToast = useCallback((id: string) => {
     setGenToasts((list) => list.filter((t) => t.id !== id));
   }, []);
+
+  const refreshTraces = useCallback(async () => {
+    setTracesBusy(true);
+    setError(null);
+    try {
+      const res = await apiFetch<{ traces: AgentTraceRecord[] }>(
+        '/agent/traces?limit=40',
+        { token },
+      );
+      setTraces(res.traces);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载 Trace 失败');
+    } finally {
+      setTracesBusy(false);
+    }
+  }, [token]);
+
+  const clearTraces = async () => {
+    setTracesBusy(true);
+    setError(null);
+    try {
+      await apiFetch<{ removed: number }>('/agent/traces', {
+        token,
+        method: 'DELETE',
+      });
+      setTraces([]);
+      setMessage('已清空本账号内存中的 Trace');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '清空失败');
+    } finally {
+      setTracesBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'traces') {
+      void refreshTraces();
+    }
+  }, [tab, refreshTraces]);
 
   const generatePackDraft = async () => {
     if (!packDraft || !genPrompt.trim()) return;
@@ -577,6 +625,7 @@ function SettingsInner({
     { id: 'account', label: '账号' },
     { id: 'packs', label: '剧情包' },
     { id: 'editor', label: '编辑 Pack' },
+    { id: 'traces', label: 'Agent Trace' },
   ];
 
   const panelStyle: CSSProperties = {
@@ -1358,6 +1407,125 @@ function SettingsInner({
                   }
                 />
               )}
+            </div>
+          )}
+
+          {tab === 'traces' && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border p-5" style={panelStyle}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-semibold">Agent Trace</h2>
+                    <p
+                      className="mt-1 text-sm"
+                      style={{ color: 'var(--ui-fg-muted)' }}
+                    >
+                      每轮对话的决策回放（tool / 升章 / RAG）。存在服务端内存，重启清空；仅当前账号可见。
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={tracesBusy}
+                      onClick={() => void refreshTraces()}
+                      className="rounded-lg border px-3 py-1.5 text-sm"
+                      style={{ borderColor: 'var(--ui-border)' }}
+                    >
+                      刷新
+                    </button>
+                    <button
+                      type="button"
+                      disabled={tracesBusy}
+                      onClick={() => void clearTraces()}
+                      className="rounded-lg border px-3 py-1.5 text-sm"
+                      style={{
+                        borderColor: 'var(--ui-border)',
+                        color: 'var(--ui-danger)',
+                      }}
+                    >
+                      清空
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {traces.length === 0 && (
+                <p
+                  className="text-sm"
+                  style={{ color: 'var(--ui-fg-muted)' }}
+                >
+                  {tracesBusy
+                    ? '加载中…'
+                    : '暂无记录。进游戏聊几句后再回来刷新。'}
+                </p>
+              )}
+
+              {traces.map((t) => (
+                <div
+                  key={t.id}
+                  className="rounded-2xl border p-4 font-mono text-xs"
+                  style={panelStyle}
+                >
+                  <div className="flex flex-wrap justify-between gap-2 text-sm font-sans font-medium">
+                    <span>
+                      {new Date(t.at).toLocaleString()} · {t.npc_id}
+                      {t.mock ? ' · MOCK' : ''}
+                    </span>
+                    <span style={{ color: 'var(--ui-fg-muted)' }}>
+                      {t.world_id}/{t.pack_version_id}
+                    </span>
+                  </div>
+                  <p className="mt-2 font-sans text-sm">
+                    玩家：「{t.player_message}」
+                  </p>
+                  <p className="mt-2" style={{ color: 'var(--ui-fg-muted)' }}>
+                    数值 {t.runtime_before.affinity}/{t.runtime_before.fatigue} →{' '}
+                    {t.runtime_after.affinity}/{t.runtime_after.fatigue}
+                    {t.animation ? ` · 动画 ${t.animation}` : ''}
+                  </p>
+                  <p className="mt-1">
+                    章节 {t.transition.chapter_before}
+                    {t.transition.chapter_before !== t.transition.chapter_after
+                      ? ` → ${t.transition.chapter_after}`
+                      : '（未升章）'}
+                    {t.transition.matched_rule_ids.length > 0
+                      ? ` · 规则 [${t.transition.matched_rule_ids.join(', ')}]`
+                      : ''}
+                  </p>
+                  {t.transition.flags_set.length > 0 && (
+                    <p className="mt-1">
+                      flags:{' '}
+                      {t.transition.flags_set
+                        .map((f) => `${f.name}=${f.value}`)
+                        .join(', ')}
+                    </p>
+                  )}
+                  {t.reply_flags_set && t.reply_flags_set.length > 0 && (
+                    <p className="mt-1">
+                      reply_flags:{' '}
+                      {t.reply_flags_set
+                        .map((f) => `${f.name}=${f.value}`)
+                        .join(', ')}
+                    </p>
+                  )}
+                  <p className="mt-1">
+                    tools:{' '}
+                    {t.tools.length === 0
+                      ? '（无）'
+                      : t.tools
+                          .map((x) => `${x.tool}: ${x.observation}`)
+                          .join(' | ')}
+                  </p>
+                  <p className="mt-1">
+                    rag:{' '}
+                    {t.rag_hits.length === 0
+                      ? '（无）'
+                      : t.rag_hits
+                          .map((h) => `${h.memory_id}(${h.score.toFixed(2)})`)
+                          .join(', ')}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
         </section>

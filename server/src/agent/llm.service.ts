@@ -15,6 +15,17 @@ export interface StreamChatOptions {
   toolCalls?: ToolCallResult[];
 }
 
+export interface LlmToolCallRequest {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+export interface ChatWithToolsResult {
+  content: string | null;
+  toolCalls: LlmToolCallRequest[];
+}
+
 @Injectable()
 export class LlmService {
   private readonly logger = new Logger(LlmService.name);
@@ -58,9 +69,47 @@ export class LlmService {
       model,
       messages,
       temperature: opts.temperature ?? 0.4,
-      ...(opts.json ? { response_format: { type: 'json_object' as const } } : {}),
+      ...(opts.json
+        ? { response_format: { type: 'json_object' as const } }
+        : {}),
     });
     return res.choices[0]?.message?.content?.trim() ?? '';
+  }
+
+  /**
+   * 带 Function Calling 的一轮非流式补全（模型可返回 tool_calls）。
+   */
+  async chatWithTools(
+    messages: OpenAI.Chat.ChatCompletionMessageParam[],
+    tools: OpenAI.Chat.ChatCompletionTool[],
+    opts: { model?: string; temperature?: number } = {},
+  ): Promise<ChatWithToolsResult> {
+    if (!this.client) {
+      return this.mockChatWithTools(messages);
+    }
+
+    const model = opts.model ?? process.env.LLM_MODEL ?? 'qwen-plus';
+    const res = await this.client.chat.completions.create({
+      model,
+      messages,
+      tools,
+      tool_choice: 'auto',
+      temperature: opts.temperature ?? 0.4,
+    });
+
+    const msg = res.choices[0]?.message;
+    const toolCalls: LlmToolCallRequest[] = (msg?.tool_calls ?? [])
+      .filter((t) => t.type === 'function')
+      .map((t) => ({
+        id: t.id,
+        name: t.function.name,
+        arguments: t.function.arguments ?? '{}',
+      }));
+
+    return {
+      content: msg?.content?.trim() || null,
+      toolCalls,
+    };
   }
 
   async *streamChat(
@@ -87,6 +136,55 @@ export class LlmService {
       }
     }
     yield { text: '', done: true };
+  }
+
+  /** MOCK：模拟一次「模型决定」的 tool_calls（非 Pack 关键词规则引擎） */
+  private mockChatWithTools(
+    messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  ): ChatWithToolsResult {
+    const lastUser = [...messages]
+      .reverse()
+      .find((m) => m.role === 'user');
+    const text =
+      typeof lastUser?.content === 'string'
+        ? lastUser.content
+        : Array.isArray(lastUser?.content)
+          ? lastUser.content
+              .map((p) => ('text' in p ? p.text : ''))
+              .join('')
+          : '';
+
+    const toolCalls: LlmToolCallRequest[] = [];
+    // 仅 MOCK 演示用的轻量启发式，正式路径走真实 FC
+    if (/累|疲|加班|压力|焦虑|困/.test(text)) {
+      toolCalls.push({
+        id: 'mock_fatigue',
+        name: 'updateFatigue',
+        arguments: JSON.stringify({
+          delta: 12,
+          reason: 'MOCK：话题偏累',
+        }),
+      });
+    } else if (/喜欢|谢谢|有意思|有趣|开心/.test(text)) {
+      toolCalls.push({
+        id: 'mock_affinity',
+        name: 'updateAffinity',
+        arguments: JSON.stringify({
+          delta: 8,
+          reason: 'MOCK：关系升温',
+        }),
+      });
+      toolCalls.push({
+        id: 'mock_fatigue_down',
+        name: 'updateFatigue',
+        arguments: JSON.stringify({
+          delta: -10,
+          reason: 'MOCK：聊得放松',
+        }),
+      });
+    }
+
+    return { content: null, toolCalls };
   }
 
   private async *mockStream(

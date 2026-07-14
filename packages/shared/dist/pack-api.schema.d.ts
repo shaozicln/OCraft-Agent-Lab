@@ -175,8 +175,8 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
 }, z.core.$strip>, z.ZodObject<{
     type: z.ZodLiteral<"done">;
     source: z.ZodEnum<{
-        llm: "llm";
         mock: "mock";
+        llm: "llm";
     }>;
     pack: z.ZodUnknown;
     profileFields: z.ZodOptional<z.ZodArray<z.ZodObject<{

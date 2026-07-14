@@ -22,6 +22,8 @@ export interface ChapterTransitionInput {
 export interface ChapterTransitionResult {
   chapterState: ChapterState;
   flagsToSet: FlagSetEntry[];
+  /** 本轮命中的 trigger 规则 id（按顺序） */
+  matchedRuleIds: string[];
 }
 
 function messageHitsTriggers(message: string, triggers: string[]): boolean {
@@ -63,6 +65,7 @@ export function evaluateChapterTransition(
   let chapterState = input.chapterState;
   let chapterAdvanced = false;
   const projectedFlags: StoryFlagsSnapshot = { ...input.flags };
+  const matchedRuleIds: string[] = [];
 
   for (const rule of input.triggers.rules) {
     if (
@@ -76,6 +79,8 @@ export function evaluateChapterTransition(
     ) {
       continue;
     }
+
+    matchedRuleIds.push(rule.id);
 
     for (const f of rule.set_flags) {
       if (!isFlagSet(projectedFlags, f.name)) {
@@ -94,7 +99,7 @@ export function evaluateChapterTransition(
     }
   }
 
-  return { chapterState, flagsToSet };
+  return { chapterState, flagsToSet, matchedRuleIds };
 }
 
 /** 扫 NPC 回复，置表演层 flags（如 ch2_npc_admitted_tired） */
