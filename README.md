@@ -1,7 +1,6 @@
 # OCraft Game
 
-测试 Agent 回复，根据npc状态变化走可自定义剧情的一小段网页端剧情，有 Api-Key 就能玩，大概玩法是是有新点子填填设定就能对话
-
+测试 Agent 回复，根据npc状态变化走可自定义剧情的一小段网页端剧情，有 Api-Key 就能玩，大概玩法是有新点子填填设定就能对话
 
 - **前端**：Next.js + React Three Fiber（3D）+ Socket.io  
 - **后端**：NestJS（HTTP + WebSocket）+  LLM  
@@ -127,7 +126,7 @@ npm run dev
 > 首次若报 `@ocraft/shared` 找不到，先执行：  
 > `cd packages/shared && npm install && npm run build`
 
-## 自定义更改
+## 自定义更改（已做可视化页面）
 
 
 | 改什么             | 文件                                                            | 说明                                                          |
