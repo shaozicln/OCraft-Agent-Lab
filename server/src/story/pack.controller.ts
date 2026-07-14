@@ -8,23 +8,29 @@ import {
   Param,
   Post,
   Put,
+  Res,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   formatAuthValidationError,
   packCreateWorldPayloadSchema,
+  packGenerateDraftPayloadSchema,
   packSaveAsPayloadSchema,
   packSeedPayloadSchema,
   packSelectPayloadSchema,
   packUpdatePayloadSchema,
+  storyPackSchema,
 } from '@ocraft/shared';
 import { AuthService } from '../auth/auth.service';
 import { PackService } from './pack.service';
+import { PackGenerateService } from './pack-generate.service';
 
 @Controller('packs')
 export class PackController {
   constructor(
     private readonly packService: PackService,
+    private readonly packGenerateService: PackGenerateService,
     private readonly authService: AuthService,
   ) {}
 
@@ -156,6 +162,85 @@ export class PackController {
       throw new BadRequestException(formatAuthValidationError(parsed.error));
     }
     return this.packService.createWorld(parsed.data);
+  }
+
+  /** 一句话生成 Pack 草稿（仅返回，不落盘） */
+  @Post('generate-draft')
+  async generateDraft(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    this.requirePlayerId(authorization);
+    const parsed = packGenerateDraftPayloadSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(formatAuthValidationError(parsed.error));
+    }
+    const baseParsed = storyPackSchema.safeParse(parsed.data.basePack);
+    if (!baseParsed.success) {
+      throw new BadRequestException(
+        `basePack 无效：${formatAuthValidationError(baseParsed.error)}`,
+      );
+    }
+    const result = await this.packGenerateService.generateDraft({
+      prompt: parsed.data.prompt,
+      basePack: baseParsed.data,
+      sections: parsed.data.sections,
+    });
+    return {
+      pack: result.pack,
+      source: result.source,
+      profileFields: result.profileFields,
+    };
+  }
+
+  /** 按 section 串行生成（SSE）；事件：section_start / section_done / error / done */
+  @Post('generate-draft/stream')
+  async generateDraftStream(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+    @Res() res: Response,
+  ) {
+    this.requirePlayerId(authorization);
+    const parsed = packGenerateDraftPayloadSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(formatAuthValidationError(parsed.error));
+    }
+    const baseParsed = storyPackSchema.safeParse(parsed.data.basePack);
+    if (!baseParsed.success) {
+      throw new BadRequestException(
+        `basePack 无效：${formatAuthValidationError(baseParsed.error)}`,
+      );
+    }
+
+    res.status(200);
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
+
+    const write = (data: unknown) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      for await (const ev of this.packGenerateService.generateDraftStream({
+        prompt: parsed.data.prompt,
+        basePack: baseParsed.data,
+        sections: parsed.data.sections,
+      })) {
+        write(ev);
+        if (ev.type === 'error') break;
+      }
+    } catch (err) {
+      write({
+        type: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+    res.end();
   }
 
   @Get('selection')

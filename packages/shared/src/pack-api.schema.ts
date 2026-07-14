@@ -36,15 +36,13 @@ export const packSaveAsPayloadSchema = z.object({
   blankContent: z.boolean().optional(),
 });
 
-/** 新建世界：world_id = 文件夹名；首版版本名默认等于 worldId */
+/** 新建世界：world_id = 文件夹名；首版版本名默认等于 worldId（极简空壳） */
 export const packCreateWorldPayloadSchema = z.object({
   worldId: packIdSchema,
   /** 首个版本名；省略则用 worldId */
   versionName: z.string().trim().min(1).max(64).optional(),
   description: z.string().max(500).optional(),
   notes: z.string().max(500).optional(),
-  fromWorldId: packIdSchema.optional(),
-  fromVersionDir: z.string().min(1).optional(),
 });
 export type PackCreateWorldPayload = z.infer<typeof packCreateWorldPayloadSchema>;
 
@@ -95,3 +93,117 @@ export const packUpdatePayloadSchema = z.object({
   pack: z.unknown(),
 });
 export type PackUpdatePayload = z.infer<typeof packUpdatePayloadSchema>;
+
+/** 一句话生成可勾选块（不含包头；未勾选则保留 basePack 对应内容） */
+export const packGenerateSectionKeys = [
+  'chapters',
+  'flags',
+  'numeric_tools',
+  'animation_rules',
+  'endings',
+  'chapter_triggers',
+  'npc_reply_flags',
+  'prompt_common',
+  'affinity_tiers',
+  'fatigue_hints',
+  'chapter_constraints',
+  'flag_constraints',
+  'npcs',
+  'pack_profile',
+] as const;
+
+export type PackGenerateSectionKey = (typeof packGenerateSectionKeys)[number];
+
+export const packGenerateSectionsSchema = z.object({
+  chapters: z.boolean(),
+  flags: z.boolean(),
+  numeric_tools: z.boolean(),
+  animation_rules: z.boolean(),
+  endings: z.boolean(),
+  chapter_triggers: z.boolean(),
+  npc_reply_flags: z.boolean(),
+  prompt_common: z.boolean(),
+  affinity_tiers: z.boolean(),
+  fatigue_hints: z.boolean(),
+  chapter_constraints: z.boolean(),
+  flag_constraints: z.boolean(),
+  npcs: z.boolean(),
+  pack_profile: z.boolean(),
+});
+export type PackGenerateSections = z.infer<typeof packGenerateSectionsSchema>;
+
+export const DEFAULT_PACK_GENERATE_SECTIONS: PackGenerateSections =
+  Object.fromEntries(
+    packGenerateSectionKeys.map((k) => [k, true]),
+  ) as PackGenerateSections;
+
+/** 生成进度展示名（弹窗 / 黄标） */
+export const PACK_GENERATE_SECTION_LABELS: Record<
+  PackGenerateSectionKey,
+  string
+> = {
+  chapters: '世界·章节',
+  flags: '世界·Flags',
+  numeric_tools: '世界·数值工具',
+  animation_rules: '世界·动画规则',
+  endings: '世界·结局',
+  chapter_triggers: '触发·章节触发',
+  npc_reply_flags: '触发·回复置 Flag',
+  prompt_common: 'Prompt·通用',
+  affinity_tiers: 'Prompt·好感区间',
+  fatigue_hints: 'Prompt·疲惫提示',
+  chapter_constraints: 'Prompt·章节约束',
+  flag_constraints: 'Prompt·Flag 约束',
+  npcs: 'NPC',
+  pack_profile: '本世界个人信息',
+};
+
+/** SSE：一句话生成流式事件 */
+export const packGenerateStreamEventSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('section_start'),
+    section: z.enum(packGenerateSectionKeys),
+    label: z.string(),
+  }),
+  z.object({
+    type: z.literal('section_done'),
+    section: z.enum(packGenerateSectionKeys),
+    label: z.string(),
+    /** 当前合并后的草稿（便于前端即时刷新编辑器） */
+    pack: z.unknown().optional(),
+  }),
+  z.object({
+    type: z.literal('error'),
+    section: z.enum(packGenerateSectionKeys).optional(),
+    message: z.string(),
+  }),
+  z.object({
+    type: z.literal('done'),
+    source: z.enum(['llm', 'mock']),
+    pack: z.unknown(),
+    profileFields: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          value: z.string(),
+        }),
+      )
+      .optional(),
+  }),
+]);
+export type PackGenerateStreamEvent = z.infer<
+  typeof packGenerateStreamEventSchema
+>;
+
+/** 一句话生成 Pack 草稿（不落盘） */
+export const packGenerateDraftPayloadSchema = z.object({
+  prompt: z.string().trim().min(4).max(500),
+  /** 当前编辑中的包（保留 world_id / version_dir / header） */
+  basePack: z.unknown(),
+  /** 省略则全部生成 */
+  sections: packGenerateSectionsSchema.optional(),
+});
+export type PackGenerateDraftPayload = z.infer<
+  typeof packGenerateDraftPayloadSchema
+>;

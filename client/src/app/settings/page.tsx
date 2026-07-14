@@ -10,6 +10,9 @@ import {
 } from 'react';
 import type {
   AuthSession,
+  PackGenerateSectionKey,
+  PackGenerateSections,
+  PackGenerateStreamEvent,
   PackSelection,
   PackWorldSummary,
   PlayerAccount,
@@ -18,15 +21,42 @@ import type {
   StoryPack,
 } from '@ocraft/shared';
 import {
+  DEFAULT_PACK_GENERATE_SECTIONS,
+  PACK_GENERATE_SECTION_LABELS,
+  packGenerateSectionKeys,
   profileFieldsToPatch,
   resolveProfileFields,
+  storyPackSchema,
 } from '@ocraft/shared';
 import { AuthGate } from '@/components/ui/AuthGate';
 import { PackEditor } from '@/components/pack-editor/PackEditor';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiFetchSse } from '@/lib/api';
 import { useTheme } from '@/theme/ThemeProvider';
 
 type Tab = 'appearance' | 'account' | 'packs' | 'editor';
+
+const SECTION_TO_TOC: Partial<Record<PackGenerateSectionKey, string>> = {
+  chapters: 'pack-sec-chapters',
+  flags: 'pack-sec-flags',
+  numeric_tools: 'pack-sec-numeric',
+  animation_rules: 'pack-sec-anim',
+  endings: 'pack-sec-endings',
+  chapter_triggers: 'pack-sec-triggers',
+  npc_reply_flags: 'pack-sec-reply-flags',
+  prompt_common: 'pack-sec-prompts-common',
+  affinity_tiers: 'pack-sec-affinity',
+  fatigue_hints: 'pack-sec-fatigue',
+  chapter_constraints: 'pack-sec-chapter-c',
+  flag_constraints: 'pack-sec-flag-c',
+  npcs: 'pack-sec-npcs',
+};
+
+type GenToast = {
+  id: string;
+  kind: 'ok' | 'err';
+  title: string;
+  detail?: string;
+};
 
 function newProfileField(): PlayerProfileField {
   return {
@@ -70,6 +100,16 @@ function SettingsInner({
   const [editVersionDir, setEditVersionDir] = useState('');
   const [packDraft, setPackDraft] = useState<StoryPack | null>(null);
   const [examplePack, setExamplePack] = useState<StoryPack | null>(null);
+  const [genPrompt, setGenPrompt] = useState('');
+  const [genSections, setGenSections] = useState<PackGenerateSections>(
+    () => ({ ...DEFAULT_PACK_GENERATE_SECTIONS }),
+  );
+  const [genActiveSection, setGenActiveSection] =
+    useState<PackGenerateSectionKey | null>(null);
+  const [genDoneSections, setGenDoneSections] = useState<
+    Set<PackGenerateSectionKey>
+  >(() => new Set());
+  const [genToasts, setGenToasts] = useState<GenToast[]>([]);
   const [packProfile, setPackProfile] = useState<PlayerPackProfile | null>(null);
   const [profileFields, setProfileFields] = useState<PlayerProfileField[]>([]);
   const [busy, setBusy] = useState(false);
@@ -215,6 +255,109 @@ function SettingsInner({
       setError(err instanceof Error ? err.message : '保存失败');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const pushGenToast = useCallback((toast: Omit<GenToast, 'id'>) => {
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    setGenToasts((list) => [...list, { ...toast, id }]);
+    if (toast.kind === 'ok') {
+      window.setTimeout(() => {
+        setGenToasts((list) => list.filter((t) => t.id !== id));
+      }, 3200);
+    }
+  }, []);
+
+  const dismissGenToast = useCallback((id: string) => {
+    setGenToasts((list) => list.filter((t) => t.id !== id));
+  }, []);
+
+  const generatePackDraft = async () => {
+    if (!packDraft || !genPrompt.trim()) return;
+    const anyChecked = packGenerateSectionKeys.some((k) => genSections[k]);
+    if (!anyChecked) {
+      pushGenToast({
+        kind: 'err',
+        title: '无法开始生成',
+        detail: '请至少勾选一个生成项目',
+      });
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    setGenActiveSection(null);
+    setGenDoneSections(new Set());
+    let finished = false;
+    try {
+      await apiFetchSse('/packs/generate-draft/stream', {
+        token,
+        body: {
+          prompt: genPrompt.trim(),
+          basePack: packDraft,
+          sections: genSections,
+        },
+        onEvent: (raw) => {
+          const ev = raw as PackGenerateStreamEvent;
+          if (ev.type === 'section_start') {
+            setGenActiveSection(ev.section);
+            const toc = SECTION_TO_TOC[ev.section];
+            if (toc) {
+              document
+                .getElementById(toc)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+          }
+          if (ev.type === 'section_done') {
+            setGenDoneSections((prev) => new Set(prev).add(ev.section));
+            setGenActiveSection(null);
+            if (ev.pack) {
+              const parsed = storyPackSchema.safeParse(ev.pack);
+              if (parsed.success) setPackDraft(parsed.data);
+            }
+            pushGenToast({
+              kind: 'ok',
+              title: `${ev.label}已生成完毕`,
+            });
+            return;
+          }
+          if (ev.type === 'error') {
+            setGenActiveSection(null);
+            pushGenToast({
+              kind: 'err',
+              title: ev.section
+                ? `${PACK_GENERATE_SECTION_LABELS[ev.section]}生成失败`
+                : '生成失败',
+              detail: ev.message,
+            });
+            setError(ev.message);
+            return;
+          }
+          if (ev.type === 'done') {
+            finished = true;
+            const parsed = storyPackSchema.safeParse(ev.pack);
+            if (parsed.success) setPackDraft(parsed.data);
+            if (ev.profileFields) setProfileFields(ev.profileFields);
+            setGenActiveSection(null);
+            setMessage(
+              ev.source === 'mock'
+                ? '流式生成完成（MOCK）。请检查后保存并选用。'
+                : '流式生成完成。请检查后保存并选用；个人信息需再点保存。',
+            );
+          }
+        },
+      });
+      if (!finished) {
+        // 流结束但无 done（通常已发过 error）
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : '生成草稿失败';
+      pushGenToast({ kind: 'err', title: '生成失败', detail });
+      setError(detail);
+    } finally {
+      setBusy(false);
+      setGenActiveSection(null);
     }
   };
 
@@ -972,6 +1115,114 @@ function SettingsInner({
 
               {packDraft && (
                 <div className="rounded-2xl border p-5" style={panelStyle}>
+                  <h2 className="text-base font-semibold">一句话生成草稿</h2>
+                  <p
+                    className="mt-1 text-sm"
+                    style={{ color: 'var(--ui-fg-muted)' }}
+                  >
+                    勾选要生成的目录项；未勾选保留当前内容。按块串行生成（真进度）：黄底=正在生成，绿底=已完成。失败会弹窗说明原因。本世界个人信息只填表单，需再保存。
+                  </p>
+                  <textarea
+                    className="mt-3 min-h-[4.5rem] w-full rounded-lg border px-3 py-2 text-sm outline-none placeholder:text-[color:var(--ui-fg-muted)]"
+                    style={{
+                      background: 'var(--ui-input)',
+                      borderColor: 'var(--ui-border)',
+                      color: 'var(--ui-fg)',
+                    }}
+                    value={genPrompt}
+                    onChange={(e) => setGenPrompt(e.target.value)}
+                    placeholder="例：咖啡店店员发现自己是被写入程序的 NPC，两章后崩溃想逃出店门"
+                  />
+                  <div className="mt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm font-medium">配置生成项目</h3>
+                      <div className="flex gap-2 text-xs">
+                        <button
+                          type="button"
+                          className="underline"
+                          style={{ color: 'var(--ui-accent)' }}
+                          onClick={() =>
+                            setGenSections({ ...DEFAULT_PACK_GENERATE_SECTIONS })
+                          }
+                        >
+                          全选
+                        </button>
+                        <button
+                          type="button"
+                          className="underline"
+                          style={{ color: 'var(--ui-fg-muted)' }}
+                          onClick={() =>
+                            setGenSections(
+                              Object.fromEntries(
+                                packGenerateSectionKeys.map((k) => [k, false]),
+                              ) as PackGenerateSections,
+                            )
+                          }
+                        >
+                          全不选
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {packGenerateSectionKeys.map((key) => {
+                        const active = genActiveSection === key;
+                        const done = genDoneSections.has(key);
+                        return (
+                          <label
+                            key={key}
+                            className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors"
+                            style={{
+                              background: active
+                                ? 'rgba(250, 204, 21, 0.55)'
+                                : done
+                                  ? 'rgba(34, 197, 94, 0.15)'
+                                  : undefined,
+                              outline: active
+                                ? '1px solid rgba(202, 138, 4, 0.8)'
+                                : undefined,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={genSections[key]}
+                              disabled={busy}
+                              onChange={(e) =>
+                                setGenSections((s) => ({
+                                  ...s,
+                                  [key]: e.target.checked,
+                                }))
+                              }
+                            />
+                            <span>
+                              {PACK_GENERATE_SECTION_LABELS[key]}
+                              {active ? ' · 生成中' : done ? ' · 完成' : ''}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy || !genPrompt.trim()}
+                    onClick={() => void generatePackDraft()}
+                    className="mt-3 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+                    style={{
+                      background: 'var(--ui-accent)',
+                      color: 'var(--ui-accent-fg)',
+                    }}
+                  >
+                    {busy
+                      ? genActiveSection
+                        ? `正在生成：${PACK_GENERATE_SECTION_LABELS[genActiveSection]}…`
+                        : '生成中…'
+                      : '生成草稿'}
+                  </button>
+                </div>
+              )}
+
+              {packDraft && (
+                <div className="rounded-2xl border p-5" style={panelStyle}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <h2 className="text-base font-semibold">本世界个人信息</h2>
@@ -1100,12 +1351,56 @@ function SettingsInner({
                   onChange={setPackDraft}
                   example={examplePack}
                   panelStyle={panelStyle}
+                  highlightTocId={
+                    genActiveSection
+                      ? SECTION_TO_TOC[genActiveSection] ?? null
+                      : null
+                  }
                 />
               )}
             </div>
           )}
         </section>
       </div>
+
+      {genToasts.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
+          {genToasts.map((t) => (
+            <div
+              key={t.id}
+              role="alert"
+              className="rounded-xl border px-4 py-3 shadow-lg"
+              style={{
+                background: 'var(--ui-panel, #fff)',
+                borderColor:
+                  t.kind === 'err'
+                    ? 'var(--ui-danger, #dc2626)'
+                    : 'rgba(202, 138, 4, 0.7)',
+                color: 'var(--ui-fg)',
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold">{t.title}</p>
+                <button
+                  type="button"
+                  className="text-xs opacity-70 hover:opacity-100"
+                  onClick={() => dismissGenToast(t.id)}
+                >
+                  关闭
+                </button>
+              </div>
+              {t.detail && (
+                <p
+                  className="mt-1 text-xs leading-relaxed"
+                  style={{ color: 'var(--ui-fg-muted)' }}
+                >
+                  {t.detail}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </main>
   );
 }

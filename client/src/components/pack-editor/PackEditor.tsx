@@ -30,11 +30,14 @@ export function PackEditor({
   onChange,
   example,
   panelStyle,
+  highlightTocId,
 }: {
   value: StoryPack;
   onChange: (next: StoryPack) => void;
   example?: StoryPack | null;
   panelStyle: CSSProperties;
+  /** 生成进度：目录项 id 高亮 */
+  highlightTocId?: string | null;
 }) {
   const props = { value, onChange, example, panelStyle };
   return (
@@ -57,23 +60,30 @@ export function PackEditor({
           目录
         </p>
         <ul className="space-y-1">
-          {TOC.map((item) => (
-            <li key={item.id}>
-              <a
-                href={`#${item.id}`}
-                className="block rounded px-2 py-1 text-xs hover:underline"
-                style={{ color: 'var(--ui-fg)' }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  document
-                    .getElementById(item.id)
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              >
-                {item.label}
-              </a>
-            </li>
-          ))}
+          {TOC.map((item) => {
+            const active = highlightTocId === item.id;
+            return (
+              <li key={item.id}>
+                <a
+                  href={`#${item.id}`}
+                  className="block rounded px-2 py-1 text-xs hover:underline"
+                  style={{
+                    color: 'var(--ui-fg)',
+                    background: active ? 'rgba(250, 204, 21, 0.45)' : undefined,
+                    fontWeight: active ? 600 : undefined,
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document
+                      .getElementById(item.id)
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                >
+                  {item.label}
+                </a>
+              </li>
+            );
+          })}
         </ul>
       </nav>
     </div>

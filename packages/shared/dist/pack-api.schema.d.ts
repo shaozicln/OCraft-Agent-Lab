@@ -31,14 +31,12 @@ export declare const packSaveAsPayloadSchema: z.ZodObject<{
     notes: z.ZodOptional<z.ZodString>;
     blankContent: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
-/** 新建世界：world_id = 文件夹名；首版版本名默认等于 worldId */
+/** 新建世界：world_id = 文件夹名；首版版本名默认等于 worldId（极简空壳） */
 export declare const packCreateWorldPayloadSchema: z.ZodObject<{
     worldId: z.ZodString;
     versionName: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodString>;
     notes: z.ZodOptional<z.ZodString>;
-    fromWorldId: z.ZodOptional<z.ZodString>;
-    fromVersionDir: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export type PackCreateWorldPayload = z.infer<typeof packCreateWorldPayloadSchema>;
 export declare const packSelectionSchema: z.ZodObject<{
@@ -92,3 +90,121 @@ export declare const packUpdatePayloadSchema: z.ZodObject<{
     pack: z.ZodUnknown;
 }, z.core.$strip>;
 export type PackUpdatePayload = z.infer<typeof packUpdatePayloadSchema>;
+/** 一句话生成可勾选块（不含包头；未勾选则保留 basePack 对应内容） */
+export declare const packGenerateSectionKeys: readonly ["chapters", "flags", "numeric_tools", "animation_rules", "endings", "chapter_triggers", "npc_reply_flags", "prompt_common", "affinity_tiers", "fatigue_hints", "chapter_constraints", "flag_constraints", "npcs", "pack_profile"];
+export type PackGenerateSectionKey = (typeof packGenerateSectionKeys)[number];
+export declare const packGenerateSectionsSchema: z.ZodObject<{
+    chapters: z.ZodBoolean;
+    flags: z.ZodBoolean;
+    numeric_tools: z.ZodBoolean;
+    animation_rules: z.ZodBoolean;
+    endings: z.ZodBoolean;
+    chapter_triggers: z.ZodBoolean;
+    npc_reply_flags: z.ZodBoolean;
+    prompt_common: z.ZodBoolean;
+    affinity_tiers: z.ZodBoolean;
+    fatigue_hints: z.ZodBoolean;
+    chapter_constraints: z.ZodBoolean;
+    flag_constraints: z.ZodBoolean;
+    npcs: z.ZodBoolean;
+    pack_profile: z.ZodBoolean;
+}, z.core.$strip>;
+export type PackGenerateSections = z.infer<typeof packGenerateSectionsSchema>;
+export declare const DEFAULT_PACK_GENERATE_SECTIONS: PackGenerateSections;
+/** 生成进度展示名（弹窗 / 黄标） */
+export declare const PACK_GENERATE_SECTION_LABELS: Record<PackGenerateSectionKey, string>;
+/** SSE：一句话生成流式事件 */
+export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    type: z.ZodLiteral<"section_start">;
+    section: z.ZodEnum<{
+        affinity_tiers: "affinity_tiers";
+        fatigue_hints: "fatigue_hints";
+        chapter_constraints: "chapter_constraints";
+        flag_constraints: "flag_constraints";
+        numeric_tools: "numeric_tools";
+        chapters: "chapters";
+        flags: "flags";
+        animation_rules: "animation_rules";
+        endings: "endings";
+        npcs: "npcs";
+        chapter_triggers: "chapter_triggers";
+        npc_reply_flags: "npc_reply_flags";
+        prompt_common: "prompt_common";
+        pack_profile: "pack_profile";
+    }>;
+    label: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    type: z.ZodLiteral<"section_done">;
+    section: z.ZodEnum<{
+        affinity_tiers: "affinity_tiers";
+        fatigue_hints: "fatigue_hints";
+        chapter_constraints: "chapter_constraints";
+        flag_constraints: "flag_constraints";
+        numeric_tools: "numeric_tools";
+        chapters: "chapters";
+        flags: "flags";
+        animation_rules: "animation_rules";
+        endings: "endings";
+        npcs: "npcs";
+        chapter_triggers: "chapter_triggers";
+        npc_reply_flags: "npc_reply_flags";
+        prompt_common: "prompt_common";
+        pack_profile: "pack_profile";
+    }>;
+    label: z.ZodString;
+    pack: z.ZodOptional<z.ZodUnknown>;
+}, z.core.$strip>, z.ZodObject<{
+    type: z.ZodLiteral<"error">;
+    section: z.ZodOptional<z.ZodEnum<{
+        affinity_tiers: "affinity_tiers";
+        fatigue_hints: "fatigue_hints";
+        chapter_constraints: "chapter_constraints";
+        flag_constraints: "flag_constraints";
+        numeric_tools: "numeric_tools";
+        chapters: "chapters";
+        flags: "flags";
+        animation_rules: "animation_rules";
+        endings: "endings";
+        npcs: "npcs";
+        chapter_triggers: "chapter_triggers";
+        npc_reply_flags: "npc_reply_flags";
+        prompt_common: "prompt_common";
+        pack_profile: "pack_profile";
+    }>>;
+    message: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    type: z.ZodLiteral<"done">;
+    source: z.ZodEnum<{
+        llm: "llm";
+        mock: "mock";
+    }>;
+    pack: z.ZodUnknown;
+    profileFields: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        label: z.ZodString;
+        value: z.ZodString;
+    }, z.core.$strip>>>;
+}, z.core.$strip>], "type">;
+export type PackGenerateStreamEvent = z.infer<typeof packGenerateStreamEventSchema>;
+/** 一句话生成 Pack 草稿（不落盘） */
+export declare const packGenerateDraftPayloadSchema: z.ZodObject<{
+    prompt: z.ZodString;
+    basePack: z.ZodUnknown;
+    sections: z.ZodOptional<z.ZodObject<{
+        chapters: z.ZodBoolean;
+        flags: z.ZodBoolean;
+        numeric_tools: z.ZodBoolean;
+        animation_rules: z.ZodBoolean;
+        endings: z.ZodBoolean;
+        chapter_triggers: z.ZodBoolean;
+        npc_reply_flags: z.ZodBoolean;
+        prompt_common: z.ZodBoolean;
+        affinity_tiers: z.ZodBoolean;
+        fatigue_hints: z.ZodBoolean;
+        chapter_constraints: z.ZodBoolean;
+        flag_constraints: z.ZodBoolean;
+        npcs: z.ZodBoolean;
+        pack_profile: z.ZodBoolean;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+export type PackGenerateDraftPayload = z.infer<typeof packGenerateDraftPayloadSchema>;

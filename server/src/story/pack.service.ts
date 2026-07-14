@@ -350,24 +350,7 @@ export class PackService implements OnModuleInit {
     versionName?: string;
     description?: string;
     notes?: string;
-    fromWorldId?: string;
-    fromVersionDir?: string;
   }) {
-    const official = this.getOfficialPack();
-    const fromWorldId = opts.fromWorldId ?? official.header.world_id;
-    let fromVersionDir = opts.fromVersionDir;
-    if (!fromVersionDir) {
-      if (fromWorldId === official.header.world_id) {
-        fromVersionDir = official.version_dir;
-      } else {
-        const world = this.listWorlds().find((w) => w.world_id === fromWorldId);
-        fromVersionDir = world?.official_version_dir;
-      }
-    }
-    if (!fromVersionDir) {
-      throw new BadRequestException(`无法确定源版本: ${fromWorldId}`);
-    }
-
     const versionName = opts.versionName?.trim() || opts.worldId;
 
     try {
@@ -376,8 +359,6 @@ export class PackService implements OnModuleInit {
         versionName,
         description: opts.description,
         notes: opts.notes,
-        fromWorldId,
-        fromVersionDir,
       });
       this.cachePack(result.pack);
       await this.seedVersion(result.worldId, result.versionDir);

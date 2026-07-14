@@ -211,6 +211,141 @@ export function blankifyStoryPack(
 }
 
 /**
+ * 新建世界用的极简空壳：各块 1 条占位，文案/触发词为空，可打开编辑器再填。
+ */
+export function createMinimalBlankPack(opts: {
+  worldId: string;
+  versionName: string;
+  versionDir: string;
+  notes?: string;
+}): StoryPack {
+  const ch0 = 'chapter_1';
+  const flag0 = 'flag_1';
+  const npcId = 'npc_1';
+
+  return {
+    header: {
+      schema_version: 1,
+      world_id: opts.worldId,
+      display_name: opts.versionName.trim(),
+      created_at: formatPackTimestamp(),
+      notes: opts.notes?.trim() || undefined,
+    },
+    version_dir: opts.versionDir,
+    world: {
+      chapters: [
+        {
+          id: ch0,
+          display_name: '',
+          hud_label: undefined,
+          rank: 0,
+        },
+      ],
+      flags: [
+        {
+          name: flag0,
+          type: 'bool',
+          description: undefined,
+          irreversible: true,
+        },
+      ],
+      default_chapter: ch0,
+      default_npc: npcId,
+      numeric_tools: {
+        fatigue_increase: {
+          triggers: [],
+          delta: 10,
+          reason: '',
+        },
+        interest_hit: {
+          affinity_delta: 10,
+          affinity_reason: '',
+          fatigue_delta: -10,
+          fatigue_reason: '',
+        },
+      },
+      animation_rules: [
+        {
+          id: 'anim_1',
+          enabled: true,
+          when: {},
+          animation: 'idle',
+        },
+      ],
+      endings: [],
+    },
+    triggers: {
+      version: 1,
+      rules: [
+        {
+          id: 'trigger_1',
+          enabled: true,
+          from_chapter: ch0,
+          to_chapter: null,
+          min_affinity: 0,
+          require_flags: [],
+          player_triggers: [],
+          set_flags: [],
+          notes: undefined,
+        },
+      ],
+      npc_reply_flag_rules: [
+        {
+          id: 'reply_flag_1',
+          enabled: true,
+          when_chapter_in: [ch0],
+          set_flag: flag0,
+          value: 'true',
+          triggers: [],
+        },
+      ],
+    },
+    prompts: {
+      reply_instruction: '',
+      affinity_tiers: [{ max_exclusive: 999, text: '' }],
+      fatigue_hints: [{ min: 60, text: '' }],
+      chapter_constraints: { [ch0]: '' },
+      flag_constraints: [
+        {
+          id: 'fc_1',
+          when: { flag: flag0, set: true },
+          text: '',
+        },
+      ],
+    },
+    npcs: [
+      {
+        npc_id: npcId,
+        name: '',
+        meta: {
+          avatar: '',
+          model_path: '',
+          scale: [1, 1, 1],
+          spawn_position: [3.2, 0, -2.2],
+        },
+        attributes: {
+          fatigue: 20,
+          max_fatigue: 100,
+          affinity: 20,
+          current_status: 'idle',
+          favorite_things: [],
+        },
+        system_prompt_template: '',
+        memories: [
+          {
+            id: 'mem_1',
+            tags: [],
+            keywords: [],
+            content: '',
+            min_chapter: ch0,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/**
  * 另存为新版本：拷贝源目录 → 新 `{版本名}__{时间戳}`，并改 pack.json 头信息。
  */
 export function savePackAsCopy(opts: {
@@ -221,7 +356,7 @@ export function savePackAsCopy(opts: {
   packsRoot?: string;
   /** 跨世界复制时指定源世界；默认与目标同世界 */
   fromWorldId?: string;
-  /** 清空文案，仅保留结构（新建/空白模板） */
+  /** 清空文案，仅保留结构（另存空白模板） */
   blankContent?: boolean;
 }): SavePackAsResult {
   const packsRoot = opts.packsRoot ?? resolveStoryPacksRoot();
@@ -286,15 +421,13 @@ export function savePackAsCopy(opts: {
 }
 
 /**
- * 新建世界：写 manifest（无显示名）+ 从源包复制首个版本。
+ * 新建世界：写 manifest + 极简空壳首版本（不复制官方结构）。
  */
 export function createWorldPack(opts: {
   worldId: string;
   versionName: string;
   description?: string;
   notes?: string;
-  fromWorldId: string;
-  fromVersionDir: string;
   packsRoot?: string;
 }): SavePackAsResult {
   const packsRoot = opts.packsRoot ?? resolveStoryPacksRoot();
@@ -305,23 +438,28 @@ export function createWorldPack(opts: {
 
   fs.mkdirSync(path.join(worldPath, 'versions'), { recursive: true });
 
-  const result = savePackAsCopy({
+  const versionDir = makeVersionDirName(opts.versionName);
+  const versionPath = resolveVersionPath(opts.worldId, versionDir, packsRoot);
+  const pack = createMinimalBlankPack({
     worldId: opts.worldId,
-    fromWorldId: opts.fromWorldId,
-    fromVersionDir: opts.fromVersionDir,
     versionName: opts.versionName,
-    notes: opts.notes ?? `新建自 ${opts.fromWorldId}/${opts.fromVersionDir}`,
-    packsRoot,
-    blankContent: true,
+    versionDir,
+    notes: opts.notes ?? '极简空白模板',
   });
+  writeStoryPackToDir(versionPath, pack);
 
   writeJson(path.join(worldPath, 'manifest.json'), {
     world_id: opts.worldId,
-    official_version_dir: result.versionDir,
+    official_version_dir: versionDir,
     description: opts.description?.trim() || undefined,
   });
 
-  return result;
+  return {
+    worldId: opts.worldId,
+    versionDir,
+    versionPath,
+    pack: loadStoryPackFromDir(versionPath),
+  };
 }
 
 export function listDiskWorldSummaries(packsRoot = resolveStoryPacksRoot()) {

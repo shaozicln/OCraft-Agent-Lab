@@ -5,19 +5,18 @@ import { GameGateway } from './game.gateway';
 import { ConversationService } from './conversation.service';
 import { ConversationArchiveService } from './conversation-archive.service';
 import { AgentHarnessService } from '../agent/agent-harness.service';
-import { LlmService } from '../agent/llm.service';
+import { AgentModule } from '../agent/agent.module';
 import { RagService } from '../agent/rag.service';
 import { NpcModule } from '../npc/npc.module';
 import { StoryModule } from '../story/story.module';
 
 @Module({
-  imports: [DbModule, AuthModule, NpcModule, StoryModule],
+  imports: [DbModule, AuthModule, NpcModule, StoryModule, AgentModule],
   providers: [
     GameGateway,
     ConversationService,
     ConversationArchiveService,
     RagService,
-    LlmService,
     AgentHarnessService,
   ],
 })

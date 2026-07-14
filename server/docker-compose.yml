@@ -7,7 +7,8 @@ services:
       POSTGRES_PASSWORD: ocraft
       POSTGRES_DB: ocraft
     ports:
-      - '5432:5432'
+      # 宿主机勿用 5432/5433：Windows Hyper-V 常保留 5358–5457
+      - '15432:5432'
     volumes:
       - ocraft_pgdata:/var/lib/postgresql/data
     healthcheck:

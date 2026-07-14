@@ -39,6 +39,30 @@ export class LlmService {
     return !this.client;
   }
 
+  /**
+   * 非流式补全。JSON 模式时尽量解析为对象；失败返回原文。
+   */
+  async complete(
+    messages: LlmMessage[],
+    opts: {
+      model?: string;
+      temperature?: number;
+      json?: boolean;
+    } = {},
+  ): Promise<string> {
+    if (!this.client) {
+      throw new Error('LLM 未配置（MOCK 模式无 complete）');
+    }
+    const model = opts.model ?? process.env.LLM_MODEL ?? 'qwen-plus';
+    const res = await this.client.chat.completions.create({
+      model,
+      messages,
+      temperature: opts.temperature ?? 0.4,
+      ...(opts.json ? { response_format: { type: 'json_object' as const } } : {}),
+    });
+    return res.choices[0]?.message?.content?.trim() ?? '';
+  }
+
   async *streamChat(
     messages: LlmMessage[],
     options: StreamChatOptions = {},
