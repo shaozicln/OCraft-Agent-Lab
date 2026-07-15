@@ -10,7 +10,9 @@
  * - players              玩家账号 + 选用 Pack
  * - player_pack_profiles 某玩家在某包版本下的角色人设
  * - player_npc_state     某玩家在某包版本下与某 NPC 的当前进度
- * - story_flags          剧情节点是否已触发（按包隔离，只升不降）
+ * - story_flags          分人剧情 flag（L4 可选；世界主线见 world_flags）
+ * - world_progress       共享世界章节（L2）
+ * - world_flags          共享世界 flags（L2）
  * - story_pack_versions  seed 进库的包版本全文（JSONB）
  * - conversation_archives 一次游戏会话的存档「文件」元数据
  * - conversation_snapshots 某次存档里的具体快照（消息 + NPC 状态）
@@ -30,6 +32,7 @@ import type {
   ArchivedMessage,
   ArchivedNpcState,
   ChapterState,
+  ConversationSnapshotV2,
   LlmMessage,
   PlayerExtra,
   PlayerGender,
@@ -194,6 +197,52 @@ export const storyFlags = pgTable(
 );
 
 /**
+ * 共享世界进度（L2）：玩家 × Pack 一条章；与 default_npc 解耦
+ */
+export const worldProgress = pgTable(
+  'world_progress',
+  {
+    playerId: text('player_id')
+      .notNull()
+      .references(() => players.id),
+    worldId: text('world_id').notNull(),
+    packVersionId: text('pack_version_id').notNull(),
+    chapterState: text('chapter_state').notNull().$type<ChapterState>(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.playerId, t.worldId, t.packVersionId],
+      name: 'world_progress_pk',
+    }),
+  ],
+);
+
+/**
+ * 共享世界 flags（L2）：无 npc_id；只升不降，读档 replaceAll
+ */
+export const worldFlags = pgTable(
+  'world_flags',
+  {
+    playerId: text('player_id')
+      .notNull()
+      .references(() => players.id),
+    worldId: text('world_id').notNull(),
+    packVersionId: text('pack_version_id').notNull(),
+    flagName: text('flag_name').notNull(),
+    value: text('value').notNull().default('true'),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.playerId, t.worldId, t.packVersionId, t.flagName],
+      name: 'world_flags_pk',
+    }),
+  ],
+);
+
+/**
  * 对话存档「会话」元数据
  * 类似以前的 20260708V1.json 文件名那一层
  */
@@ -204,7 +253,14 @@ export const conversationArchives = pgTable(
     playerId: text('player_id')
       .notNull()
       .references(() => players.id),
+    /** 焦点/创建 NPC；run 档仍可填默认进度 NPC 便于兼容 */
     npcId: text('npc_id').notNull(),
+    /** run 档所属世界；旧 npc 档可空 */
+    worldId: text('world_id'),
+    /** run 档所属包版本；旧 npc 档可空 */
+    packVersionId: text('pack_version_id'),
+    /** run=一局世界；npc=旧单人会话 */
+    scope: text('scope').notNull().default('npc').$type<'run' | 'npc'>(),
     /** 展示用文件名，如 20260708V1.json */
     filename: text('filename').notNull(),
     /** 玩家自定义存档名；空则 UI 用 filename */
@@ -232,10 +288,12 @@ export const conversationSnapshots = pgTable(
     /** 在该存档文件内的序号，从 0 开始 */
     snapshotIndex: integer('snapshot_index').notNull(),
     savedAt: timestamp('saved_at', { withTimezone: true }).notNull(),
-    /** 存档时 NPC 状态：好感、疲惫、章节等 */
+    /** 焦点 NPC 状态镜像（列表预览 / 旧档） */
     npcState: jsonb('npc_state').notNull().$type<ArchivedNpcState>(),
-    /** 存档时的全部聊天消息 */
+    /** 焦点 NPC 聊天镜像 */
     messages: jsonb('messages').notNull().$type<ArchivedMessage[]>(),
+    /** schema_version=2 一局全文；空则按旧 npc_state+messages */
+    payload: jsonb('payload').$type<ConversationSnapshotV2 | null>(),
   },
   (t) => [
     uniqueIndex('snapshots_archive_index_idx').on(

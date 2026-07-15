@@ -4,13 +4,11 @@ import type {
   NpcExchangeEvent,
   PackExchangeEvent,
 } from '@ocraft/shared';
-import { getDefaultNpcId } from '@ocraft/shared';
 import { LlmService } from './llm.service';
 import { AgentTraceService } from './agent-trace.service';
 import { evaluateExchangeEvents } from './npc-exchange';
 import { NpcService } from '../npc/npc.service';
-import { ConversationService } from '../game/conversation.service';
-import { StoryFlagService } from '../story/story-flag.service';
+import { WorldProgressService } from '../story/world-progress.service';
 import { PackService } from '../story/pack.service';
 
 @Injectable()
@@ -19,8 +17,7 @@ export class NpcExchangeService {
 
   constructor(
     private readonly packService: PackService,
-    private readonly conversationService: ConversationService,
-    private readonly storyFlagService: StoryFlagService,
+    private readonly worldProgress: WorldProgressService,
     private readonly npcService: NpcService,
     private readonly llmService: LlmService,
     private readonly agentTrace: AgentTraceService,
@@ -28,7 +25,7 @@ export class NpcExchangeService {
 
   /**
    * 主对话结束后尝试触发关系事件互聊。
-   * 进度取 default_npc 的章/flags；失败不抛，返回 null。
+   * 进度取 world_progress（L2）；失败不抛，返回 null。
    */
   async tryRunAfterChat(opts: {
     playerId: string;
@@ -42,12 +39,9 @@ export class NpcExchangeService {
 
     try {
       const pack = this.packService.getPack();
-      const progressNpcId = getDefaultNpcId(pack);
-      const chapterState = this.conversationService.getChapterState(
-        playerId,
-        progressNpcId,
-      );
-      const flags = this.storyFlagService.getFlags(playerId, progressNpcId);
+      await this.worldProgress.ensureHydrated(playerId);
+      const chapterState = this.worldProgress.getChapter(playerId);
+      const flags = this.worldProgress.getFlags(playerId);
 
       const event = evaluateExchangeEvents(
         chapterState,
@@ -88,9 +82,8 @@ export class NpcExchangeService {
       }
 
       if (event.set_flags.length > 0) {
-        await this.storyFlagService.setFlags(
+        await this.worldProgress.setFlags(
           playerId,
-          progressNpcId,
           event.set_flags.map((f) => ({ name: f.name, value: f.value })),
         );
       }
@@ -151,7 +144,7 @@ export class NpcExchangeService {
       pack.npcs.find((n) => n.npc_id === speakerId)?.name ?? speakerId;
 
     const preState = this.npcService.getRuntimeState(playerId, speakerId);
-    const storyFlags = this.storyFlagService.getFlags(playerId, speakerId);
+    const storyFlags = this.worldProgress.getFlags(playerId);
     const basePrompt = this.npcService.buildSystemPrompt(speakerId, {
       chapterState,
       affinity: preState.affinity,

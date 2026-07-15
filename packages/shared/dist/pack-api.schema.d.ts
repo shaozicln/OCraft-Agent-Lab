@@ -126,6 +126,7 @@ export declare const PACK_GENERATE_SECTION_LABELS: Record<PackGenerateSectionKey
 export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     type: z.ZodLiteral<"section_start">;
     section: z.ZodEnum<{
+        npcs: "npcs";
         flags: "flags";
         chapters: "chapters";
         affinity_tiers: "affinity_tiers";
@@ -135,7 +136,6 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
         numeric_tools: "numeric_tools";
         animation_rules: "animation_rules";
         endings: "endings";
-        npcs: "npcs";
         chapter_triggers: "chapter_triggers";
         npc_reply_flags: "npc_reply_flags";
         prompt_common: "prompt_common";
@@ -145,6 +145,7 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
 }, z.core.$strip>, z.ZodObject<{
     type: z.ZodLiteral<"section_done">;
     section: z.ZodEnum<{
+        npcs: "npcs";
         flags: "flags";
         chapters: "chapters";
         affinity_tiers: "affinity_tiers";
@@ -154,7 +155,6 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
         numeric_tools: "numeric_tools";
         animation_rules: "animation_rules";
         endings: "endings";
-        npcs: "npcs";
         chapter_triggers: "chapter_triggers";
         npc_reply_flags: "npc_reply_flags";
         prompt_common: "prompt_common";
@@ -165,6 +165,7 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
 }, z.core.$strip>, z.ZodObject<{
     type: z.ZodLiteral<"error">;
     section: z.ZodOptional<z.ZodEnum<{
+        npcs: "npcs";
         flags: "flags";
         chapters: "chapters";
         affinity_tiers: "affinity_tiers";
@@ -174,7 +175,6 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
         numeric_tools: "numeric_tools";
         animation_rules: "animation_rules";
         endings: "endings";
-        npcs: "npcs";
         chapter_triggers: "chapter_triggers";
         npc_reply_flags: "npc_reply_flags";
         prompt_common: "prompt_common";
@@ -195,6 +195,7 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
     }, z.core.$strip>>>;
     failedSections: z.ZodOptional<z.ZodArray<z.ZodObject<{
         section: z.ZodEnum<{
+            npcs: "npcs";
             flags: "flags";
             chapters: "chapters";
             affinity_tiers: "affinity_tiers";
@@ -204,7 +205,6 @@ export declare const packGenerateStreamEventSchema: z.ZodDiscriminatedUnion<[z.Z
             numeric_tools: "numeric_tools";
             animation_rules: "animation_rules";
             endings: "endings";
-            npcs: "npcs";
             chapter_triggers: "chapter_triggers";
             npc_reply_flags: "npc_reply_flags";
             prompt_common: "prompt_common";

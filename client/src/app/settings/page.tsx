@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { Literata } from 'next/font/google';
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from 'react';
@@ -35,6 +37,15 @@ import { AuthGate } from '@/components/ui/AuthGate';
 import { PackEditor } from '@/components/pack-editor/PackEditor';
 import { apiFetch, apiFetchSse } from '@/lib/api';
 import { useTheme } from '@/theme/ThemeProvider';
+import './settings.css';
+
+/** 题头拉丁：Literata 书刊感，字面更宽、更舒展 */
+const settingsDisplay = Literata({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-settings-display',
+  display: 'swap',
+});
 
 type Tab = 'appearance' | 'account' | 'packs' | 'editor' | 'traces';
 
@@ -124,6 +135,39 @@ function SettingsInner({
   const [pendingAutoload, setPendingAutoload] = useState(false);
   const [traces, setTraces] = useState<AgentTraceRecord[]>([]);
   const [tracesBusy, setTracesBusy] = useState(false);
+  const [headerScrolled, setHeaderScrolled] = useState(false);
+  const [headerExpandClick, setHeaderExpandClick] = useState(false);
+  /** 点击展开时的 scrollY；只有再往下滚超过阈值才收起，避免展开动画触发的 scroll 立刻清掉状态 */
+  const headerPinYRef = useRef(0);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y < 36) {
+        setHeaderScrolled(false);
+        setHeaderExpandClick(false);
+        return;
+      }
+      if (y > 80) {
+        setHeaderScrolled(true);
+        setHeaderExpandClick((pinned) => {
+          if (!pinned) return false;
+          if (y > headerPinYRef.current + 56) return false;
+          return true;
+        });
+      }
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const headerCollapsed = headerScrolled && !headerExpandClick;
+
+  const expandSettingsHeader = useCallback(() => {
+    headerPinYRef.current = window.scrollY;
+    setHeaderExpandClick(true);
+  }, []);
 
   const currentWorld = useMemo(
     () => worlds.find((w) => w.world_id === selectedWorldId) ?? worlds[0],
@@ -503,7 +547,7 @@ function SettingsInner({
         method: 'DELETE',
       });
       setSelection(sel);
-      setMessage('已恢复默认默认包');
+      setMessage('已恢复默认包');
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败');
     } finally {
@@ -687,85 +731,125 @@ function SettingsInner({
     }
   };
 
-  const tabs: Array<{ id: Tab; label: string }> = [
-    { id: 'appearance', label: '外观' },
-    { id: 'account', label: '账号' },
-    { id: 'packs', label: '剧情包' },
-    { id: 'editor', label: '编辑 Pack' },
-    { id: 'traces', label: 'Agent Trace' },
+  const tabGroups: Array<Array<{ id: Tab; label: string }>> = [
+    [
+      { id: 'appearance', label: '外观' },
+      { id: 'account', label: '账号' },
+    ],
+    [
+      { id: 'packs', label: '剧情包' },
+      { id: 'editor', label: '编辑 Pack' },
+      { id: 'traces', label: 'Agent Trace' },
+    ],
   ];
 
   const panelStyle: CSSProperties = {
     background: 'var(--ui-panel-solid)',
     borderColor: 'var(--ui-border)',
     color: 'var(--ui-fg)',
-    boxShadow: 'var(--ui-shadow)',
   };
+
+  const cuePath = selection
+    ? `${selection.world_id} / ${selection.pack_version_id}${
+        selection.is_explicit ? '' : ' · 默认'
+      }`
+    : '尚未选用剧情包';
 
   return (
     <main
-      className="min-h-screen"
-      style={{ background: 'var(--ui-bg)', color: 'var(--ui-fg)' }}
+      className={`settings-shell ${settingsDisplay.variable}`}
+      data-header-collapsed={headerCollapsed ? 'true' : 'false'}
     >
-      <header
-        className="sticky top-0 z-10 flex items-center justify-between border-b px-4 py-3 backdrop-blur"
-        style={{
-          background: 'var(--ui-panel)',
-          borderColor: 'var(--ui-border)',
-        }}
-      >
-        <div>
-          <h1 className="text-lg font-semibold">设置</h1>
-          <p className="text-xs" style={{ color: 'var(--ui-fg-muted)' }}>
-            {username}
-            {selection
-              ? ` · ${selection.world_id}/${selection.pack_version_id}`
-              : ''}
-            {selection && !selection.is_explicit ? '（测试默认）' : ''}
-          </p>
-        </div>
-        <Link
-          href="/"
-          className="rounded-lg px-3 py-1.5 text-sm font-medium"
-          style={{
-            background: 'var(--ui-accent)',
-            color: 'var(--ui-accent-fg)',
-          }}
+      <div className="settings-shell__grain" aria-hidden />
+      <div className="settings-shell__inner">
+        <header
+          className="settings-top"
+          data-collapsed={headerCollapsed ? 'true' : 'false'}
         >
-          返回游戏
-        </Link>
-      </header>
+          <div className="settings-top__compact">
+            <div className="settings-top__compact-inner">
+              <button
+                type="button"
+                className="settings-top__chip"
+                onClick={expandSettingsHeader}
+                aria-expanded={!headerCollapsed}
+                title="展开题头"
+              >
+                <span className="settings-top__chip-title">设置</span>
+                <span className="settings-top__chip-meta">
+                  {selection?.world_id ?? username}
+                </span>
+              </button>
+              <Link href="/" className="settings-cta settings-cta--slim">
+                返回场景
+              </Link>
+            </div>
+          </div>
 
-      <div className="mx-auto flex max-w-6xl gap-6 px-4 py-6">
-        <nav className="w-40 shrink-0 space-y-1">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className="w-full rounded-lg px-3 py-2 text-left text-sm"
-              style={
-                tab === t.id
-                  ? {
-                      background: 'var(--ui-accent)',
-                      color: 'var(--ui-accent-fg)',
-                    }
-                  : { color: 'var(--ui-fg-muted)' }
-              }
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
+          <div className="settings-top__full">
+            <div className="settings-top__full-inner">
+              <div className="settings-top__row">
+                <div className="min-w-0">
+                  <p className="settings-top__brand">OCraft · Control</p>
+                  <h1 className="settings-top__title">设置</h1>
+                </div>
+                <Link href="/" className="settings-cta">
+                  返回场景
+                </Link>
+              </div>
+              <div className="settings-cue" title={`${username} · ${cuePath}`}>
+                <span className="settings-cue__tick" aria-hidden />
+                <span className="settings-cue__label">Active pack</span>
+                <span
+                  className="settings-cue__path"
+                  data-empty={selection ? 'false' : 'true'}
+                >
+                  {username} · {cuePath}
+                </span>
+              </div>
+            </div>
+          </div>
+        </header>
 
-        <section className="min-w-0 flex-1 space-y-4">
+        <div className="settings-body">
+          <aside className="settings-sidebar shrink-0">
+            <p className="settings-sidebar-label">Cue sheet</p>
+            <nav className="settings-sidebar-nav" aria-label="设置分类">
+              {tabGroups.map((group, gi) => (
+                <div key={gi} className="contents">
+                  {gi > 0 && (
+                    <div className="settings-sidebar-divider" aria-hidden />
+                  )}
+                  {group.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setTab(t.id)}
+                      data-active={tab === t.id ? 'true' : 'false'}
+                      className="settings-nav-btn"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </nav>
+          </aside>
+
+          <section
+            key={tab}
+            className="settings-panel-in min-w-0 flex-1 space-y-4"
+          >
           {(error || message) && (
             <div
-              className="rounded-xl border px-4 py-3 text-sm"
+              className="settings-panel text-sm"
               style={{
                 ...panelStyle,
                 borderColor: error ? 'var(--ui-danger)' : 'var(--ui-border)',
                 color: error ? 'var(--ui-danger)' : 'var(--ui-fg)',
+                background: error
+                  ? 'color-mix(in srgb, var(--ui-danger) 8%, var(--ui-panel-solid))'
+                  : 'color-mix(in srgb, var(--set-gel) 10%, var(--ui-panel-solid))',
               }}
             >
               {error ?? message}
@@ -773,10 +857,10 @@ function SettingsInner({
           )}
 
           {tab === 'appearance' && (
-            <div className="rounded-2xl border p-5" style={panelStyle}>
-              <h2 className="text-base font-semibold">外观主题</h2>
-              <p className="mt-1 text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
-                浅色为白/半透明白；深色为蓝黑/半透明蓝黑（原控制台风格）。
+            <div className="settings-panel" style={panelStyle}>
+              <h2 className="settings-panel__title">外观主题</h2>
+              <p className="settings-panel__lead">
+                浅色偏纸面；深色偏蓝黑控制台。选好后立刻应用到本页与游戏 HUD。
               </p>
               <div
                 className="mt-4 flex max-w-sm rounded-xl p-1"
@@ -810,9 +894,9 @@ function SettingsInner({
           )}
 
           {tab === 'account' && (
-            <div className="rounded-2xl border p-5" style={panelStyle}>
-              <h2 className="text-base font-semibold">账号</h2>
-              <p className="mt-1 text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
+            <div className="settings-panel" style={panelStyle}>
+              <h2 className="settings-panel__title">账号</h2>
+              <p className="settings-panel__lead">
                 UID、用户名、密码为全局账号信息，与剧情包无关。
               </p>
               <dl className="mt-3 space-y-1 text-sm">
@@ -901,16 +985,16 @@ function SettingsInner({
 
           {tab === 'packs' && (
             <div className="space-y-4">
-              <div className="rounded-2xl border p-5" style={panelStyle}>
+              <div className="settings-panel" style={panelStyle}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-base font-semibold">世界与版本</h2>
+                  <h2 className="settings-panel__title">世界与版本</h2>
                   <button
                     type="button"
                     className="text-sm"
                     style={{ color: 'var(--ui-accent)' }}
                     onClick={() => void clearSelection()}
                   >
-                    恢复默认默认
+                    恢复默认
                   </button>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1026,9 +1110,9 @@ function SettingsInner({
                 )}
               </div>
 
-              <div className="rounded-2xl border p-5" style={panelStyle}>
-                <h2 className="text-base font-semibold">另存为新版本</h2>
-                <p className="mt-1 text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
+              <div className="settings-panel" style={panelStyle}>
+                <h2 className="settings-panel__title">另存为新版本</h2>
+                <p className="settings-panel__lead">
                   只填版本名 → 生成「版本名__时间戳」文件夹；内容清空，测试示例作浅灰提示。
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1080,9 +1164,9 @@ function SettingsInner({
                 </button>
               </div>
 
-              <div className="rounded-2xl border p-5" style={panelStyle}>
-                <h2 className="text-base font-semibold">新建世界</h2>
-                <p className="mt-1 text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
+              <div className="settings-panel" style={panelStyle}>
+                <h2 className="settings-panel__title">新建世界</h2>
+                <p className="settings-panel__lead">
                   世界 ID = story-packs/ 文件夹名；首版版本名可省略（默认等于世界 ID）。
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1150,9 +1234,9 @@ function SettingsInner({
 
           {tab === 'editor' && (
             <div className="space-y-4">
-              <div className="rounded-2xl border p-5" style={panelStyle}>
-                <h2 className="text-base font-semibold">编辑 Pack</h2>
-                <p className="mt-1 text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
+              <div className="settings-panel" style={panelStyle}>
+                <h2 className="settings-panel__title">编辑 Pack</h2>
+                <p className="settings-panel__lead">
                   设定按版本隔离；新建/另存后字段为空，浅灰 placeholder 来自测试包。
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1230,8 +1314,8 @@ function SettingsInner({
               </div>
 
               {packDraft && (
-                <div className="rounded-2xl border p-5" style={panelStyle}>
-                  <h2 className="text-base font-semibold">生成 Pack 草稿</h2>
+                <div className="settings-panel" style={panelStyle}>
+                  <h2 className="settings-panel__title">生成 Pack 草稿</h2>
                   <p
                     className="mt-1 text-sm"
                     style={{ color: 'var(--ui-fg-muted)' }}
@@ -1439,10 +1523,10 @@ function SettingsInner({
               )}
 
               {packDraft && (
-                <div className="rounded-2xl border p-5" style={panelStyle}>
+                <div className="settings-panel" style={panelStyle}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <h2 className="text-base font-semibold">本世界个人信息</h2>
+                      <h2 className="settings-panel__title">本世界个人信息</h2>
                       
                     </div>
                     <button
@@ -1580,14 +1664,11 @@ function SettingsInner({
 
           {tab === 'traces' && (
             <div className="space-y-4">
-              <div className="rounded-2xl border p-5" style={panelStyle}>
+              <div className="settings-panel" style={panelStyle}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <h2 className="text-base font-semibold">Agent Trace</h2>
-                    <p
-                      className="mt-1 text-sm"
-                      style={{ color: 'var(--ui-fg-muted)' }}
-                    >
+                    <h2 className="settings-panel__title">Agent Trace</h2>
+                    <p className="settings-panel__lead">
                       每轮对话的决策回放（tool / 升章 / RAG）。存在服务端内存，重启清空；仅当前账号可见。
                     </p>
                   </div>
@@ -1618,10 +1699,7 @@ function SettingsInner({
               </div>
 
               {traces.length === 0 && (
-                <p
-                  className="text-sm"
-                  style={{ color: 'var(--ui-fg-muted)' }}
-                >
+                <p className="settings-panel__lead">
                   {tracesBusy
                     ? '加载中…'
                     : '暂无记录。进游戏聊几句后再回来刷新。'}
@@ -1631,19 +1709,19 @@ function SettingsInner({
               {traces.map((t) => (
                 <div
                   key={t.id}
-                  className="rounded-2xl border p-4 font-mono text-xs"
+                  className="settings-panel settings-trace"
                   style={panelStyle}
                 >
-                  <div className="flex flex-wrap justify-between gap-2 text-sm font-sans font-medium">
+                  <div className="settings-trace__meta">
                     <span>
                       {new Date(t.at).toLocaleString()} · {t.npc_id}
                       {t.mock ? ' · MOCK' : ''}
                     </span>
-                    <span style={{ color: 'var(--ui-fg-muted)' }}>
+                    <span className="settings-trace__path">
                       {t.world_id}/{t.pack_version_id}
                     </span>
                   </div>
-                  <p className="mt-2 font-sans text-sm">
+                  <p className="mt-2">
                     玩家：「{t.player_message}」
                   </p>
                   <p className="mt-2" style={{ color: 'var(--ui-fg-muted)' }}>
@@ -1651,7 +1729,7 @@ function SettingsInner({
                     {t.runtime_after.affinity}/{t.runtime_after.fatigue}
                     {t.animation ? ` · 动画 ${t.animation}` : ''}
                   </p>
-                  <p className="mt-1">
+                  <p className="settings-trace__tech">
                     章节 {t.transition.chapter_before}
                     {t.transition.chapter_before !== t.transition.chapter_after
                       ? ` → ${t.transition.chapter_after}`
@@ -1661,7 +1739,7 @@ function SettingsInner({
                       : ''}
                   </p>
                   {t.transition.flags_set.length > 0 && (
-                    <p className="mt-1">
+                    <p className="settings-trace__tech">
                       flags:{' '}
                       {t.transition.flags_set
                         .map((f) => `${f.name}=${f.value}`)
@@ -1669,14 +1747,14 @@ function SettingsInner({
                     </p>
                   )}
                   {t.reply_flags_set && t.reply_flags_set.length > 0 && (
-                    <p className="mt-1">
+                    <p className="settings-trace__tech">
                       reply_flags:{' '}
                       {t.reply_flags_set
                         .map((f) => `${f.name}=${f.value}`)
                         .join(', ')}
                     </p>
                   )}
-                  <p className="mt-1">
+                  <p className="settings-trace__tech">
                     tools:{' '}
                     {t.tools.length === 0
                       ? '（无）'
@@ -1684,7 +1762,7 @@ function SettingsInner({
                           .map((x) => `${x.tool}: ${x.observation}`)
                           .join(' | ')}
                   </p>
-                  <p className="mt-1">
+                  <p className="settings-trace__tech">
                     rag:{' '}
                     {t.rag_hits.length === 0
                       ? '（无）'
@@ -1693,7 +1771,7 @@ function SettingsInner({
                           .join(', ')}
                   </p>
                   {t.exchange && (
-                    <p className="mt-1">
+                    <p className="settings-trace__tech">
                       exchange [{t.exchange.event_id}]:{' '}
                       {t.exchange.lines
                         .map((l) => `${l.name}「${l.text.slice(0, 40)}${l.text.length > 40 ? '…' : ''}」`)
@@ -1704,47 +1782,48 @@ function SettingsInner({
               ))}
             </div>
           )}
-        </section>
-      </div>
-
-      {genToasts.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
-          {genToasts.map((t) => (
-            <div
-              key={t.id}
-              role="alert"
-              className="rounded-xl border px-4 py-3 shadow-lg"
-              style={{
-                background: 'var(--ui-panel, #fff)',
-                borderColor:
-                  t.kind === 'err'
-                    ? 'var(--ui-danger, #dc2626)'
-                    : 'rgba(202, 138, 4, 0.7)',
-                color: 'var(--ui-fg)',
-              }}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-semibold">{t.title}</p>
-                <button
-                  type="button"
-                  className="text-xs opacity-70 hover:opacity-100"
-                  onClick={() => dismissGenToast(t.id)}
-                >
-                  关闭
-                </button>
-              </div>
-              {t.detail && (
-                <p
-                  className="mt-1 text-xs leading-relaxed"
-                  style={{ color: 'var(--ui-fg-muted)' }}
-                >
-                  {t.detail}
-                </p>
-              )}
-            </div>
-          ))}
+          </section>
         </div>
-      )}
+
+        {genToasts.length > 0 && (
+          <div className="fixed bottom-4 right-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
+            {genToasts.map((t) => (
+              <div
+                key={t.id}
+                role="alert"
+                className="rounded-xl border px-4 py-3 shadow-lg"
+                style={{
+                  background: 'var(--ui-panel, #fff)',
+                  borderColor:
+                    t.kind === 'err'
+                      ? 'var(--ui-danger, #dc2626)'
+                      : 'color-mix(in srgb, var(--set-gel) 55%, transparent)',
+                  color: 'var(--ui-fg)',
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold">{t.title}</p>
+                  <button
+                    type="button"
+                    className="text-xs opacity-70 hover:opacity-100"
+                    onClick={() => dismissGenToast(t.id)}
+                  >
+                    关闭
+                  </button>
+                </div>
+                {t.detail && (
+                  <p
+                    className="mt-1 text-xs leading-relaxed"
+                    style={{ color: 'var(--ui-fg-muted)' }}
+                  >
+                    {t.detail}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

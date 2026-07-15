@@ -50,28 +50,19 @@ export function PackEditor({
         <PackPromptsForm {...props} />
       </div>
       <nav
-        className="sticky top-20 hidden h-fit w-40 shrink-0 rounded-xl border p-3 lg:block"
+        className="settings-pack-toc settings-panel sticky top-28 hidden h-fit w-40 shrink-0 lg:block"
         style={panelStyle}
       >
-        <p
-          className="mb-2 text-xs font-medium"
-          style={{ color: 'var(--ui-fg-muted)' }}
-        >
-          目录
-        </p>
-        <ul className="space-y-1">
+        <p className="settings-sidebar-label">目录</p>
+        <ul className="settings-sidebar-nav">
           {TOC.map((item) => {
             const active = highlightTocId === item.id;
             return (
-              <li key={item.id}>
+              <li key={item.id} className="contents">
                 <a
                   href={`#${item.id}`}
-                  className="block rounded px-2 py-1 text-xs hover:underline"
-                  style={{
-                    color: 'var(--ui-fg)',
-                    background: active ? 'rgba(250, 204, 21, 0.45)' : undefined,
-                    fontWeight: active ? 600 : undefined,
-                  }}
+                  className="settings-nav-btn"
+                  data-active={active ? 'true' : 'false'}
                   onClick={(e) => {
                     e.preventDefault();
                     document

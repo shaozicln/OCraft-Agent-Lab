@@ -189,13 +189,23 @@
       "id": "ex_ch2_first_meet",
       "enabled": true,
       "chapter": "ch2_unease",
-      "require_flags": ["met_hook"],
-      "speakers": ["npc_suolunsen", "npc_hilvi"],
+      "require_flags": [
+        "met_hook"
+      ],
+      "speakers": [
+        "npc_suolunsen",
+        "npc_hilvi"
+      ],
       "beat_hints": [
         "索伦森试探转校传闻与异常感，语气压低",
         "希尔薇礼貌但疏离，不直接点破"
       ],
-      "set_flags": [{ "name": "ex_ch2_meet_done", "value": "true" }],
+      "set_flags": [
+        {
+          "name": "ex_ch2_meet_done",
+          "value": "true"
+        }
+      ],
       "once": true,
       "notes": "进裂痕且已听闻希尔薇后，首次旁听互聊"
     }

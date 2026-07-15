@@ -3,18 +3,36 @@ import { and, eq } from 'drizzle-orm';
 import type {
   ArchivedMessage,
   ArchivedNpcState,
+  ArchiveScope,
   ConversationArchiveSummary,
+  ConversationSnapshotV2,
 } from '@ocraft/shared';
 import { PlayerStateRepository } from '../db/player-state.repository';
+import type { AppDatabase } from '../db/db.service';
 import {
   conversationArchives,
   conversationSnapshots,
 } from '../db/schema';
+import { migrateSave } from './save-migrate';
 
+/** 内存/返回用：统一带上可选 v2 payload */
 export interface ConversationSnapshot {
   saved_at: string;
   npc_state: ArchivedNpcState;
   messages: ArchivedMessage[];
+  payload?: ConversationSnapshotV2 | null;
+}
+
+export interface CreateArchiveOpts {
+  playerId: string;
+  /** 焦点 NPC（run 档也写，便于兼容） */
+  npcId: string;
+  sessionStartedAt: string;
+  snapshot: ConversationSnapshot;
+  displayName?: string;
+  scope?: ArchiveScope;
+  worldId?: string;
+  packVersionId?: string;
 }
 
 @Injectable()
@@ -32,17 +50,22 @@ export class ConversationArchiveService {
     return this.playerStateRepo.db;
   }
 
-  async createSessionArchive(
-    playerId: string,
-    npcId: string,
-    sessionStartedAt: string,
-    snapshot: ConversationSnapshot,
-    displayName?: string,
-  ): Promise<string> {
+  async createSessionArchive(opts: CreateArchiveOpts): Promise<string> {
+    const {
+      playerId,
+      npcId,
+      sessionStartedAt,
+      snapshot,
+      displayName,
+      scope = 'npc',
+      worldId,
+      packVersionId,
+    } = opts;
     const started = new Date(sessionStartedAt);
     const stamp = this.formatFileStamp(started);
     const filename = await this.nextFilename(playerId, stamp);
     const db = this.requireDb();
+    const payload = snapshot.payload ?? null;
 
     const [archive] = await db
       .insert(conversationArchives)
@@ -52,6 +75,9 @@ export class ConversationArchiveService {
         filename,
         displayName: displayName?.trim() || null,
         sessionStartedAt: started,
+        scope,
+        worldId: worldId ?? null,
+        packVersionId: packVersionId ?? null,
       })
       .returning();
 
@@ -61,10 +87,11 @@ export class ConversationArchiveService {
       savedAt: new Date(snapshot.saved_at),
       npcState: snapshot.npc_state,
       messages: snapshot.messages,
+      payload,
     });
 
     this.logger.log(
-      `Created archive player=${playerId} npc=${npcId} → ${filename} (snapshot 0)`,
+      `Created archive player=${playerId} scope=${scope} npc=${npcId} → ${filename} (snapshot 0)`,
     );
     return filename;
   }
@@ -119,17 +146,73 @@ export class ConversationArchiveService {
       savedAt: new Date(snapshot.saved_at),
       npcState: snapshot.npc_state,
       messages: snapshot.messages,
+      payload: snapshot.payload ?? null,
     });
 
     this.logger.log(`Appended snapshot ${snapshotIndex} → ${filename}`);
     return snapshotIndex;
   }
 
+  /** 自动存：覆盖该档最新快照（不新增历史点，避免每句对话涨一条） */
+  async upsertLatestSnapshot(
+    playerId: string,
+    filename: string,
+    snapshot: ConversationSnapshot,
+    tx?: AppDatabase,
+  ): Promise<number> {
+    const archive = await this.playerStateRepo.findArchiveByFilename(
+      playerId,
+      filename,
+    );
+    if (!archive) {
+      throw new NotFoundException(`Archive not found: ${filename}`);
+    }
+
+    const db = tx ?? this.requireDb();
+    const existing = await db
+      .select()
+      .from(conversationSnapshots)
+      .where(eq(conversationSnapshots.archiveId, archive.id))
+      .orderBy(conversationSnapshots.snapshotIndex);
+
+    if (existing.length === 0) {
+      await db.insert(conversationSnapshots).values({
+        archiveId: archive.id,
+        snapshotIndex: 0,
+        savedAt: new Date(snapshot.saved_at),
+        npcState: snapshot.npc_state,
+        messages: snapshot.messages,
+        payload: snapshot.payload ?? null,
+      });
+      return 0;
+    }
+
+    const last = existing[existing.length - 1]!;
+    await db
+      .update(conversationSnapshots)
+      .set({
+        savedAt: new Date(snapshot.saved_at),
+        npcState: snapshot.npc_state,
+        messages: snapshot.messages,
+        payload: snapshot.payload ?? null,
+      })
+      .where(eq(conversationSnapshots.id, last.id));
+
+    return last.snapshotIndex;
+  }
+
+  /**
+   * 列表：仅当前包的「整局」档（由新开一局 / 读档激活后自动更新）
+   */
   async listArchives(
     playerId: string,
-    npcId: string,
+    _npcId: string,
+    pack?: { worldId: string; packVersionId: string },
   ): Promise<ConversationArchiveSummary[]> {
     if (!this.playerStateRepo.ready) {
+      return [];
+    }
+    if (!pack) {
       return [];
     }
 
@@ -140,7 +223,9 @@ export class ConversationArchiveService {
       .where(
         and(
           eq(conversationArchives.playerId, playerId),
-          eq(conversationArchives.npcId, npcId),
+          eq(conversationArchives.scope, 'run'),
+          eq(conversationArchives.worldId, pack.worldId),
+          eq(conversationArchives.packVersionId, pack.packVersionId),
         ),
       );
 
@@ -157,15 +242,23 @@ export class ConversationArchiveService {
         filename: archive.filename,
         display_name: archive.displayName ?? undefined,
         session_started_at: archive.sessionStartedAt.toISOString(),
-        snapshots: snapshots.map((snap) => ({
-          index: snap.snapshotIndex,
-          saved_at: snap.savedAt.toISOString(),
-          message_count: snap.messages.length,
-          npc_state: {
-            ...snap.npcState,
-            story_flags: snap.npcState.story_flags ?? {},
-          },
-        })),
+        scope: 'run',
+        snapshots: snapshots.map((snap) => {
+          const worldChapter = snap.payload?.world?.chapter_state;
+          const worldFlags = snap.payload?.world?.story_flags;
+          return {
+            index: snap.snapshotIndex,
+            saved_at: snap.savedAt.toISOString(),
+            message_count:
+              snap.payload?.messages?.length ?? snap.messages.length,
+            npc_state: {
+              ...snap.npcState,
+              chapter_state: worldChapter ?? snap.npcState.chapter_state,
+              story_flags:
+                worldFlags ?? snap.npcState.story_flags ?? {},
+            },
+          };
+        }),
       });
     }
 
@@ -179,7 +272,11 @@ export class ConversationArchiveService {
     playerId: string,
     filename: string,
     snapshotIndex: number,
-  ): Promise<{ snapshot: ConversationSnapshot }> {
+  ): Promise<{
+    snapshot: ConversationSnapshot;
+    scope: ArchiveScope;
+    archiveNpcId: string;
+  }> {
     const archive = await this.playerStateRepo.findArchiveByFilename(
       playerId,
       filename,
@@ -207,7 +304,14 @@ export class ConversationArchiveService {
       );
     }
 
+    let payload: ConversationSnapshotV2 | null = null;
+    if (row.payload) {
+      payload = migrateSave(row.payload);
+    }
+
     return {
+      scope: (archive.scope as ArchiveScope) ?? 'npc',
+      archiveNpcId: archive.npcId,
       snapshot: {
         saved_at: row.savedAt.toISOString(),
         npc_state: {
@@ -215,6 +319,7 @@ export class ConversationArchiveService {
           story_flags: row.npcState.story_flags ?? {},
         },
         messages: row.messages,
+        payload,
       },
     };
   }

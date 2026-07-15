@@ -211,15 +211,15 @@ export function SectionCard({
   actions?: ReactNode;
 }) {
   return (
-    <div id={id} className="scroll-mt-24 rounded-2xl border p-5" style={panelStyle}>
+    <div
+      id={id}
+      className="settings-panel scroll-mt-24"
+      style={panelStyle}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-base font-semibold">{title}</h2>
-          {hint && (
-            <p className="mt-1 text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
-              {hint}
-            </p>
-          )}
+          <h2 className="settings-panel__title">{title}</h2>
+          {hint && <p className="settings-panel__lead">{hint}</p>}
         </div>
         {actions}
       </div>

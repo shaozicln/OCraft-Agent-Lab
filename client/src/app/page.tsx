@@ -5,6 +5,7 @@ import { isNpcPresent } from '@ocraft/shared';
 import { AuthGate } from '@/components/ui/AuthGate';
 import { GameCanvas, type SceneNpc } from '@/components/r3f/GameCanvas';
 import { type HumanoidAnimation } from '@/components/r3f/Humanoid';
+import { ChapterTransition, type ChapterCue } from '@/components/ui/ChapterTransition';
 import { ChatBox } from '@/components/ui/ChatBox';
 import { EscMenu } from '@/components/ui/EscMenu';
 import { HUD } from '@/components/ui/HUD';
@@ -21,6 +22,15 @@ const NPC_PALETTE = [
   { color: '#FCD34D', headColor: '#FDE68A' },
   { color: '#C4B5FD', headColor: '#DDD6FE' },
 ] as const;
+
+/** 按 npc_id 稳定取色，升章刷人后颜色不漂移 */
+function paletteForNpc(npcId: string) {
+  let h = 0;
+  for (let i = 0; i < npcId.length; i++) {
+    h = (h * 31 + npcId.charCodeAt(i)) >>> 0;
+  }
+  return NPC_PALETTE[h % NPC_PALETTE.length];
+}
 
 function asAnim(v: string | undefined): HumanoidAnimation {
   if (
@@ -73,6 +83,8 @@ function GamePageInner({
   const [deltas, setDeltas] = useState<{ affinity?: number; fatigue?: number }>(
     {},
   );
+  const prevChapterRef = useRef<string | undefined>(undefined);
+  const [chapterCue, setChapterCue] = useState<ChapterCue | null>(null);
 
   useEffect(() => {
     if (defaultNpcId) setActiveNpcId((id) => id || defaultNpcId);
@@ -140,8 +152,8 @@ function GamePageInner({
 
   const sceneNpcs: SceneNpc[] = useMemo(
     () =>
-      visibleNpcs.map((n, i) => {
-        const palette = NPC_PALETTE[i % NPC_PALETTE.length];
+      visibleNpcs.map((n) => {
+        const palette = paletteForNpc(n.npc_id);
         const st = npcStates[n.npc_id];
         return {
           npcId: n.npc_id,
@@ -167,7 +179,8 @@ function GamePageInner({
     [nearbyNpcs, visibleNpcs, npcStates],
   );
 
-  const uiBlocking = chatOpen || menuOpen;
+  const chapterCueActive = chapterCue != null;
+  const uiBlocking = chatOpen || menuOpen || chapterCueActive;
   const movementEnabled = !uiBlocking;
   const lookEnabled = !uiBlocking;
 
@@ -255,6 +268,27 @@ function GamePageInner({
       };
     }
   }, [npc]);
+
+  // 服务端章节变化 → 全屏过场（跳过首次同步；不用 defaultChapter 以免误触发）
+  useEffect(() => {
+    if (!progressChapter || !runtime) return;
+    const prev = prevChapterRef.current;
+    prevChapterRef.current = progressChapter;
+    if (prev === undefined || prev === progressChapter) return;
+
+    const meta = runtime.chapters.find((c) => c.id === progressChapter);
+    const title =
+      meta?.display_name ||
+      meta?.hud_label ||
+      chapterLabels[progressChapter] ||
+      progressChapter;
+    const ordinal = meta != null ? meta.rank + 1 : undefined;
+    setChapterCue({ key: Date.now(), ordinal, title });
+  }, [progressChapter, runtime, chapterLabels]);
+
+  const clearChapterCue = useCallback(() => {
+    setChapterCue(null);
+  }, []);
 
   useEffect(() => {
     if (!npcState || !chatOpen) return;
@@ -351,7 +385,7 @@ function GamePageInner({
           <p
             className={`text-xs ${connected ? 'text-emerald-600' : 'text-red-500'}`}
           >
-            {connected ? '● 已连接服务器' : '○ 未连接服务器 (3010)'}
+            {connected ? '● 已连接服务器' : '○ 未连接服务器 (4000)'}
           </p>
           <p className="text-xs text-gray-400">当前账号：{username}</p>
           {npcError ? (
@@ -450,6 +484,8 @@ function GamePageInner({
         onRequestStoryMap={handleRequestStoryMap}
         onStartNewRun={handleStartNewRun}
       />
+
+      <ChapterTransition cue={chapterCue} onDone={clearChapterCue} />
     </main>
   );
 }

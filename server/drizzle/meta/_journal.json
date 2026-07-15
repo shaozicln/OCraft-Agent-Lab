@@ -64,6 +64,34 @@
       "when": 1752672000000,
       "tag": "0008_archive_display_name",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1752758400000,
+      "tag": "0009_run_archives",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1752844800000,
+      "tag": "0010_clear_archives",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1752931200000,
+      "tag": "0011_world_progress",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1753017600000,
+      "tag": "0012_reset_world_and_archives",
+      "breakpoints": true
     }
   ]
 }

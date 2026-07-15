@@ -9,7 +9,7 @@ import {
   type PlayerGender,
   type PlayerPackProfile,
 } from '@ocraft/shared';
-import { DbService } from './db.service';
+import { DbService, type AppDatabase } from './db.service';
 import {
   conversationArchives,
   conversationSnapshots,
@@ -416,5 +416,71 @@ export class PlayerStateRepository {
 
   get ready() {
     return this.dbService.isReady;
+  }
+
+  /** 整局存/读：多表同事务。无库时直接执行 fn(undefined)。 */
+  async transaction<T>(
+    fn: (tx: AppDatabase | undefined) => Promise<T>,
+  ): Promise<T> {
+    if (!this.dbService.isReady) {
+      return fn(undefined);
+    }
+    return this.dbService.db.transaction(async (tx) => fn(tx));
+  }
+
+  async saveFullSessionWithDb(
+    db: AppDatabase,
+    playerId: string,
+    worldId: string,
+    packVersionId: string,
+    npcId: string,
+    data: {
+      runtime: NpcRuntimeState;
+      chapterState: ChapterState;
+      recentMessages: LlmMessage[];
+      transcriptMessages: ArchivedMessage[];
+      sessionStartedAt?: string | null;
+      activeArchiveFilename?: string | null;
+    },
+  ): Promise<void> {
+    await this.ensurePlayer(playerId);
+    await db
+      .insert(playerNpcState)
+      .values({
+        playerId,
+        worldId,
+        packVersionId,
+        npcId,
+        affinity: data.runtime.affinity,
+        fatigue: data.runtime.fatigue,
+        currentStatus: data.runtime.current_status,
+        chapterState: data.chapterState,
+        recentMessages: data.recentMessages,
+        transcriptMessages: data.transcriptMessages,
+        sessionStartedAt: data.sessionStartedAt
+          ? new Date(data.sessionStartedAt)
+          : null,
+        activeArchiveFilename: data.activeArchiveFilename ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [
+          playerNpcState.playerId,
+          playerNpcState.worldId,
+          playerNpcState.packVersionId,
+          playerNpcState.npcId,
+        ],
+        set: {
+          affinity: data.runtime.affinity,
+          fatigue: data.runtime.fatigue,
+          currentStatus: data.runtime.current_status,
+          chapterState: data.chapterState,
+          recentMessages: data.recentMessages,
+          transcriptMessages: data.transcriptMessages,
+          sessionStartedAt: data.sessionStartedAt
+            ? new Date(data.sessionStartedAt)
+            : null,
+          activeArchiveFilename: data.activeArchiveFilename ?? null,
+        },
+      });
   }
 }

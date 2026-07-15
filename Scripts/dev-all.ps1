@@ -33,8 +33,8 @@ if (Test-IdeIntegratedTerminal) {
 
 Write-Host 'Opening 3 external PowerShell windows...' -ForegroundColor Green
 Write-Host '  1. Drizzle Studio'
-Write-Host '  2. Server (NestJS :3010)'
-Write-Host '  3. Client (Next.js :3000)'
+Write-Host '  2. Server (NestJS :4000)'
+Write-Host '  3. Client (Next.js :3300)'
 Write-Host ''
 Write-Host 'Tip: for Cursor built-in terminals, open this project in Cursor and press Ctrl+Shift+B.' -ForegroundColor Yellow
 Write-Host ''

@@ -42,7 +42,7 @@ export class GameGateway implements OnGatewayConnection {
   private readonly logger = new Logger(GameGateway.name);
 
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   constructor(
     private readonly authService: AuthService,
@@ -104,6 +104,21 @@ export class GameGateway implements OnGatewayConnection {
       chapter_state: this.conversationService.getChapterState(playerId, npcId),
       story_flags: this.conversationService.getStoryFlags(playerId, npcId),
     };
+  }
+
+  /** 读档 / 新开局后：全员状态推给客户端（含进度订阅键） */
+  private emitAllNpcStates(client: AuthedSocket, playerId: string) {
+    for (const npc of this.packService.getPack().npcs) {
+      const runtime = this.npcService.getRuntimeState(playerId, npc.npc_id);
+      client.emit(
+        'npc_state_update',
+        this.buildStatePayload(
+          playerId,
+          npc.npc_id,
+          runtime.current_status,
+        ),
+      );
+    }
   }
 
   @SubscribeMessage('request_npc_state')
@@ -202,6 +217,15 @@ export class GameGateway implements OnGatewayConnection {
           toolCalls: result.toolCalls,
         });
 
+        // 世界章/flags 已写 L2：同步刷 HUD（进度与聊天 NPC 可能不是同一人）
+        const progressNpcId = getDefaultNpcId(this.packService.getPack());
+        if (progressNpcId !== npcId) {
+          client.emit(
+            'npc_state_update',
+            this.buildStatePayload(playerId, progressNpcId),
+          );
+        }
+
         const exchange = await this.npcExchange.tryRunAfterChat({
           playerId,
           chatNpcId: npcId,
@@ -211,20 +235,38 @@ export class GameGateway implements OnGatewayConnection {
         });
         if (exchange) {
           client.emit('npc_exchange', exchange);
-          const progressNpcId = getDefaultNpcId(
-            this.packService.getPack(),
+          client.emit(
+            'npc_state_update',
+            this.buildStatePayload(playerId, progressNpcId),
           );
           if (progressNpcId !== npcId) {
-            client.emit(
-              'npc_state_update',
-              this.buildStatePayload(playerId, progressNpcId),
-            );
-          } else {
             client.emit(
               'npc_state_update',
               this.buildStatePayload(playerId, npcId),
             );
           }
+        }
+
+        try {
+          const saved = await this.conversationService.autoSaveActiveRun(
+            playerId,
+            npcId,
+          );
+          if (saved) {
+            client.emit('conversation_saved', {
+              npcId,
+              filename: saved.filename,
+              snapshotIndex: saved.snapshotIndex,
+              savedAt: saved.savedAt,
+              chapter_state: saved.chapterState,
+              scope: saved.scope,
+              world_changed: saved.worldChanged,
+            });
+          }
+        } catch (autoErr) {
+          this.logger.warn(
+            `autoSave skipped player=${playerId}: ${autoErr instanceof Error ? autoErr.message : autoErr}`,
+          );
         }
       } catch (err) {
         this.logger.error(err);
@@ -258,7 +300,7 @@ export class GameGateway implements OnGatewayConnection {
       );
 
       if (!result) {
-        throw new WsException('没有可存档的对话');
+        throw new WsException('自动存档失败，请稍后重试。');
       }
 
       client.emit('conversation_saved', {
@@ -266,10 +308,9 @@ export class GameGateway implements OnGatewayConnection {
         filename: result.filename,
         snapshotIndex: result.snapshotIndex,
         savedAt: result.savedAt,
-        chapter_state: this.conversationService.getChapterState(
-          playerId,
-          npcId,
-        ),
+        chapter_state: result.chapterState,
+        scope: result.scope,
+        world_changed: result.worldChanged,
       });
     });
   }
@@ -318,7 +359,7 @@ export class GameGateway implements OnGatewayConnection {
         snapshotIndex,
       );
 
-      this.npcService.updateRuntimeState(playerId, npcId, restored.npcState);
+      this.emitAllNpcStates(client, playerId);
 
       client.emit('conversation_loaded', {
         npcId,
@@ -330,15 +371,12 @@ export class GameGateway implements OnGatewayConnection {
           chapter_state: restored.chapterState,
           story_flags: restored.storyFlags,
         },
+        scope: restored.scope,
+        restored_npc_ids: restored.restoredNpcIds,
       });
-
       client.emit(
-        'npc_state_update',
-        this.buildStatePayload(
-          playerId,
-          npcId,
-          restored.npcState.current_status,
-        ),
+        'story_map',
+        this.conversationService.buildStoryMap(playerId, npcId),
       );
     });
   }
@@ -388,14 +426,7 @@ export class GameGateway implements OnGatewayConnection {
           chapter_state: result.chapterState,
           story_flags: result.storyFlags,
         });
-        client.emit(
-          'npc_state_update',
-          this.buildStatePayload(
-            playerId,
-            npcId,
-            result.npcState.current_status,
-          ),
-        );
+        this.emitAllNpcStates(client, playerId);
         client.emit('story_map', this.conversationService.buildStoryMap(playerId, npcId));
         const archives = await this.conversationService.listArchives(
           playerId,

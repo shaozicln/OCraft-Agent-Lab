@@ -1,0 +1,107 @@
+.chapter-cue {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  background: #020617;
+  opacity: 0;
+}
+
+.chapter-cue[data-phase='in'],
+.chapter-cue[data-phase='hold'] {
+  opacity: 1;
+  transition: opacity 480ms ease;
+}
+
+.chapter-cue[data-phase='out'] {
+  opacity: 0;
+  transition: opacity 640ms ease;
+}
+
+.chapter-cue__veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      70% 55% at 50% 45%,
+      color-mix(in srgb, var(--ui-accent, #38bdf8) 14%, transparent),
+      transparent 70%
+    ),
+    #020617;
+}
+
+.chapter-cue__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 11vh;
+  min-height: 2.5rem;
+  background: #000;
+}
+
+.chapter-cue__bar--top {
+  top: 0;
+}
+
+.chapter-cue__bar--bottom {
+  bottom: 0;
+}
+
+.chapter-cue__copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0 1.5rem;
+  text-align: center;
+  color: #f1f5f9;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.chapter-cue[data-phase='hold'] .chapter-cue__copy,
+.chapter-cue[data-phase='in'] .chapter-cue__copy {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 520ms ease 180ms,
+    transform 520ms ease 180ms;
+}
+
+.chapter-cue[data-phase='out'] .chapter-cue__copy {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+.chapter-cue__kicker {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ui-accent, #38bdf8) 85%, #e2e8f0);
+}
+
+.chapter-cue__title {
+  max-width: 22rem;
+  font-size: clamp(1.35rem, 3.2vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  color: #f8fafc;
+}
+
+.chapter-cue__rule {
+  width: 3.5rem;
+  height: 1px;
+  margin-top: 0.15rem;
+  background: color-mix(in srgb, var(--ui-accent, #38bdf8) 55%, transparent);
+}

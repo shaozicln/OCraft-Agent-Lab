@@ -78,7 +78,7 @@ export function ChatLoadPanel({
       />
       <div className="relative flex max-h-72 w-full max-w-md flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-700 px-4 py-2">
-          <span className="text-sm font-medium text-white">读档</span>
+          <span className="text-sm font-medium text-white">整局存档</span>
           <div className="flex items-center gap-2">
             {onNewRunFromStart && (
               <button
@@ -87,7 +87,7 @@ export function ChatLoadPanel({
                 onClick={() => {
                   if (
                     window.confirm(
-                      '新建独立存档槽并从第一章开始？当前进度会留在旧槽，本局将重置。',
+                      '新建一局存档槽并从第一章开始？之后每轮对话都会自动写入这个新槽；旧槽仍可在列表读回。',
                     )
                   ) {
                     onNewRunFromStart();
@@ -118,7 +118,9 @@ export function ChatLoadPanel({
             <p className="py-2 text-center text-sm text-red-400">{error}</p>
           )}
           {!loading && !error && archives?.length === 0 && (
-            <p className="py-4 text-center text-sm text-slate-500">暂无存档</p>
+            <p className="py-4 text-center text-sm text-slate-500">
+              暂无存档槽。开聊后会自动创建并每轮写入；也可点右上角「新开一局」。
+            </p>
           )}
           {archives?.map((archive) => (
             <div
@@ -139,6 +141,9 @@ export function ChatLoadPanel({
               >
                 <span className="font-medium text-white">
                   {titleOf(archive)}
+                </span>
+                <span className="ml-2 rounded bg-emerald-950 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                  自动保存
                 </span>
                 {archive.display_name ? (
                   <span className="ml-2 text-slate-500">{archive.filename}</span>

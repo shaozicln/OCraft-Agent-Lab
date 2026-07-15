@@ -109,19 +109,17 @@ export function useGameSocket(
     });
 
     socket.on('conversation_saved', (data: ConversationSavedEvent) => {
-      if (data.npcId !== activeNpcIdRef.current) return;
+      // 整局自动存：刷新徽章（不限当前聊天 NPC）
       setLastSaved(data);
       setSaveError(null);
     });
 
     socket.on('conversation_archives_list', (data: ConversationArchivesListEvent) => {
-      if (data.npcId !== activeNpcIdRef.current) return;
       setArchivesList(data.archives);
       setLoadError(null);
     });
 
     socket.on('conversation_loaded', (data: ConversationLoadedEvent) => {
-      if (data.npcId !== activeNpcIdRef.current) return;
       setLoadedConversation(data);
       setLoadError(null);
       setStreamText('');
@@ -129,6 +127,28 @@ export function useGameSocket(
       setSuggestions(null);
       setSuggestionsLoading(false);
       setSuggestionsError(null);
+      // 同步世界章/旗到进度订阅键（可能与 focus 不同）
+      setNpcStates((prev) => ({
+        ...prev,
+        [progressNpcId]: {
+          ...(prev[progressNpcId] ?? {
+            npcId: progressNpcId,
+            affinity: 0,
+            fatigue: 0,
+          }),
+          chapter_state: data.npc_state.chapter_state,
+          story_flags: data.npc_state.story_flags ?? {},
+        },
+        [data.npcId]: {
+          ...(prev[data.npcId] ?? {
+            npcId: data.npcId,
+            affinity: data.npc_state.affinity,
+            fatigue: data.npc_state.fatigue,
+          }),
+          ...data.npc_state,
+          npcId: data.npcId,
+        },
+      }));
     });
 
     socket.on('story_map', (data: StoryMapEvent) => {
@@ -136,24 +156,31 @@ export function useGameSocket(
     });
 
     socket.on('new_run_started', (data: NewRunStartedEvent) => {
-      if (data.npcId !== activeNpcIdRef.current) return;
       setLastNewRun(data);
       setStreamText('');
       setIsStreaming(false);
       setLoadedConversation(null);
       setSuggestions(null);
-      setNpcStates((prev) => ({
-        ...prev,
-        [data.npcId]: {
-          ...(prev[data.npcId] ?? {
-            npcId: data.npcId,
+      setNpcStates((prev) => {
+        const next = { ...prev };
+        const applyWorld = (id: string) => {
+          next[id] = {
+            ...(next[id] ?? {
+              npcId: id,
+              affinity: 0,
+              fatigue: 0,
+            }),
+            npcId: id,
             affinity: 0,
             fatigue: 0,
-          }),
-          chapter_state: data.chapter_state,
-          story_flags: data.story_flags,
-        },
-      }));
+            chapter_state: data.chapter_state,
+            story_flags: data.story_flags,
+          };
+        };
+        applyWorld(data.npcId);
+        applyWorld(progressNpcId);
+        return next;
+      });
     });
 
     socket.on('archive_renamed', (data: ArchiveRenamedEvent) => {

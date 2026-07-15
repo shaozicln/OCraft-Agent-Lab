@@ -15,12 +15,12 @@ async function bootstrap() {
     origin: isDev
       ? true
       : (process.env.CLIENT_ORIGIN?.split(',').map((s) => s.trim()) ?? [
-          'http://localhost:3000',
+          'http://localhost:3300',
         ]),
     credentials: true,
   });
 
-  const port = process.env.PORT ?? 3010;
+  const port = process.env.PORT ?? 4000;
   await app.listen(port);
   console.log(`Game server listening on http://localhost:${port}`);
 }

@@ -106,6 +106,40 @@ export const archivedMessageSchema = z.object({
   at: z.string(),
 });
 
+/** 存档作用域：run=一局世界；npc=旧版单人会话 */
+export const archiveScopeSchema = z.enum(['run', 'npc']);
+export type ArchiveScope = z.infer<typeof archiveScopeSchema>;
+
+/** 一局档里单个 NPC 的子快照 */
+export const archivedNpcSlotSchema = z.object({
+  affinity: z.number(),
+  fatigue: z.number(),
+  current_status: z.string(),
+  story_flags: storyFlagsSnapshotSchema.default({}),
+  messages: z.array(archivedMessageSchema).default([]),
+});
+export type ArchivedNpcSlot = z.infer<typeof archivedNpcSlotSchema>;
+
+/**
+ * 存档快照 v2（一局一档）
+ * 仍在 DB 的 npc_state/messages 列写入「焦点 NPC」镜像，便于旧列表预览；
+ * 完整数据在 payload / 或解析时从本结构还原。
+ */
+export const conversationSnapshotV2Schema = z.object({
+  schema_version: z.literal(2),
+  saved_at: z.string(),
+  focus_npc_id: z.string().min(1),
+  world: z.object({
+    chapter_state: chapterStateSchema,
+    story_flags: storyFlagsSnapshotSchema.default({}),
+  }),
+  /** 焦点镜像（兼容旧列表/旧客户端） */
+  npc_state: archivedNpcStateSchema,
+  messages: z.array(archivedMessageSchema),
+  npcs: z.record(z.string(), archivedNpcSlotSchema),
+});
+export type ConversationSnapshotV2 = z.infer<typeof conversationSnapshotV2Schema>;
+
 export const conversationSnapshotSummarySchema = z.object({
   index: z.number().int(),
   saved_at: z.string(),
@@ -118,6 +152,8 @@ export const conversationArchiveSummarySchema = z.object({
   /** 自定义显示名；缺省时前端用 filename */
   display_name: z.string().optional(),
   session_started_at: z.string(),
+  /** 缺省视为旧版单人档 */
+  scope: archiveScopeSchema.optional(),
   snapshots: z.array(conversationSnapshotSummarySchema),
 });
 
@@ -128,6 +164,12 @@ export const conversationSavedEventSchema = z.object({
   savedAt: z.string(),
   /** 存档时章节 id */
   chapter_state: chapterStateSchema.optional(),
+  scope: archiveScopeSchema.optional(),
+  /**
+   * 本轮是否因章/世界旗变化而写入（前端仅此时插系统提示，避免每轮刷屏）。
+   * 缺省视为 true，兼容旧服务端。
+   */
+  world_changed: z.boolean().optional(),
 });
 
 export const conversationArchivesListEventSchema = z.object({
@@ -141,6 +183,9 @@ export const conversationLoadedEventSchema = z.object({
   snapshotIndex: z.number().int(),
   messages: z.array(archivedMessageSchema),
   npc_state: archivedNpcStateSchema,
+  scope: archiveScopeSchema.optional(),
+  /** 一局档：一并恢复的其他 NPC id（便于前端拉状态） */
+  restored_npc_ids: z.array(z.string()).optional(),
 });
 
 /** 新开一局 / 从某章或某分歧回溯为新存档槽 */

@@ -1,30 +1,62 @@
 'use client';
 
 import type { StoryMapEdge, StoryMapEvent } from '@ocraft/shared';
-import { useEffect, useMemo, useState } from 'react';
+import {
+  Background,
+  BaseEdge,
+  Controls,
+  EdgeLabelRenderer,
+  Handle,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  getBezierPath,
+  useEdgesState,
+  useNodesState,
+  type Edge,
+  type EdgeProps,
+  type Node,
+  type NodeProps,
+} from '@xyflow/react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTheme } from '@/theme/ThemeProvider';
+import '@xyflow/react/dist/style.css';
+import './story-progress.css';
 
 type RestartTarget =
   | { kind: 'chapter'; chapterId: string; label: string }
   | { kind: 'edge'; ruleId: string; label: string; toLabel: string };
 
-const NODE_W = 148;
-const NODE_H = 72;
-const GAP_X = 96;
-const PAD_X = 64;
-const LANE_H = 120;
+const NODE_W = 176;
+const NODE_H = 90;
+const GAP_X = 120;
+const PAD_X = 48;
+const LANE_H = 140;
+
+type ChapterNodeData = {
+  rank: number;
+  displayName: string;
+  active: boolean;
+  busy?: boolean;
+  onSelect: () => void;
+};
+
+type StubNodeData = Record<string, never>;
+
+type StoryEdgeData = {
+  label: string;
+  related: boolean;
+  busy?: boolean;
+  onSelect: () => void;
+};
 
 function chapterShort(map: StoryMapEvent, id: string): string {
   const c = map.chapters.find((x) => x.id === id);
   return c ? `第${c.rank + 1}章：${c.display_name}` : id;
 }
 
-function shortEdgeLabel(label: string, max = 12): string {
-  const t = label.replace(/\s+/g, ' ').trim();
-  return t.length > max ? `${t.slice(0, max)}…` : t;
-}
-
-type Pos = { x: number; y: number; cx: number; cy: number; lane: number; col: number };
+type Pos = { x: number; y: number; lane: number; col: number };
 
 function buildLayout(map: StoryMapEvent) {
   const chapters = [...map.chapters].sort((a, b) => a.rank - b.rank);
@@ -53,7 +85,6 @@ function buildLayout(map: StoryMapEvent) {
             : i % 2 === 1
               ? Math.ceil(i / 2)
               : -Math.ceil(i / 2);
-      // 已有非 0 则保留更靠外的
       const prev = laneOf.get(to) ?? 0;
       if (prev === 0 || Math.abs(lane) > Math.abs(prev)) {
         laneOf.set(to, lane);
@@ -61,7 +92,6 @@ function buildLayout(map: StoryMapEvent) {
     });
   }
 
-  // 单入边继承来源 lane（合流前支线保持高度）
   for (const e of map.edges) {
     if (!e.to) continue;
     const siblings = (outs.get(e.from) ?? []).filter((x) => x.to);
@@ -73,63 +103,315 @@ function buildLayout(map: StoryMapEvent) {
   }
 
   const maxLane = Math.max(1, ...[...laneOf.values()].map((v) => Math.abs(v)));
-  const centerY = PAD_X + maxLane * LANE_H + NODE_H / 2;
+  const centerY = PAD_X + maxLane * LANE_H;
 
   const positions = new Map<string, Pos>();
   for (const c of chapters) {
     const col = colOf.get(c.id) ?? 0;
     const lane = laneOf.get(c.id) ?? 0;
-    const x = PAD_X + col * (NODE_W + GAP_X);
-    const y = centerY + lane * LANE_H - NODE_H / 2;
     positions.set(c.id, {
-      x,
-      y,
-      cx: x + NODE_W / 2,
-      cy: y + NODE_H / 2,
+      x: PAD_X + col * (NODE_W + GAP_X),
+      y: centerY + lane * LANE_H - NODE_H / 2,
       lane,
       col,
     });
   }
 
-  const width =
-    PAD_X * 2 +
-    chapters.length * NODE_W +
-    Math.max(chapters.length - 1, 0) * GAP_X;
-  const height = centerY + maxLane * LANE_H + NODE_H / 2 + PAD_X;
-
-  return { chapters, positions, width, height, centerY };
+  return { chapters, positions, centerY, laneOf };
 }
 
-function edgePath(
-  from: Pos,
-  to: Pos | null,
-  stubLane: number,
-): { d: string; midX: number; midY: number } {
-  const x1 = from.x + NODE_W;
-  const y1 = from.cy;
-  if (!to) {
-    const x2 = x1 + GAP_X * 0.45;
-    const y2 = y1 + stubLane * 28;
-    const midX = (x1 + x2) / 2;
-    const midY = (y1 + y2) / 2;
+const ChapterNode = memo(function ChapterNode({
+  data,
+}: NodeProps<Node<ChapterNodeData>>) {
+  return (
+    <div
+      className="story-node-shell"
+      style={{ width: NODE_W, height: NODE_H }}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="story-handle"
+        isConnectable={false}
+      />
+      <button
+        type="button"
+        className="story-node story-node--flow"
+        data-active={data.active ? 'true' : 'false'}
+        disabled={data.busy}
+        onClick={(e) => {
+          e.stopPropagation();
+          data.onSelect();
+        }}
+      >
+        <span className="story-node__rank">
+          {String(data.rank + 1).padStart(2, '0')}
+          {data.active ? ' · NOW' : ''}
+        </span>
+        <span className="story-node__name">{data.displayName}</span>
+        {data.active && <span className="story-node__now" />}
+      </button>
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="story-handle"
+        isConnectable={false}
+      />
+    </div>
+  );
+});
+
+const StubNode = memo(function StubNode(_props: NodeProps<Node<StubNodeData>>) {
+  return (
+    <div className="story-stub-node" aria-hidden>
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="story-handle"
+        isConnectable={false}
+      />
+    </div>
+  );
+});
+
+function StoryEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  markerEnd,
+}: EdgeProps<Edge<StoryEdgeData>>) {
+  const [hover, setHover] = useState(false);
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+  });
+  const hot = hover || Boolean(data?.related);
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          stroke: hot
+            ? 'var(--ui-accent)'
+            : 'color-mix(in srgb, var(--ui-fg-muted) 55%, transparent)',
+          strokeOpacity: hot ? 0.9 : 1,
+          strokeWidth: hot ? 2.5 : 1.75,
+          transition: 'stroke 160ms ease, stroke-width 160ms ease',
+        }}
+      />
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={18}
+        strokeLinecap="round"
+        className="react-flow__edge-interaction"
+        style={{ cursor: data?.busy ? 'not-allowed' : 'pointer' }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={() => {
+          if (data?.busy) return;
+          data?.onSelect();
+        }}
+      />
+      {hover && data?.label && (
+        <EdgeLabelRenderer>
+          <div
+            className="story-edge-tip"
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, calc(-100% - 10px)) translate(${labelX}px, ${labelY}px)`,
+              pointerEvents: 'none',
+            }}
+            role="tooltip"
+          >
+            {data.label}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const nodeTypes = {
+  chapter: ChapterNode,
+  stub: StubNode,
+};
+
+const edgeTypes = {
+  story: StoryEdge,
+};
+
+function mapToFlow(
+  map: StoryMapEvent,
+  busy: boolean | undefined,
+  onChapter: (chapterId: string, label: string) => void,
+  onEdge: (ruleId: string, label: string, toLabel: string) => void,
+): { nodes: Node[]; edges: Edge[] } {
+  const { chapters, positions, laneOf } = buildLayout(map);
+  const related = new Set(
+    map.edges
+      .filter((e) => e.from === map.current_chapter || e.to === map.current_chapter)
+      .map((e) => e.id),
+  );
+
+  const nodes: Node[] = chapters.map((c) => {
+    const pos = positions.get(c.id)!;
     return {
-      d: `M ${x1} ${y1} Q ${midX} ${y1}, ${x2} ${y2}`,
-      midX,
-      midY,
+      id: c.id,
+      type: 'chapter',
+      position: { x: pos.x, y: pos.y },
+      data: {
+        rank: c.rank,
+        displayName: c.display_name,
+        active: c.id === map.current_chapter,
+        busy,
+        onSelect: () => onChapter(c.id, chapterShort(map, c.id)),
+      } satisfies ChapterNodeData,
+      draggable: false,
+      selectable: false,
     };
+  });
+
+  const edges: Edge[] = [];
+  const stubsByFrom = new Map<string, StoryMapEdge[]>();
+  for (const e of map.edges) {
+    if (e.to) continue;
+    const list = stubsByFrom.get(e.from) ?? [];
+    list.push(e);
+    stubsByFrom.set(e.from, list);
   }
-  const x2 = to.x;
-  const y2 = to.cy;
-  const dx = Math.max(x2 - x1, 40);
-  const c1x = x1 + dx * 0.4;
-  const c2x = x2 - dx * 0.4;
-  const midX = (x1 + x2) / 2;
-  const midY = (y1 + y2) / 2;
-  return {
-    d: `M ${x1} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${x2} ${y2}`,
-    midX,
-    midY,
-  };
+
+  for (const [fromId, stubs] of stubsByFrom) {
+    const fromPos = positions.get(fromId);
+    if (!fromPos) continue;
+    stubs.forEach((edge, stubIdx) => {
+      const stubLane = stubIdx % 2 === 0 ? 1 : -1;
+      const stubId = `stub:${edge.id}`;
+      nodes.push({
+        id: stubId,
+        type: 'stub',
+        position: {
+          x: fromPos.x + NODE_W + GAP_X * 0.42,
+          y: fromPos.y + NODE_H / 2 - 6 + stubLane * 28,
+        },
+        data: {},
+        draggable: false,
+        selectable: false,
+      });
+      edges.push({
+        id: edge.id,
+        type: 'story',
+        source: fromId,
+        target: stubId,
+        data: {
+          label: edge.label,
+          related: related.has(edge.id),
+          busy,
+          onSelect: () => onEdge(edge.id, edge.label, '（同章置 flag）'),
+        } satisfies StoryEdgeData,
+      });
+    });
+  }
+
+  for (const edge of map.edges) {
+    if (!edge.to) continue;
+    edges.push({
+      id: edge.id,
+      type: 'story',
+      source: edge.from,
+      target: edge.to,
+      data: {
+        label: edge.label,
+        related: related.has(edge.id),
+        busy,
+        onSelect: () =>
+          onEdge(edge.id, edge.label, chapterShort(map, edge.to!)),
+      } satisfies StoryEdgeData,
+    });
+  }
+
+  void laneOf;
+  return { nodes, edges };
+}
+
+function StoryFlowCanvas({
+  map,
+  busy,
+  onChapter,
+  onEdge,
+}: {
+  map: StoryMapEvent;
+  busy?: boolean;
+  onChapter: (chapterId: string, label: string) => void;
+  onEdge: (ruleId: string, label: string, toLabel: string) => void;
+}) {
+  const graph = useMemo(
+    () => mapToFlow(map, busy, onChapter, onEdge),
+    [map, busy, onChapter, onEdge],
+  );
+  const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
+
+  useEffect(() => {
+    setNodes(graph.nodes);
+    setEdges(graph.edges);
+  }, [graph, setNodes, setEdges]);
+
+  const { theme } = useTheme();
+
+  const onInit = useCallback((instance: { fitView: (opts?: object) => void }) => {
+    // 容器量完尺寸后再 fit，避免首帧高度为 0 导致空白
+    requestAnimationFrame(() => {
+      instance.fitView({ padding: 0.22, duration: 200 });
+    });
+  }, []);
+
+  return (
+    <div className="story-flow-host" data-ui-theme={theme}>
+      <ReactFlow
+        className="story-flow"
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onInit={onInit}
+        fitView
+        fitViewOptions={{ padding: 0.22 }}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.85 }}
+        minZoom={0.25}
+        maxZoom={1.75}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+        panOnScroll
+        zoomOnDoubleClick={false}
+        proOptions={{ hideAttribution: true }}
+        colorMode={theme}
+      >
+        <Background
+          gap={24}
+          size={1.1}
+          color="color-mix(in srgb, var(--ui-fg-muted) 22%, transparent)"
+        />
+        <Controls showInteractive={false} className="story-flow__controls" />
+      </ReactFlow>
+    </div>
+  );
 }
 
 /** Esc：按钮；点开整屏留缝故事线弹窗 */
@@ -154,30 +436,20 @@ export function StoryProgressMap({
     <>
       <button
         type="button"
-        className="group w-full rounded-xl border px-3 py-2.5 text-left transition hover:brightness-[1.03]"
-        style={{
-          borderColor: 'var(--ui-border)',
-          background: 'var(--ui-bg-elevated)',
-          color: 'var(--ui-fg)',
-        }}
+        className="story-entry"
         onClick={() => {
           onOpen?.();
           setOpen(true);
         }}
       >
-        <span className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium">剧情进度</span>
-          <span
-            className="text-xs transition group-hover:translate-x-0.5"
-            style={{ color: 'var(--ui-accent)' }}
-          >
-            打开 →
+        <span className="story-entry__row">
+          <span>
+            <span className="story-entry__eyebrow">Storyline</span>
+            <span className="story-entry__title block">剧情进度</span>
           </span>
+          <span className="story-entry__go">打开 →</span>
         </span>
-        <span
-          className="mt-0.5 block text-xs"
-          style={{ color: 'var(--ui-fg-muted)' }}
-        >
+        <span className="story-entry__lead">
           横向故事线 · 分歧支点 · 新开存档
         </span>
       </button>
@@ -217,7 +489,6 @@ function StorylineModal({
 }) {
   const [pending, setPending] = useState<RestartTarget | null>(null);
   const [slotName, setSlotName] = useState('');
-  const [hoverEdge, setHoverEdge] = useState<string | null>(null);
   const [entered, setEntered] = useState(false);
 
   useEffect(() => {
@@ -227,35 +498,39 @@ function StorylineModal({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (pending) {
-          setPending(null);
-          setSlotName('');
-        } else {
-          onClose();
-        }
+      if (e.key !== 'Escape') return;
+      if (pending) {
+        setPending(null);
+        setSlotName('');
+      } else {
+        onClose();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, pending]);
 
-  const layout = useMemo(() => (map ? buildLayout(map) : null), [map]);
-
   const flagList = useMemo(() => {
     if (!map) return [];
     return Object.entries(map.flags).filter(([, v]) => v && v !== 'false');
   }, [map]);
 
-  const relatedEdgeIds = useMemo(() => {
-    if (!map) return new Set<string>();
-    const cur = map.current_chapter;
-    return new Set(
-      map.edges
-        .filter((e) => e.from === cur || e.to === cur)
-        .map((e) => e.id),
-    );
-  }, [map]);
+  const firstChapter = map
+    ? [...map.chapters].sort((a, b) => a.rank - b.rank)[0]
+    : undefined;
+
+  const onChapter = useCallback((chapterId: string, label: string) => {
+    setPending({ kind: 'chapter', chapterId, label });
+    setSlotName('');
+  }, []);
+
+  const onEdge = useCallback(
+    (ruleId: string, label: string, toLabel: string) => {
+      setPending({ kind: 'edge', ruleId, label, toLabel });
+      setSlotName('');
+    },
+    [],
+  );
 
   const confirm = () => {
     if (!pending) return;
@@ -269,13 +544,9 @@ function StorylineModal({
     setSlotName('');
   };
 
-  const firstChapter = map
-    ? [...map.chapters].sort((a, b) => a.rank - b.rank)[0]
-    : undefined;
-
   return (
     <div
-      className="fixed inset-0 z-[200] flex p-4 sm:p-6 md:p-8"
+      className="story-modal-root"
       style={{
         background: entered ? 'rgba(8,10,14,0.58)' : 'rgba(8,10,14,0)',
         backdropFilter: entered ? 'blur(6px)' : 'blur(0px)',
@@ -289,44 +560,33 @@ function StorylineModal({
       }}
     >
       <div
-        className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border shadow-2xl"
+        className="story-modal"
         style={{
-          background: 'var(--ui-panel-solid)',
-          borderColor: 'var(--ui-border)',
-          color: 'var(--ui-fg)',
           opacity: entered ? 1 : 0,
-          transform: entered ? 'translateY(0) scale(1)' : 'translateY(10px) scale(0.985)',
-          transition: 'opacity 240ms ease, transform 280ms cubic-bezier(.22,1,.36,1)',
+          transform: entered
+            ? 'translateY(0) scale(1)'
+            : 'translateY(10px) scale(0.985)',
+          transition:
+            'opacity 240ms ease, transform 280ms cubic-bezier(.22,1,.36,1)',
         }}
       >
-        <header
-          className="flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4 sm:px-6"
-          style={{ borderColor: 'var(--ui-border)' }}
-        >
+        <header className="story-modal__head">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold tracking-tight">故事线</h2>
-              {map && (
-                <span
-                  className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                  style={{
-                    background:
-                      'color-mix(in srgb, var(--ui-accent) 16%, transparent)',
-                    color: 'var(--ui-accent)',
-                  }}
-                >
-                  {chapterShort(map, map.current_chapter)}
-                </span>
-              )}
-            </div>
-            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--ui-fg-muted)' }}>
+            <p className="story-modal__eyebrow">Storyboard</p>
+            <h2 className="story-modal__title">故事线</h2>
+            {map && (
+              <span className="story-modal__badge">
+                {chapterShort(map, map.current_chapter)}
+              </span>
+            )}
+            <p className="story-modal__lead">
               {map
                 ? flagList.length > 0
                   ? `已置 flag：${flagList.map(([k]) => k).join(' · ')}`
                   : '尚未置任何剧情 flag'
                 : '正在同步进度…'}
               <span className="mx-1.5 opacity-40">|</span>
-              点击章节或支点，可从该处分叉新开存档
+              拖拽平移 / 滚轮缩放；悬停连线看分歧；点击章节或支点可新开存档
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -334,11 +594,7 @@ function StorylineModal({
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-lg border px-3 py-2 text-xs font-medium transition hover:brightness-110 disabled:opacity-50"
-                style={{
-                  borderColor: 'var(--ui-border)',
-                  color: 'var(--ui-accent)',
-                }}
+                className="story-modal__btn disabled:opacity-50"
                 onClick={() => {
                   setPending({
                     kind: 'chapter',
@@ -353,8 +609,7 @@ function StorylineModal({
             )}
             <button
               type="button"
-              className="rounded-lg px-3 py-2 text-xs transition hover:opacity-80"
-              style={{ color: 'var(--ui-fg-muted)' }}
+              className="story-modal__btn story-modal__btn--ghost"
               onClick={onClose}
             >
               关闭 Esc
@@ -362,14 +617,8 @@ function StorylineModal({
           </div>
         </header>
 
-        <div
-          className="relative min-h-0 flex-1 overflow-auto"
-          style={{
-            background:
-              'radial-gradient(1200px 480px at 20% 40%, color-mix(in srgb, var(--ui-accent) 7%, transparent), transparent 60%), var(--ui-panel-solid)',
-          }}
-        >
-          {!map || !layout ? (
+        <div className="story-modal__canvas story-modal__canvas--flow">
+          {!map ? (
             <div
               className="flex h-full min-h-[280px] items-center justify-center text-sm"
               style={{ color: 'var(--ui-fg-muted)' }}
@@ -380,187 +629,18 @@ function StorylineModal({
               </span>
             </div>
           ) : (
-            <div
-              className="relative mx-auto my-8"
-              style={{
-                width: Math.max(layout.width, 640),
-                height: Math.max(layout.height, 320),
-                minWidth: '100%',
-              }}
-            >
-              <svg
-                className="pointer-events-none absolute inset-0"
-                width={Math.max(layout.width, 640)}
-                height={Math.max(layout.height, 320)}
-                aria-hidden
-              >
-                <defs>
-                  <linearGradient id="story-edge" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="var(--ui-accent)" stopOpacity="0.15" />
-                    <stop offset="50%" stopColor="var(--ui-accent)" stopOpacity="0.55" />
-                    <stop offset="100%" stopColor="var(--ui-accent)" stopOpacity="0.15" />
-                  </linearGradient>
-                </defs>
-
-                {/* 主轴参考 */}
-                <line
-                  x1={PAD_X - 8}
-                  y1={layout.centerY}
-                  x2={layout.width - PAD_X + 8}
-                  y2={layout.centerY}
-                  stroke="currentColor"
-                  strokeOpacity={0.08}
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                />
-
-                {map.edges.map((edge, ei) => {
-                  const from = layout.positions.get(edge.from);
-                  if (!from) return null;
-                  const to = edge.to ? layout.positions.get(edge.to) : null;
-                  const stubs = map.edges.filter(
-                    (e) => e.from === edge.from && !e.to,
-                  );
-                  const stubIdx = stubs.indexOf(edge);
-                  const stubLane = stubIdx < 0 ? 0 : stubIdx % 2 === 0 ? 1 : -1;
-                  const { d, midX, midY } = edgePath(from, to, stubLane);
-                  const hot =
-                    hoverEdge === edge.id || relatedEdgeIds.has(edge.id);
-                  return (
-                    <g key={edge.id} className="pointer-events-auto">
-                      <path
-                        d={d}
-                        fill="none"
-                        stroke={hot ? 'url(#story-edge)' : 'currentColor'}
-                        strokeOpacity={hot ? 1 : 0.22}
-                        strokeWidth={hot ? 3 : 2}
-                        strokeLinecap="round"
-                        style={{
-                          transition:
-                            'stroke-opacity 160ms ease, stroke-width 160ms ease',
-                          animation: entered
-                            ? `story-draw 520ms ease ${ei * 40}ms both`
-                            : undefined,
-                        }}
-                      />
-                      <g
-                        className="cursor-pointer"
-                        onMouseEnter={() => setHoverEdge(edge.id)}
-                        onMouseLeave={() => setHoverEdge(null)}
-                        onClick={() => {
-                          if (busy) return;
-                          setPending({
-                            kind: 'edge',
-                            ruleId: edge.id,
-                            label: edge.label,
-                            toLabel: edge.to
-                              ? chapterShort(map, edge.to)
-                              : '（同章置 flag）',
-                          });
-                          setSlotName('');
-                        }}
-                      >
-                        <rect
-                          x={midX - 52}
-                          y={midY - 14}
-                          width={104}
-                          height={28}
-                          rx={14}
-                          fill="var(--ui-panel-solid)"
-                          stroke={
-                            hot ? 'var(--ui-accent)' : 'var(--ui-border)'
-                          }
-                          strokeWidth={hot ? 1.5 : 1}
-                          style={{ transition: 'stroke 160ms ease' }}
-                        />
-                        <text
-                          x={midX}
-                          y={midY + 4}
-                          textAnchor="middle"
-                          fontSize={10}
-                          fill="currentColor"
-                          opacity={0.75}
-                        >
-                          {shortEdgeLabel(edge.label)}
-                        </text>
-                      </g>
-                    </g>
-                  );
-                })}
-              </svg>
-
-              {layout.chapters.map((ch, i) => {
-                const pos = layout.positions.get(ch.id)!;
-                const active = ch.id === map.current_chapter;
-                return (
-                  <button
-                    key={ch.id}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      setPending({
-                        kind: 'chapter',
-                        chapterId: ch.id,
-                        label: chapterShort(map, ch.id),
-                      });
-                      setSlotName('');
-                    }}
-                    className="absolute flex flex-col items-stretch justify-center rounded-2xl border px-3 py-2 text-left transition disabled:opacity-50"
-                    style={{
-                      left: pos.x,
-                      top: pos.y,
-                      width: NODE_W,
-                      height: NODE_H,
-                      borderColor: active
-                        ? 'var(--ui-accent)'
-                        : 'var(--ui-border)',
-                      background: active
-                        ? 'color-mix(in srgb, var(--ui-accent) 14%, var(--ui-panel-solid))'
-                        : 'var(--ui-bg-elevated)',
-                      boxShadow: active
-                        ? '0 8px 28px color-mix(in srgb, var(--ui-accent) 22%, transparent)'
-                        : '0 4px 14px rgba(0,0,0,0.06)',
-                      animation: entered
-                        ? `story-node-in 420ms cubic-bezier(.22,1,.36,1) ${80 + i * 45}ms both`
-                        : undefined,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
-                  >
-                    <span
-                      className="text-[10px] font-medium tracking-wide uppercase"
-                      style={{ color: 'var(--ui-fg-muted)' }}
-                    >
-                      Chapter {ch.rank + 1}
-                      {active ? ' · Now' : ''}
-                    </span>
-                    <span className="mt-0.5 truncate text-sm font-semibold leading-snug">
-                      {ch.display_name}
-                    </span>
-                    {active && (
-                      <span
-                        className="mt-1 h-1 w-8 rounded-full"
-                        style={{ background: 'var(--ui-accent)' }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            <ReactFlowProvider>
+              <StoryFlowCanvas
+                map={map}
+                busy={busy}
+                onChapter={onChapter}
+                onEdge={onEdge}
+              />
+            </ReactFlowProvider>
           )}
         </div>
 
-        <footer
-          className="flex shrink-0 flex-wrap items-center gap-4 border-t px-5 py-3 text-[11px] sm:px-6"
-          style={{
-            borderColor: 'var(--ui-border)',
-            color: 'var(--ui-fg-muted)',
-          }}
-        >
+        <footer className="story-modal__foot">
           <span className="inline-flex items-center gap-1.5">
             <span
               className="h-2.5 w-2.5 rounded-full"
@@ -570,10 +650,10 @@ function StorylineModal({
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span
-              className="h-2.5 w-6 rounded-full border"
+              className="h-2.5 w-6 rounded-sm border"
               style={{ borderColor: 'var(--ui-accent)' }}
             />
-            分歧支点（可点）
+            分歧支点（悬停看说明）
           </span>
           <span className="ml-auto opacity-70">点击空白处或 Esc 关闭</span>
         </footer>
@@ -655,21 +735,6 @@ function StorylineModal({
           </div>
         </div>
       )}
-
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-        @keyframes story-node-in {
-          from { opacity: 0; transform: translateY(8px) scale(0.96); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes story-draw {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-      `,
-        }}
-      />
     </div>
   );
 }

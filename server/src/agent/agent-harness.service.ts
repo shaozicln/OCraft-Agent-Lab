@@ -15,7 +15,7 @@ import { RagService } from './rag.service';
 import { AgentTraceService } from './agent-trace.service';
 import { NpcService } from '../npc/npc.service';
 import { ConversationService } from '../game/conversation.service';
-import { StoryFlagService } from '../story/story-flag.service';
+import { WorldProgressService } from '../story/world-progress.service';
 import { PackService } from '../story/pack.service';
 import {
   evaluateChapterTransition,
@@ -40,7 +40,7 @@ export class AgentHarnessService {
     private readonly ragService: RagService,
     private readonly llmService: LlmService,
     private readonly conversationService: ConversationService,
-    private readonly storyFlagService: StoryFlagService,
+    private readonly worldProgress: WorldProgressService,
     private readonly packService: PackService,
     private readonly agentTrace: AgentTraceService,
   ) {}
@@ -52,14 +52,12 @@ export class AgentHarnessService {
   ): Promise<AgentRunResult> {
     const pack = this.packService.getPack();
     const toolCalls: ToolCallResult[] = [];
-    let chapterState = this.conversationService.getChapterState(
-      playerId,
-      npcId,
-    );
+    await this.worldProgress.ensureHydrated(playerId);
+    let chapterState = this.worldProgress.getChapter(playerId);
     const chapterBefore = chapterState;
 
     const preState = this.npcService.getRuntimeState(playerId, npcId);
-    const storyFlagsBefore = this.storyFlagService.getFlags(playerId, npcId);
+    const storyFlagsBefore = this.worldProgress.getFlags(playerId);
     const ragHits = this.ragService.retrieve(
       npcId,
       playerMessage,
@@ -114,7 +112,7 @@ export class AgentHarnessService {
 
     let postToolState = this.npcService.getRuntimeState(playerId, npcId);
 
-    const flags = this.storyFlagService.getFlags(playerId, npcId);
+    const flags = this.worldProgress.getFlags(playerId);
     const transition = evaluateChapterTransition({
       chapterState,
       playerMessage,
@@ -124,11 +122,7 @@ export class AgentHarnessService {
     });
 
     if (transition.flagsToSet.length > 0) {
-      await this.storyFlagService.setFlags(
-        playerId,
-        npcId,
-        transition.flagsToSet,
-      );
+      await this.worldProgress.setFlags(playerId, transition.flagsToSet);
     }
 
     if (transition.chapterState !== chapterState) {
@@ -138,12 +132,12 @@ export class AgentHarnessService {
         transition.chapterState,
       );
       this.logger.log(
-        `Chapter advanced player=${playerId} npc=${npcId} → ${chapterState}`,
+        `Chapter advanced player=${playerId} → ${chapterState} (via chat npc=${npcId})`,
       );
     }
 
     postToolState = this.npcService.getRuntimeState(playerId, npcId);
-    const storyFlags = this.storyFlagService.getFlags(playerId, npcId);
+    const storyFlags = this.worldProgress.getFlags(playerId);
     const systemAfter = this.npcService.buildSystemPrompt(npcId, {
       chapterState,
       affinity: postToolState.affinity,
@@ -227,15 +221,12 @@ export class AgentHarnessService {
     npcId: string,
   ): Promise<string[]> {
     const pack = this.packService.getPack();
-    const chapterState = this.conversationService.getChapterState(
-      playerId,
-      npcId,
-    );
+    const chapterState = this.worldProgress.getChapter(playerId);
     const chapterMeta = pack.world.chapters.find((c) => c.id === chapterState);
     const chapterLabel =
       chapterMeta?.hud_label || chapterMeta?.display_name || chapterState;
     const preState = this.npcService.getRuntimeState(playerId, npcId);
-    const storyFlags = this.storyFlagService.getFlags(playerId, npcId);
+    const storyFlags = this.worldProgress.getFlags(playerId);
     const npcDef = this.npcService.getDefinition(npcId);
     const history = this.conversationService.getRecentTurns(playerId, npcId);
     const recent = history.slice(-8);
@@ -346,11 +337,8 @@ export class AgentHarnessService {
       assistantReply,
     );
 
-    const chapterState = this.conversationService.getChapterState(
-      playerId,
-      npcId,
-    );
-    const flags = this.storyFlagService.getFlags(playerId, npcId);
+    const chapterState = this.worldProgress.getChapter(playerId);
+    const flags = this.worldProgress.getFlags(playerId);
     const replyFlags = evaluateNpcReplyFlags(
       chapterState,
       assistantReply,
@@ -358,7 +346,7 @@ export class AgentHarnessService {
       this.packService.getPack().triggers,
     );
     if (replyFlags.length > 0) {
-      await this.storyFlagService.setFlags(playerId, npcId, replyFlags);
+      await this.worldProgress.setFlags(playerId, replyFlags);
       this.agentTrace.appendReplyFlags(playerId, npcId, replyFlags);
     }
   }

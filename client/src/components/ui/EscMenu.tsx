@@ -1,7 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import type {
   AuthSession,
   PlayerAccount,
@@ -12,6 +18,7 @@ import { resolveProfileFields } from '@ocraft/shared';
 import { apiFetch } from '@/lib/api';
 import { useTheme } from '@/theme/ThemeProvider';
 import { StoryProgressMap } from './StoryProgressMap';
+import './esc-menu.css';
 
 const GENDER_LABEL: Record<string, string> = {
   male: '男',
@@ -19,6 +26,26 @@ const GENDER_LABEL: Record<string, string> = {
   other: '其他',
   undisclosed: '未透露',
 };
+
+const WIDTH_STORAGE_KEY = 'ocraft.escMenu.width';
+const WIDTH_DEFAULT = 320;
+const WIDTH_MIN = 240;
+const WIDTH_MAX = 560;
+
+function clampMenuWidth(px: number) {
+  const maxByViewport =
+    typeof window !== 'undefined'
+      ? Math.min(WIDTH_MAX, Math.floor(window.innerWidth * 0.55))
+      : WIDTH_MAX;
+  return Math.min(maxByViewport, Math.max(WIDTH_MIN, Math.round(px)));
+}
+
+function readStoredWidth() {
+  if (typeof window === 'undefined') return WIDTH_DEFAULT;
+  const raw = window.localStorage.getItem(WIDTH_STORAGE_KEY);
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) ? clampMenuWidth(n) : WIDTH_DEFAULT;
+}
 
 interface EscMenuProps {
   open: boolean;
@@ -61,11 +88,17 @@ export function EscMenu({
   const [editingAccount, setEditingAccount] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [width, setWidth] = useState(WIDTH_DEFAULT);
   const [accountForm, setAccountForm] = useState({
     username: '',
     currentPassword: '',
     newPassword: '',
   });
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    setWidth(readStoredWidth());
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -110,6 +143,35 @@ export function EscMenu({
       cancelled = true;
     };
   }, [open, token, worldId, packVersionId]);
+
+  const onResizePointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      draggingRef.current = true;
+      const handle = e.currentTarget;
+      handle.setPointerCapture(e.pointerId);
+
+      const onMove = (ev: PointerEvent) => {
+        if (!draggingRef.current) return;
+        setWidth(clampMenuWidth(ev.clientX));
+      };
+      const onUp = (ev: PointerEvent) => {
+        draggingRef.current = false;
+        handle.releasePointerCapture(ev.pointerId);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        setWidth((w) => {
+          const next = clampMenuWidth(w);
+          window.localStorage.setItem(WIDTH_STORAGE_KEY, String(next));
+          return next;
+        });
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [],
+  );
 
   if (!open) return null;
 
@@ -174,39 +236,37 @@ export function EscMenu({
         aria-label="关闭菜单"
         onClick={onClose}
       />
-      <aside
-        className="relative z-10 flex h-full w-[min(25vw,20rem)] min-w-[16rem] flex-col border-r shadow-lg backdrop-blur-md"
-        style={{
-          background: 'var(--ui-panel)',
-          borderColor: 'var(--ui-border)',
-          color: 'var(--ui-fg)',
-          boxShadow: 'var(--ui-shadow)',
-        }}
-      >
+      <aside className="esc-rail" style={{ width }}>
         <div
-          className="border-b px-4 py-3"
-          style={{ borderColor: 'var(--ui-border)' }}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="拖拽调整菜单宽度"
+          aria-valuemin={WIDTH_MIN}
+          aria-valuemax={WIDTH_MAX}
+          aria-valuenow={width}
+          onPointerDown={onResizePointerDown}
+          className="esc-rail__resize"
         >
+          <span className="esc-rail__resize-grip" />
+        </div>
+
+        <div className="esc-rail__head">
           <div className="mb-1 flex items-center justify-between gap-2">
-            <p className="text-xs" style={{ color: 'var(--ui-fg-muted)' }}>
-              菜单
-            </p>
+            <p className="esc-rail__eyebrow">OCraft · Menu</p>
             <button
               type="button"
-              className="text-xs"
-              style={{ color: 'var(--ui-accent)' }}
+              className="esc-rail__link"
               onClick={() => setEditingAccount((v) => !v)}
             >
               {editingAccount ? '取消' : '编辑账号'}
             </button>
           </div>
-          <h2 className="text-base font-semibold">
+          <h2 className="esc-rail__title">
             {account?.username ?? username}
           </h2>
-          <p className="mt-0.5 text-xs" style={{ color: 'var(--ui-fg-muted)' }}>
+          <p className="esc-rail__meta">
             UID {account?.id ?? '—'}
-          </p>
-          <p className="mt-0.5 text-xs" style={{ color: 'var(--ui-fg-muted)' }}>
+            {' · '}
             注册{' '}
             {account?.createdAt
               ? new Date(account.createdAt).toLocaleDateString()
@@ -285,7 +345,7 @@ export function EscMenu({
           )}
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
+        <div className="esc-rail__body">
           {error && (
             <p className="text-xs" style={{ color: 'var(--ui-danger)' }}>
               {error}
@@ -294,19 +354,22 @@ export function EscMenu({
 
           <section>
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="font-medium">个人信息</h3>
+              <h3 className="esc-rail__section-label" style={{ marginBottom: 0 }}>
+                个人信息
+              </h3>
               <Link
                 href={editorHref}
-                className="text-xs"
-                style={{ color: 'var(--ui-accent)' }}
+                className="esc-rail__link"
                 onClick={onClose}
               >
                 编辑
               </Link>
             </div>
-            <dl className="space-y-1 text-xs">
+            <dl className="space-y-1.5 text-sm">
               {profileFields.length === 0 && (
-                <p style={{ color: 'var(--ui-fg-muted)' }}>暂无本世界人设</p>
+                <p className="text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
+                  暂无本世界人设
+                </p>
               )}
               {profileFields.map((f) => {
                 const raw =
@@ -319,21 +382,19 @@ export function EscMenu({
                     <dt style={{ color: 'var(--ui-fg-muted)' }}>
                       {f.label || '未命名'}
                     </dt>
-                    <dd className="max-w-[9rem] truncate text-right">
-                      {display}
-                    </dd>
+                    <dd className="max-w-[55%] truncate text-right">{display}</dd>
                   </div>
                 );
               })}
             </dl>
-            <p className="mt-2 text-xs" style={{ color: 'var(--ui-fg-muted)' }}>
+            <p className="mt-2 text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
               当前包：{packLabel || '—'}
             </p>
           </section>
 
           {onStartNewRun && (
             <section>
-              <h3 className="mb-2 font-medium">剧情</h3>
+              <h3 className="esc-rail__section-label">剧情</h3>
               <StoryProgressMap
                 map={storyMap}
                 busy={runBusy}
@@ -346,7 +407,7 @@ export function EscMenu({
           )}
 
           <section>
-            <h3 className="mb-2 font-medium">外观</h3>
+            <h3 className="esc-rail__section-label">外观</h3>
             <div
               className="flex rounded-lg p-1"
               style={{ background: 'var(--ui-bg-elevated)' }}
@@ -361,7 +422,7 @@ export function EscMenu({
                   key={id}
                   type="button"
                   onClick={() => setTheme(id)}
-                  className="flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition"
+                  className="flex-1 rounded-md px-2 py-2 text-sm font-medium transition"
                   style={
                     theme === id
                       ? {
@@ -379,10 +440,7 @@ export function EscMenu({
           </section>
         </div>
 
-        <div
-          className="space-y-2 border-t px-4 py-3"
-          style={{ borderColor: 'var(--ui-border)' }}
-        >
+        <div className="esc-rail__foot space-y-2">
           <Link
             href="/settings"
             className="block w-full rounded-lg px-3 py-2 text-center text-sm font-medium"

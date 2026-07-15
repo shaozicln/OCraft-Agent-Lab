@@ -1,0 +1,130 @@
+/* ESC 侧栏 — 进场前控制台，贴合 OCraft 蓝黑/纸面 token */
+
+.esc-rail {
+  --esc-ink: var(--ui-fg);
+  --esc-muted: var(--ui-fg-muted);
+  --esc-line: var(--ui-border);
+  --esc-soft: color-mix(in srgb, var(--ui-accent) 12%, transparent);
+  position: relative;
+  z-index: 10;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  border-right: 1px solid var(--esc-line);
+  background: color-mix(in srgb, var(--ui-panel) 96%, transparent);
+  color: var(--esc-ink);
+  backdrop-filter: blur(14px);
+  box-shadow: 4px 0 28px color-mix(in srgb, #000 12%, transparent);
+}
+
+.esc-rail__head {
+  border-bottom: 1px solid var(--esc-line);
+  padding: 0.9rem 1rem 0.85rem;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--ui-accent) 6%, transparent),
+      transparent 70%
+    );
+}
+
+.esc-rail__eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ui-accent);
+}
+
+.esc-rail__title {
+  margin: 0.25rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.esc-rail__meta {
+  margin: 0.3rem 0 0;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--esc-muted);
+}
+
+.esc-rail__link {
+  font-size: 0.8125rem;
+  color: var(--ui-accent);
+  transition: opacity 0.15s ease;
+}
+
+.esc-rail__link:hover {
+  opacity: 0.85;
+}
+
+.esc-rail__section-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--esc-muted);
+}
+
+.esc-rail__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.esc-rail__body dl,
+.esc-rail__body dt,
+.esc-rail__body dd,
+.esc-rail__body p.text-xs,
+.esc-rail__body .text-xs {
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.esc-rail__body > * + * {
+  margin-top: 1.15rem;
+}
+
+.esc-rail__foot {
+  border-top: 1px solid var(--esc-line);
+  padding: 0.75rem 1rem;
+}
+
+.esc-rail__resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 20;
+  height: 100%;
+  width: 0.4rem;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.esc-rail__resize-grip {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  height: 2.5rem;
+  width: 0.2rem;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--esc-muted);
+  opacity: 0.35;
+  transition: opacity 0.15s ease, height 0.15s ease;
+}
+
+.esc-rail__resize:hover .esc-rail__resize-grip {
+  opacity: 0.7;
+  height: 3.25rem;
+  background: var(--ui-accent);
+}

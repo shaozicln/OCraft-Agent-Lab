@@ -93,6 +93,72 @@ export declare const archivedMessageSchema: z.ZodObject<{
     content: z.ZodString;
     at: z.ZodString;
 }, z.core.$strip>;
+/** 存档作用域：run=一局世界；npc=旧版单人会话 */
+export declare const archiveScopeSchema: z.ZodEnum<{
+    run: "run";
+    npc: "npc";
+}>;
+export type ArchiveScope = z.infer<typeof archiveScopeSchema>;
+/** 一局档里单个 NPC 的子快照 */
+export declare const archivedNpcSlotSchema: z.ZodObject<{
+    affinity: z.ZodNumber;
+    fatigue: z.ZodNumber;
+    current_status: z.ZodString;
+    story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
+    messages: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        role: z.ZodEnum<{
+            user: "user";
+            assistant: "assistant";
+        }>;
+        content: z.ZodString;
+        at: z.ZodString;
+    }, z.core.$strip>>>;
+}, z.core.$strip>;
+export type ArchivedNpcSlot = z.infer<typeof archivedNpcSlotSchema>;
+/**
+ * 存档快照 v2（一局一档）
+ * 仍在 DB 的 npc_state/messages 列写入「焦点 NPC」镜像，便于旧列表预览；
+ * 完整数据在 payload / 或解析时从本结构还原。
+ */
+export declare const conversationSnapshotV2Schema: z.ZodObject<{
+    schema_version: z.ZodLiteral<2>;
+    saved_at: z.ZodString;
+    focus_npc_id: z.ZodString;
+    world: z.ZodObject<{
+        chapter_state: z.ZodString;
+        story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
+    }, z.core.$strip>;
+    npc_state: z.ZodObject<{
+        affinity: z.ZodNumber;
+        fatigue: z.ZodNumber;
+        current_status: z.ZodString;
+        chapter_state: z.ZodString;
+        story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
+    }, z.core.$strip>;
+    messages: z.ZodArray<z.ZodObject<{
+        role: z.ZodEnum<{
+            user: "user";
+            assistant: "assistant";
+        }>;
+        content: z.ZodString;
+        at: z.ZodString;
+    }, z.core.$strip>>;
+    npcs: z.ZodRecord<z.ZodString, z.ZodObject<{
+        affinity: z.ZodNumber;
+        fatigue: z.ZodNumber;
+        current_status: z.ZodString;
+        story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
+        messages: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            role: z.ZodEnum<{
+                user: "user";
+                assistant: "assistant";
+            }>;
+            content: z.ZodString;
+            at: z.ZodString;
+        }, z.core.$strip>>>;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+export type ConversationSnapshotV2 = z.infer<typeof conversationSnapshotV2Schema>;
 export declare const conversationSnapshotSummarySchema: z.ZodObject<{
     index: z.ZodNumber;
     saved_at: z.ZodString;
@@ -109,6 +175,10 @@ export declare const conversationArchiveSummarySchema: z.ZodObject<{
     filename: z.ZodString;
     display_name: z.ZodOptional<z.ZodString>;
     session_started_at: z.ZodString;
+    scope: z.ZodOptional<z.ZodEnum<{
+        run: "run";
+        npc: "npc";
+    }>>;
     snapshots: z.ZodArray<z.ZodObject<{
         index: z.ZodNumber;
         saved_at: z.ZodString;
@@ -128,6 +198,11 @@ export declare const conversationSavedEventSchema: z.ZodObject<{
     snapshotIndex: z.ZodNumber;
     savedAt: z.ZodString;
     chapter_state: z.ZodOptional<z.ZodString>;
+    scope: z.ZodOptional<z.ZodEnum<{
+        run: "run";
+        npc: "npc";
+    }>>;
+    world_changed: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
 export declare const conversationArchivesListEventSchema: z.ZodObject<{
     npcId: z.ZodString;
@@ -135,6 +210,10 @@ export declare const conversationArchivesListEventSchema: z.ZodObject<{
         filename: z.ZodString;
         display_name: z.ZodOptional<z.ZodString>;
         session_started_at: z.ZodString;
+        scope: z.ZodOptional<z.ZodEnum<{
+            run: "run";
+            npc: "npc";
+        }>>;
         snapshots: z.ZodArray<z.ZodObject<{
             index: z.ZodNumber;
             saved_at: z.ZodString;
@@ -168,6 +247,11 @@ export declare const conversationLoadedEventSchema: z.ZodObject<{
         chapter_state: z.ZodString;
         story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
     }, z.core.$strip>;
+    scope: z.ZodOptional<z.ZodEnum<{
+        run: "run";
+        npc: "npc";
+    }>>;
+    restored_npc_ids: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 /** 新开一局 / 从某章或某分歧回溯为新存档槽 */
 export declare const startNewRunPayloadSchema: z.ZodObject<{

@@ -1,8 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as path from 'path';
 import {
+  getDefaultNpcId,
   getFirstChapterId,
+  type ArchivedNpcSlot,
+  type ArchiveScope,
   type ChapterState,
+  type ConversationSnapshotV2,
   type LlmMessage,
   type NpcRuntimeState,
   type StartNewRunPayload,
@@ -13,11 +17,12 @@ import { PlayerStateRepository } from '../db/player-state.repository';
 import { NpcService } from '../npc/npc.service';
 import { PackService } from '../story/pack.service';
 import { StoryFlagService } from '../story/story-flag.service';
+import { WorldProgressService } from '../story/world-progress.service';
 import {
   ConversationArchiveService,
   type ConversationSnapshot,
 } from './conversation-archive.service';
-
+import { migrateSave } from './save-migrate';
 const MAX_HISTORY_TURNS = 6;
 
 interface SessionTranscript {
@@ -29,6 +34,10 @@ export interface SaveSnapshotResult {
   filename: string;
   snapshotIndex: number;
   savedAt: string;
+  scope: ArchiveScope;
+  chapterState: ChapterState;
+  /** 本轮写入前世界章/旗是否脏（升章/立旗） */
+  worldChanged: boolean;
 }
 
 export interface RestoreSnapshotResult {
@@ -38,6 +47,8 @@ export interface RestoreSnapshotResult {
   npcState: NpcRuntimeState;
   chapterState: ChapterState;
   storyFlags: StoryFlagsSnapshot;
+  scope: ArchiveScope;
+  restoredNpcIds: string[];
 }
 
 @Injectable()
@@ -48,6 +59,8 @@ export class ConversationService {
   private readonly chapterStates = new Map<string, ChapterState>();
   private readonly transcripts = new Map<string, SessionTranscript>();
   private readonly sessionArchiveFiles = new Map<string, string>();
+  /** 一局档文件名：player:world:pack */
+  private readonly runArchiveFiles = new Map<string, string>();
   private readonly hydrated = new Set<string>();
 
   constructor(
@@ -55,11 +68,25 @@ export class ConversationService {
     private readonly playerStateRepo: PlayerStateRepository,
     private readonly npcService: NpcService,
     private readonly storyFlagService: StoryFlagService,
+    private readonly worldProgress: WorldProgressService,
     private readonly packService: PackService,
   ) {}
 
   private key(playerId: string, npcId: string) {
     return this.packService.sessionKey(playerId, npcId);
+  }
+
+  private runKey(playerId: string) {
+    const { worldId, packVersionId } = this.progressKey();
+    return `${playerId}:${worldId}:${packVersionId}`;
+  }
+
+  private progressNpcId(): string {
+    return getDefaultNpcId(this.packService.getPack());
+  }
+
+  private allNpcIds(): string[] {
+    return this.packService.getPack().npcs.map((n) => n.npc_id);
   }
 
   private progressKey() {
@@ -80,35 +107,36 @@ export class ConversationService {
 
   /**
    * 若内存/库中的章节不在当前 Pack，改回默认章并写库。
+   * 章节真相源为 world_progress（L2）。
    */
   private async sanitizeChapterState(
     playerId: string,
-    npcId: string,
+    _npcId: string,
   ): Promise<ChapterState> {
-    const k = this.key(playerId, npcId);
-    const raw =
-      this.chapterStates.get(k) ?? this.defaultChapter();
+    await this.worldProgress.ensureHydrated(playerId);
+    const raw = this.worldProgress.getChapter(playerId);
     const valid = this.resolveValidChapter(raw);
     if (valid === raw) {
-      this.chapterStates.set(k, valid);
+      this.mirrorChapterToNpcCaches(playerId, valid);
       return valid;
     }
     this.logger.warn(
-      `章节 id「${raw}」不在当前 Pack，已重置为「${valid}」（player=${playerId} npc=${npcId}）`,
+      `章节 id「${raw}」不在当前 Pack，已重置为「${valid}」（player=${playerId}）`,
     );
-    this.chapterStates.set(k, valid);
-    const { worldId, packVersionId } = this.progressKey();
-    await this.playerStateRepo.saveChapterState(
-      playerId,
-      worldId,
-      packVersionId,
-      npcId,
-      valid,
-    );
+    await this.worldProgress.setChapter(playerId, valid);
+    this.mirrorChapterToNpcCaches(playerId, valid);
     return valid;
   }
 
+  /** 把世界章镜像到各 NPC 内存章（兼容旧 persist 路径） */
+  private mirrorChapterToNpcCaches(playerId: string, chapter: ChapterState) {
+    for (const id of this.allNpcIds()) {
+      this.chapterStates.set(this.key(playerId, id), chapter);
+    }
+  }
+
   async ensureSession(playerId: string, npcId: string): Promise<void> {
+    await this.worldProgress.ensureHydrated(playerId);
     const k = this.key(playerId, npcId);
     if (this.hydrated.has(k)) {
       await this.sanitizeChapterState(playerId, npcId);
@@ -117,18 +145,19 @@ export class ConversationService {
 
     const { worldId, packVersionId } = this.progressKey();
     const defaults = this.npcService.getDefaultRuntimeState(npcId);
+    const worldChapter = this.worldProgress.getChapter(playerId);
     const session = await this.playerStateRepo.loadSession(
       playerId,
       worldId,
       packVersionId,
       npcId,
       defaults,
-      this.defaultChapter(),
+      worldChapter,
     );
 
     await this.npcService.hydrateRuntime(playerId, npcId);
     await this.storyFlagService.hydrate(playerId, npcId);
-    this.chapterStates.set(k, session.chapterState);
+    this.chapterStates.set(k, worldChapter);
     this.history.set(k, session.recentMessages);
 
     if (session.transcriptMessages.length > 0) {
@@ -143,6 +172,18 @@ export class ConversationService {
 
     if (session.activeArchiveFilename) {
       this.sessionArchiveFiles.set(k, session.activeArchiveFilename);
+      // 任一 NPC 绑的若是一局档，恢复后继续往同一文件追加
+      void this.playerStateRepo
+        .findArchiveByFilename(playerId, session.activeArchiveFilename)
+        .then((arch) => {
+          if (arch?.scope === 'run') {
+            this.runArchiveFiles.set(
+              this.runKey(playerId),
+              session.activeArchiveFilename!,
+            );
+          }
+        })
+        .catch(() => undefined);
     }
 
     this.hydrated.add(k);
@@ -160,7 +201,7 @@ export class ConversationService {
       npcId,
       {
         runtime: this.npcService.getRuntimeState(playerId, npcId),
-        chapterState: this.getChapterState(playerId, npcId),
+        chapterState: this.worldProgress.getChapter(playerId),
         recentMessages: this.history.get(k) ?? [],
         transcriptMessages: transcript?.messages ?? [],
         sessionStartedAt: transcript?.startedAt ?? null,
@@ -169,38 +210,34 @@ export class ConversationService {
     );
   }
 
-  getChapterState(playerId: string, npcId: string): ChapterState {
-    const raw =
-      this.chapterStates.get(this.key(playerId, npcId)) ??
-      this.defaultChapter();
-    return this.resolveValidChapter(raw);
+  /** 世界章（npcId 仅保留签名兼容） */
+  getChapterState(playerId: string, _npcId?: string): ChapterState {
+    return this.resolveValidChapter(this.worldProgress.getChapter(playerId));
   }
 
-  getStoryFlags(playerId: string, npcId: string): StoryFlagsSnapshot {
-    return this.storyFlagService.getFlags(playerId, npcId);
+  /** HUD / 剧情图：世界 flags（L2） */
+  getStoryFlags(playerId: string, _npcId?: string): StoryFlagsSnapshot {
+    return this.worldProgress.getFlags(playerId);
   }
 
   async setChapterState(
     playerId: string,
-    npcId: string,
+    _npcId: string,
     state: ChapterState,
   ): Promise<ChapterState> {
-    const valid = this.resolveValidChapter(state);
-    if (valid !== state) {
-      this.logger.warn(
-        `拒绝写入无效章节「${state}」，改为「${valid}」（player=${playerId} npc=${npcId}）`,
+    const valid = await this.worldProgress.setChapter(playerId, state);
+    this.mirrorChapterToNpcCaches(playerId, valid);
+    const { worldId, packVersionId } = this.progressKey();
+    // 镜像写各 NPC 行，便于旧查询；真相源仍是 world_progress
+    for (const id of this.allNpcIds()) {
+      await this.playerStateRepo.saveChapterState(
+        playerId,
+        worldId,
+        packVersionId,
+        id,
+        valid,
       );
     }
-    const k = this.key(playerId, npcId);
-    this.chapterStates.set(k, valid);
-    const { worldId, packVersionId } = this.progressKey();
-    await this.playerStateRepo.saveChapterState(
-      playerId,
-      worldId,
-      packVersionId,
-      npcId,
-      valid,
-    );
     return valid;
   }
 
@@ -247,70 +284,378 @@ export class ConversationService {
     ];
   }
 
-  async saveSnapshot(
+  /**
+   * 组装当前一局快照（世界进度 + 全员状态/聊天）。
+   * 无任何对话时仍可存（用于新开局后的自动存）。
+   */
+  private async buildRunSnapshot(
     playerId: string,
-    npcId: string,
-    npcState: NpcRuntimeState,
-  ): Promise<SaveSnapshotResult | null> {
-    const k = this.key(playerId, npcId);
-    const transcript = this.transcripts.get(k);
-    if (!transcript || transcript.messages.length === 0) {
-      return null;
+    focusNpcId: string,
+  ): Promise<{
+    snapshot: ConversationSnapshot;
+    chapterState: ChapterState;
+  }> {
+    await this.worldProgress.ensureHydrated(playerId);
+    for (const id of this.allNpcIds()) {
+      await this.ensureSession(playerId, id);
     }
 
+    const focusKey = this.key(playerId, focusNpcId);
+    const focusTranscript = this.transcripts.get(focusKey);
+    const worldChapter = this.worldProgress.getChapter(playerId);
+    const worldFlagsSnap = this.worldProgress.getFlags(playerId);
+
+    const npcs: Record<string, ArchivedNpcSlot> = {};
+    for (const id of this.allNpcIds()) {
+      const runtime = this.npcService.getRuntimeState(playerId, id);
+      const t = this.transcripts.get(this.key(playerId, id));
+      npcs[id] = {
+        affinity: runtime.affinity,
+        fatigue: runtime.fatigue,
+        current_status: runtime.current_status,
+        story_flags: this.storyFlagService.getFlags(playerId, id),
+        messages: t ? [...t.messages] : [],
+      };
+    }
+
+    const focusRuntime = this.npcService.getRuntimeState(playerId, focusNpcId);
+    const focusMessages = focusTranscript
+      ? [...focusTranscript.messages]
+      : npcs[focusNpcId]?.messages ?? [];
+
     const savedAt = new Date().toISOString();
-    const snapshot: ConversationSnapshot = {
+    const payload: ConversationSnapshotV2 = {
+      schema_version: 2,
       saved_at: savedAt,
-      npc_state: {
-        affinity: npcState.affinity,
-        fatigue: npcState.fatigue,
-        current_status: npcState.current_status,
-        chapter_state: this.getChapterState(playerId, npcId),
-        story_flags: this.storyFlagService.getFlags(playerId, npcId),
+      focus_npc_id: focusNpcId,
+      world: {
+        chapter_state: worldChapter,
+        story_flags: worldFlagsSnap,
       },
-      messages: [...transcript.messages],
+      npc_state: {
+        affinity: focusRuntime.affinity,
+        fatigue: focusRuntime.fatigue,
+        current_status: focusRuntime.current_status,
+        chapter_state: worldChapter,
+        story_flags: worldFlagsSnap,
+      },
+      messages: focusMessages,
+      npcs,
     };
 
-    const existingFile = this.sessionArchiveFiles.get(k);
-    let filename: string;
-    let snapshotIndex: number;
+    return {
+      chapterState: worldChapter,
+      snapshot: {
+        saved_at: savedAt,
+        npc_state: payload.npc_state,
+        messages: focusMessages,
+        payload,
+      },
+    };
+  }
 
-    if (existingFile) {
-      filename = existingFile;
-      snapshotIndex = await this.archiveService.appendSnapshot(
+  private async resolveActiveRunFilename(
+    playerId: string,
+    focusNpcId: string,
+  ): Promise<string | null> {
+    const rk = this.runKey(playerId);
+    const progressNpcId = this.progressNpcId();
+    const candidate =
+      this.runArchiveFiles.get(rk) ??
+      this.sessionArchiveFiles.get(this.key(playerId, progressNpcId)) ??
+      this.sessionArchiveFiles.get(this.key(playerId, focusNpcId));
+    if (!candidate) return null;
+    const arch = await this.playerStateRepo.findArchiveByFilename(
+      playerId,
+      candidate,
+    );
+    if (arch?.scope !== 'run') return null;
+    return candidate;
+  }
+
+  /**
+   * 保证有活跃一局槽：已有则复用；没有则按当前进度建槽（不重置章/旗/对白）。
+   */
+  private async ensureActiveRunFilename(
+    playerId: string,
+    focusNpcId: string,
+  ): Promise<string> {
+    const existing = await this.resolveActiveRunFilename(playerId, focusNpcId);
+    if (existing) return existing;
+
+    const { snapshot, chapterState } = await this.buildRunSnapshot(
+      playerId,
+      focusNpcId,
+    );
+    const { worldId, packVersionId } = this.progressKey();
+    const progressNpcId = this.progressNpcId();
+    const pack = this.packService.getPack();
+    const rank =
+      pack.world.chapters.find((c) => c.id === chapterState)?.rank ?? 0;
+    const displayName = `自动记录·第${rank + 1}章·${new Date().toLocaleString(
+      'zh-CN',
+      {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      },
+    )}`;
+
+    const focusKey = this.key(playerId, focusNpcId);
+    const sessionStartedAt =
+      this.transcripts.get(focusKey)?.startedAt ?? snapshot.saved_at;
+
+    const filename = await this.archiveService.createSessionArchive({
+      playerId,
+      npcId: progressNpcId,
+      sessionStartedAt,
+      snapshot,
+      displayName,
+      scope: 'run',
+      worldId,
+      packVersionId,
+    });
+
+    this.runArchiveFiles.set(this.runKey(playerId), filename);
+    for (const id of this.allNpcIds()) {
+      const k = this.key(playerId, id);
+      this.sessionArchiveFiles.set(k, filename);
+      const transcript = this.transcripts.get(k);
+      await this.playerStateRepo.saveFullSession(
+        playerId,
+        worldId,
+        packVersionId,
+        id,
+        {
+          runtime: this.npcService.getRuntimeState(playerId, id),
+          chapterState,
+          recentMessages: this.history.get(k) ?? [],
+          transcriptMessages: transcript?.messages ?? [],
+          sessionStartedAt: transcript?.startedAt ?? sessionStartedAt,
+          activeArchiveFilename: filename,
+        },
+      );
+    }
+
+    this.logger.log(
+      `Auto-created run slot player=${playerId} archive=${filename} chapter=${chapterState}`,
+    );
+    return filename;
+  }
+
+  /**
+   * 自动存档：每轮对话覆盖「当前活跃一局槽」最新快照（含对白/好感/章旗）。
+   * 无槽时自动建一局（不重置进度）。opts.force 保留兼容，已无门禁差异。
+   */
+  async autoSaveActiveRun(
+    playerId: string,
+    focusNpcId: string,
+    _opts?: { force?: boolean },
+  ): Promise<SaveSnapshotResult | null> {
+    const worldChanged = this.worldProgress.isDirty(playerId);
+    const filename = await this.ensureActiveRunFilename(playerId, focusNpcId);
+
+    const { snapshot, chapterState } = await this.buildRunSnapshot(
+      playerId,
+      focusNpcId,
+    );
+
+    const snapshotIndex = await this.playerStateRepo.transaction(async (tx) => {
+      const idx = await this.archiveService.upsertLatestSnapshot(
         playerId,
         filename,
         snapshot,
+        tx,
       );
-    } else {
-      filename = await this.archiveService.createSessionArchive(
-        playerId,
-        npcId,
-        transcript.startedAt,
-        snapshot,
-      );
-      snapshotIndex = 0;
-      this.sessionArchiveFiles.set(k, filename);
+      const { worldId, packVersionId } = this.progressKey();
+      for (const id of this.allNpcIds()) {
+        const k = this.key(playerId, id);
+        const transcript = this.transcripts.get(k);
+        const row = {
+          runtime: this.npcService.getRuntimeState(playerId, id),
+          chapterState,
+          recentMessages: this.history.get(k) ?? [],
+          transcriptMessages: transcript?.messages ?? [],
+          sessionStartedAt: transcript?.startedAt ?? null,
+          activeArchiveFilename: filename,
+        };
+        if (tx) {
+          await this.playerStateRepo.saveFullSessionWithDb(
+            tx,
+            playerId,
+            worldId,
+            packVersionId,
+            id,
+            row,
+          );
+        } else {
+          await this.playerStateRepo.saveFullSession(
+            playerId,
+            worldId,
+            packVersionId,
+            id,
+            row,
+          );
+        }
+      }
+      return idx;
+    });
+
+    this.worldProgress.consumeDirty(playerId);
+    this.runArchiveFiles.set(this.runKey(playerId), filename);
+    for (const id of this.allNpcIds()) {
+      this.sessionArchiveFiles.set(this.key(playerId, id), filename);
     }
 
-    await this.persistSession(playerId, npcId);
-    return { filename, snapshotIndex, savedAt };
+    return {
+      filename,
+      snapshotIndex,
+      savedAt: snapshot.saved_at,
+      scope: 'run',
+      chapterState,
+      worldChanged,
+    };
+  }
+
+  /** @deprecated 手动存档已取消；保留别名以免旧客户端报错 */
+  async saveSnapshot(
+    playerId: string,
+    focusNpcId: string,
+    _npcState: NpcRuntimeState,
+  ): Promise<SaveSnapshotResult | null> {
+    return this.autoSaveActiveRun(playerId, focusNpcId);
   }
 
   async restoreSnapshot(
     playerId: string,
-    npcId: string,
+    focusNpcId: string,
     filename: string,
     snapshotIndex: number,
   ): Promise<RestoreSnapshotResult> {
-    const { snapshot } = await this.archiveService.loadSnapshot(
+    const loaded = await this.archiveService.loadSnapshot(
       playerId,
       filename,
       snapshotIndex,
     );
-    const k = this.key(playerId, npcId);
+    const { snapshot, scope } = loaded;
     const safeFilename = path.basename(filename);
+    const { worldId, packVersionId } = this.progressKey();
+    const progressNpcId = this.progressNpcId();
 
+    const migrated = migrateSave(snapshot.payload ?? {
+      npc_state: snapshot.npc_state,
+      messages: snapshot.messages,
+      saved_at: snapshot.saved_at,
+      focus_npc_id: focusNpcId,
+    });
+
+    // —— v2 一局档（含 v1 迁移结果）——
+    if (migrated?.schema_version === 2) {
+      const v2 = migrated;
+      const worldChapter = this.resolveValidChapter(v2.world.chapter_state);
+      const worldFlagsSnap: StoryFlagsSnapshot = { ...v2.world.story_flags };
+
+      await this.playerStateRepo.transaction(async (tx) => {
+        await this.worldProgress.replaceWorld(
+          playerId,
+          worldChapter,
+          worldFlagsSnap,
+          tx,
+        );
+        this.mirrorChapterToNpcCaches(playerId, worldChapter);
+
+        for (const id of this.allNpcIds()) {
+          const slot = v2.npcs[id];
+          const k = this.key(playerId, id);
+          const defaults = this.npcService.getDefaultRuntimeState(id);
+          const runtime: NpcRuntimeState = slot
+            ? {
+                affinity: slot.affinity,
+                fatigue: slot.fatigue,
+                current_status: slot.current_status,
+              }
+            : defaults;
+
+          this.npcService.updateRuntimeState(playerId, id, runtime);
+          this.sessionArchiveFiles.set(k, safeFilename);
+          this.hydrated.add(k);
+
+          const messages = slot?.messages ?? [];
+          const transcript: SessionTranscript = {
+            startedAt: messages[0]?.at ?? v2.saved_at,
+            messages: [...messages],
+          };
+          this.transcripts.set(k, transcript);
+
+          const history: LlmMessage[] = messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          }));
+          while (history.length > MAX_HISTORY_TURNS * 2) {
+            history.shift();
+          }
+          this.history.set(k, history);
+
+          const flagsForNpc = { ...(slot?.story_flags ?? {}) };
+          await this.storyFlagService.replaceAll(playerId, id, flagsForNpc);
+
+          const row = {
+            runtime,
+            chapterState: worldChapter,
+            recentMessages: history,
+            transcriptMessages: messages,
+            sessionStartedAt: transcript.startedAt,
+            activeArchiveFilename: safeFilename,
+          };
+          if (tx) {
+            await this.playerStateRepo.saveFullSessionWithDb(
+              tx,
+              playerId,
+              worldId,
+              packVersionId,
+              id,
+              row,
+            );
+          } else {
+            await this.playerStateRepo.saveFullSession(
+              playerId,
+              worldId,
+              packVersionId,
+              id,
+              row,
+            );
+          }
+        }
+      });
+
+      this.worldProgress.consumeDirty(playerId);
+      this.runArchiveFiles.set(this.runKey(playerId), safeFilename);
+
+      const focusSlot = v2.npcs[focusNpcId] ?? v2.npcs[progressNpcId];
+      const focusMessages = focusSlot?.messages ?? v2.messages ?? [];
+
+      return {
+        filename: safeFilename,
+        snapshotIndex,
+        messages: focusMessages,
+        npcState: focusSlot
+          ? {
+              affinity: focusSlot.affinity,
+              fatigue: focusSlot.fatigue,
+              current_status: focusSlot.current_status,
+            }
+          : this.npcService.getRuntimeState(playerId, focusNpcId),
+        chapterState: worldChapter,
+        storyFlags: worldFlagsSnap,
+        scope: 'run',
+        restoredNpcIds: this.allNpcIds(),
+      };
+    }
+
+    // —— 无法迁移时的 v1 兜底 ——
+    const npcId = focusNpcId;
+    const k = this.key(playerId, npcId);
     const messages = [...snapshot.messages];
     const transcript: SessionTranscript = {
       startedAt: messages[0]?.at ?? new Date().toISOString(),
@@ -327,27 +672,26 @@ export class ConversationService {
     }
     this.history.set(k, history);
 
-    this.chapterStates.set(
-      k,
-      this.resolveValidChapter(snapshot.npc_state.chapter_state),
+    const chapterState = this.resolveValidChapter(
+      snapshot.npc_state.chapter_state,
     );
-    this.sessionArchiveFiles.set(k, safeFilename);
-    this.hydrated.add(k);
-
     const storyFlags: StoryFlagsSnapshot = {
       ...(snapshot.npc_state.story_flags ?? {}),
     };
-    await this.storyFlagService.replaceAll(playerId, npcId, storyFlags);
 
-    const chapterState = await this.sanitizeChapterState(playerId, npcId);
+    await this.playerStateRepo.transaction(async (tx) => {
+      await this.worldProgress.replaceWorld(
+        playerId,
+        chapterState,
+        storyFlags,
+        tx,
+      );
+      this.mirrorChapterToNpcCaches(playerId, chapterState);
+      this.sessionArchiveFiles.set(k, safeFilename);
+      this.hydrated.add(k);
+      await this.storyFlagService.replaceAll(playerId, npcId, storyFlags);
 
-    const { worldId, packVersionId } = this.progressKey();
-    await this.playerStateRepo.saveFullSession(
-      playerId,
-      worldId,
-      packVersionId,
-      npcId,
-      {
+      const row = {
         runtime: {
           affinity: snapshot.npc_state.affinity,
           fatigue: snapshot.npc_state.fatigue,
@@ -358,8 +702,27 @@ export class ConversationService {
         transcriptMessages: messages,
         sessionStartedAt: transcript.startedAt,
         activeArchiveFilename: safeFilename,
-      },
-    );
+      };
+      if (tx) {
+        await this.playerStateRepo.saveFullSessionWithDb(
+          tx,
+          playerId,
+          worldId,
+          packVersionId,
+          npcId,
+          row,
+        );
+      } else {
+        await this.playerStateRepo.saveFullSession(
+          playerId,
+          worldId,
+          packVersionId,
+          npcId,
+          row,
+        );
+      }
+    });
+    this.worldProgress.consumeDirty(playerId);
 
     return {
       filename: safeFilename,
@@ -372,11 +735,17 @@ export class ConversationService {
       },
       chapterState,
       storyFlags,
+      scope: scope === 'run' ? 'run' : 'npc',
+      restoredNpcIds: [npcId],
     };
   }
 
   async listArchives(playerId: string, npcId: string) {
-    return this.archiveService.listArchives(playerId, npcId);
+    const { worldId, packVersionId } = this.progressKey();
+    return this.archiveService.listArchives(playerId, npcId, {
+      worldId,
+      packVersionId,
+    });
   }
 
   async renameArchive(
@@ -405,8 +774,8 @@ export class ConversationService {
 
     return {
       npcId,
-      current_chapter: this.getChapterState(playerId, npcId),
-      flags: this.storyFlagService.getFlags(playerId, npcId),
+      current_chapter: this.getChapterState(playerId),
+      flags: this.worldProgress.getFlags(playerId),
       chapters: [...pack.world.chapters]
         .sort((a, b) => a.rank - b.rank)
         .map((c) => ({
@@ -419,12 +788,12 @@ export class ConversationService {
   }
 
   /**
-   * 新开独立存档槽：重置对话与数值，切到目标章/分歧，并立刻建空槽快照。
+   * 新开独立存档槽：重置包内全部 NPC，切到目标章/分歧，并立刻建一局空槽快照。
    * 旧存档文件不受影响。
    */
   async startNewRun(
     playerId: string,
-    npcId: string,
+    focusNpcId: string,
     opts: Omit<StartNewRunPayload, 'npcId'>,
   ): Promise<{
     filename: string;
@@ -433,12 +802,15 @@ export class ConversationService {
     storyFlags: StoryFlagsSnapshot;
     npcState: NpcRuntimeState;
   }> {
-    await this.ensureSession(playerId, npcId);
     const pack = this.packService.getPack();
-    const k = this.key(playerId, npcId);
+    const progressNpcId = this.progressNpcId();
+    const { worldId, packVersionId } = this.progressKey();
 
-    let chapterId =
-      opts.chapterId ?? getFirstChapterId(pack);
+    for (const id of this.allNpcIds()) {
+      await this.ensureSession(playerId, id);
+    }
+
+    let chapterId = opts.chapterId ?? getFirstChapterId(pack);
     const flags: StoryFlagsSnapshot = {};
 
     if (opts.viaRuleId) {
@@ -460,59 +832,96 @@ export class ConversationService {
     }
 
     chapterId = this.resolveValidChapter(chapterId);
-
-    const defaults = this.npcService.getDefaultRuntimeState(npcId);
-    this.npcService.updateRuntimeState(playerId, npcId, defaults);
-    await this.storyFlagService.replaceAll(playerId, npcId, flags);
-    this.chapterStates.set(k, chapterId);
-    this.history.set(k, []);
     const startedAt = new Date().toISOString();
-    this.transcripts.set(k, { startedAt, messages: [] });
-    this.hydrated.add(k);
 
+    const npcs: Record<string, ArchivedNpcSlot> = {};
+    await this.playerStateRepo.transaction(async (tx) => {
+      await this.worldProgress.replaceWorld(playerId, chapterId, flags, tx);
+      this.mirrorChapterToNpcCaches(playerId, chapterId);
+
+      for (const id of this.allNpcIds()) {
+        const defaults = this.npcService.getDefaultRuntimeState(id);
+        this.npcService.updateRuntimeState(playerId, id, defaults);
+        const k = this.key(playerId, id);
+        this.history.set(k, []);
+        this.transcripts.set(k, { startedAt, messages: [] });
+        this.hydrated.add(k);
+        await this.storyFlagService.replaceAll(playerId, id, {});
+        npcs[id] = {
+          affinity: defaults.affinity,
+          fatigue: defaults.fatigue,
+          current_status: defaults.current_status,
+          story_flags: {},
+          messages: [],
+        };
+      }
+    });
+
+    const focusDefaults = this.npcService.getDefaultRuntimeState(focusNpcId);
     const displayName =
       opts.displayName?.trim() ||
       `第${(pack.world.chapters.find((c) => c.id === chapterId)?.rank ?? 0) + 1}章起·${new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
 
-    const snapshot: ConversationSnapshot = {
+    const payload: ConversationSnapshotV2 = {
+      schema_version: 2,
       saved_at: startedAt,
+      focus_npc_id: focusNpcId,
+      world: {
+        chapter_state: chapterId,
+        story_flags: flags,
+      },
       npc_state: {
-        affinity: defaults.affinity,
-        fatigue: defaults.fatigue,
-        current_status: defaults.current_status,
+        affinity: focusDefaults.affinity,
+        fatigue: focusDefaults.fatigue,
+        current_status: focusDefaults.current_status,
         chapter_state: chapterId,
         story_flags: flags,
       },
       messages: [],
+      npcs,
     };
 
-    const filename = await this.archiveService.createSessionArchive(
+    const snapshot: ConversationSnapshot = {
+      saved_at: startedAt,
+      npc_state: payload.npc_state,
+      messages: [],
+      payload,
+    };
+
+    const filename = await this.archiveService.createSessionArchive({
       playerId,
-      npcId,
-      startedAt,
+      npcId: progressNpcId,
+      sessionStartedAt: startedAt,
       snapshot,
       displayName,
-    );
-    this.sessionArchiveFiles.set(k, filename);
-
-    const { worldId, packVersionId } = this.progressKey();
-    await this.playerStateRepo.saveFullSession(
-      playerId,
+      scope: 'run',
       worldId,
       packVersionId,
-      npcId,
-      {
-        runtime: defaults,
-        chapterState: chapterId,
-        recentMessages: [],
-        transcriptMessages: [],
-        sessionStartedAt: startedAt,
-        activeArchiveFilename: filename,
-      },
-    );
+    });
+
+    this.runArchiveFiles.set(this.runKey(playerId), filename);
+    for (const id of this.allNpcIds()) {
+      this.sessionArchiveFiles.set(this.key(playerId, id), filename);
+      await this.playerStateRepo.saveFullSession(
+        playerId,
+        worldId,
+        packVersionId,
+        id,
+        {
+          runtime: this.npcService.getRuntimeState(playerId, id),
+          chapterState: chapterId,
+          recentMessages: [],
+          transcriptMessages: [],
+          sessionStartedAt: startedAt,
+          activeArchiveFilename: filename,
+        },
+      );
+    }
+
+    this.worldProgress.consumeDirty(playerId);
 
     this.logger.log(
-      `New run player=${playerId} npc=${npcId} chapter=${chapterId} archive=${filename}`,
+      `New run player=${playerId} focus=${focusNpcId} chapter=${chapterId} archive=${filename} scope=run`,
     );
 
     return {
@@ -520,7 +929,7 @@ export class ConversationService {
       display_name: displayName,
       chapterState: chapterId,
       storyFlags: flags,
-      npcState: defaults,
+      npcState: focusDefaults,
     };
   }
 

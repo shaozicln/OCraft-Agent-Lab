@@ -1,5 +1,5 @@
 export const GAME_SERVER_URL =
-  process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? 'http://localhost:3010';
+  process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? 'http://localhost:4000';
 
 export const INTERACTION_DISTANCE = 2;
 export const PLAYER_SPEED = 4;

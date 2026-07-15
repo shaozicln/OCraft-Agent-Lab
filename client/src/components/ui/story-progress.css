@@ -1,0 +1,468 @@
+/* 剧情进度 — 故事板 / 分镜条，序列章号有信息量 */
+
+.story-entry {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.85rem 0.75rem 1.1rem;
+  text-align: left;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-fg);
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.story-entry::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55rem;
+  bottom: 0.55rem;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--ui-accent);
+  opacity: 0.85;
+}
+
+.story-entry:hover {
+  border-color: color-mix(in srgb, var(--ui-accent) 40%, var(--ui-border));
+  background: color-mix(in srgb, var(--ui-accent) 6%, var(--ui-bg-elevated));
+  transform: translateX(1px);
+}
+
+.story-entry:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.story-entry__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.story-entry__eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ui-fg-muted);
+}
+
+.story-entry__title {
+  margin-top: 0.2rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.story-entry__go {
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ui-accent);
+  transition: transform 0.18s ease;
+}
+
+.story-entry:hover .story-entry__go {
+  transform: translateX(3px);
+}
+
+.story-entry__lead {
+  margin-top: 0.3rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ui-fg-muted);
+}
+
+/* —— Modal —— */
+.story-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  padding: 1rem;
+}
+
+@media (min-width: 640px) {
+  .story-modal-root {
+    padding: 1.5rem;
+  }
+}
+
+.story-modal {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 0.65rem;
+  background: var(--ui-panel-solid);
+  color: var(--ui-fg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+}
+
+.story-modal__head {
+  display: flex;
+  shrink: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px dashed color-mix(in srgb, var(--ui-border) 80%, var(--ui-accent));
+  padding: 1rem 1.25rem;
+}
+
+.story-modal__eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ui-accent);
+}
+
+.story-modal__title {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.35rem, 2.2vw, 1.6rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.story-modal__badge {
+  display: inline-block;
+  margin-top: 0.45rem;
+  border-radius: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  background: color-mix(in srgb, var(--ui-accent) 14%, transparent);
+  color: var(--ui-fg);
+}
+
+.story-modal__lead {
+  margin: 0.5rem 0 0;
+  max-width: 42rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--ui-fg-muted);
+}
+
+.story-modal__canvas {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  background: var(--ui-bg);
+}
+
+.story-modal__canvas--flow {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-height: 360px;
+  background:
+    radial-gradient(
+      80% 60% at 12% 20%,
+      color-mix(in srgb, var(--ui-accent) 10%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      70% 50% at 88% 80%,
+      color-mix(in srgb, var(--ui-accent) 6%, transparent),
+      transparent 50%
+    ),
+    var(--ui-bg);
+}
+
+.story-flow-host {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 覆盖 React Flow 默认灰/黑，强制使用 OCraft --ui-* */
+.story-flow.react-flow,
+.story-flow.react-flow.dark,
+.story-flow.react-flow.light {
+  width: 100%;
+  height: 100%;
+  --xy-background-color: transparent;
+  --xy-background-color-default: transparent;
+  --xy-background-pattern-dots-color-default: color-mix(
+    in srgb,
+    var(--ui-fg-muted) 28%,
+    transparent
+  );
+  --xy-edge-stroke-default: color-mix(in srgb, var(--ui-fg-muted) 50%, transparent);
+  --xy-edge-stroke-selected-default: var(--ui-accent);
+  --xy-node-color-default: var(--ui-fg);
+  --xy-handle-background-color-default: var(--ui-accent);
+  --xy-controls-button-background-color: var(--ui-panel-solid);
+  --xy-controls-button-background-color-hover: color-mix(
+    in srgb,
+    var(--ui-accent) 12%,
+    var(--ui-panel-solid)
+  );
+  --xy-controls-button-color: var(--ui-fg);
+  --xy-controls-button-border-color: var(--ui-border);
+  --xy-controls-box-shadow: var(--ui-shadow);
+  background: transparent !important;
+  color: var(--ui-fg);
+}
+
+.story-flow .react-flow__background {
+  background: transparent !important;
+}
+
+.story-flow .react-flow__renderer,
+.story-flow .react-flow__viewport {
+  width: 100%;
+  height: 100%;
+}
+
+.story-flow .react-flow__node {
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ui-fg);
+}
+
+.story-flow .react-flow__attribution {
+  display: none;
+}
+
+.story-handle {
+  width: 7px !important;
+  height: 7px !important;
+  border: 1.5px solid color-mix(in srgb, var(--ui-accent) 55%, var(--ui-border)) !important;
+  background: var(--ui-panel-solid) !important;
+  opacity: 0.85;
+}
+
+.story-node-shell {
+  position: relative;
+  filter: drop-shadow(0 6px 16px color-mix(in srgb, #000 10%, transparent));
+}
+
+html[data-theme='dark'] .story-node-shell {
+  filter: drop-shadow(0 8px 20px color-mix(in srgb, #000 35%, transparent));
+}
+
+.story-node--flow {
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.story-stub-node {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, var(--ui-accent) 50%, var(--ui-border));
+  background: var(--ui-panel-solid);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 12%, transparent);
+}
+
+.story-flow__controls {
+  margin: 12px !important;
+  border: 1px solid var(--ui-border) !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+  box-shadow: var(--ui-shadow) !important;
+  background: var(--ui-panel-solid) !important;
+}
+
+.story-flow__controls button {
+  width: 28px !important;
+  height: 28px !important;
+  background: var(--ui-panel-solid) !important;
+  border-bottom: 1px solid var(--ui-border) !important;
+  fill: var(--ui-fg-muted) !important;
+  color: var(--ui-fg-muted) !important;
+}
+
+.story-flow__controls button:hover {
+  background: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-panel-solid)) !important;
+  fill: var(--ui-fg) !important;
+}
+
+.story-flow__controls button svg {
+  fill: inherit;
+}
+
+.story-node {
+  display: flex;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid var(--ui-border);
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  color: var(--ui-fg);
+  background: var(--ui-panel-solid);
+  transition:
+    border-color 0.16s ease,
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.story-node:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--ui-accent) 50%, var(--ui-border));
+  background: color-mix(in srgb, var(--ui-accent) 5%, var(--ui-panel-solid));
+}
+
+.story-node:disabled {
+  opacity: 0.5;
+}
+
+.story-node[data-active='true'] {
+  border-color: var(--ui-accent);
+  background: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-panel-solid));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ui-accent) 40%, transparent),
+    inset 3px 0 0 var(--ui-accent);
+}
+
+.story-node__rank {
+  flex-shrink: 0;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  color: var(--ui-fg-muted);
+}
+
+.story-node__name {
+  display: -webkit-box;
+  margin-top: 0.2rem;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.story-node__now {
+  flex-shrink: 0;
+  margin-top: 0.4rem;
+  height: 2px;
+  width: 1.75rem;
+  border-radius: 1px;
+  background: var(--ui-accent);
+}
+
+.story-edge-tip {
+  position: absolute;
+  z-index: 5;
+  max-width: min(16rem, 70vw);
+  padding: 0.5rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 40%, var(--ui-border));
+  border-radius: 0.4rem;
+  background: var(--ui-panel-solid);
+  color: var(--ui-fg);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
+  box-shadow: var(--ui-shadow);
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+  animation: story-tip-in 140ms ease both;
+}
+
+@keyframes story-tip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, calc(-100% - 10px));
+  }
+}
+
+.story-modal__foot {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  border-top: 1px solid var(--ui-border);
+  padding: 0.75rem 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--ui-fg-muted);
+}
+
+.story-modal__btn {
+  border-radius: 0.35rem;
+  border: 1px solid var(--ui-border);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ui-fg);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.story-modal__btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ui-accent) 40%, var(--ui-border));
+  background: color-mix(in srgb, var(--ui-accent) 8%, transparent);
+}
+
+.story-modal__btn--ghost {
+  border-color: transparent;
+  color: var(--ui-fg-muted);
+}
+
+.story-modal__btn--ghost:hover {
+  color: var(--ui-fg);
+  background: transparent;
+}
+
+@keyframes story-node-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes story-draw {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-entry,
+  .story-entry__go,
+  .story-node,
+  .story-edge-tip {
+    transition: none !important;
+    animation: none !important;
+  }
+}

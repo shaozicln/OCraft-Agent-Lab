@@ -127,6 +127,11 @@ export function ChatBox({
 
   useEffect(() => {
     if (!lastSaved) return;
+    // 每轮都会自动存；仅升章/立旗时在聊天里提示（普通回合 world_changed=false）
+    if (lastSaved.world_changed === false) {
+      onClearLastSaved();
+      return;
+    }
     const savedChapterId = lastSaved.chapter_state;
     const savedChapterLabel = savedChapterId
       ? (chapterLabels?.[savedChapterId] ?? savedChapterId)
@@ -136,8 +141,8 @@ export function ChatBox({
       {
         role: 'system',
         text: savedChapterLabel
-          ? `已存档：${lastSaved.filename} #${lastSaved.snapshotIndex + 1} · 章节 ${savedChapterLabel}`
-          : `已存档：${lastSaved.filename} #${lastSaved.snapshotIndex + 1}`,
+          ? `进度已自动保存 · 章节 ${savedChapterLabel}`
+          : `进度已自动保存`,
       },
     ]);
     onClearLastSaved();
@@ -239,7 +244,7 @@ export function ChatBox({
       setHistory((prev) => [
         ...prev,
         { role: 'player', text: msg },
-        { role: 'system', text: '发送失败：未连接服务器（请先启动 server:3010）' },
+        { role: 'system', text: '发送失败：未连接服务器（请先启动 server:4000）' },
       ]);
       setInput('');
       return;
@@ -258,17 +263,6 @@ export function ChatBox({
     lastStreamRef.current = '';
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [connected, input, isStreaming, onSend]);
-
-  const handleSave = useCallback(() => {
-    if (!connected) {
-      setHistory((prev) => [
-        ...prev,
-        { role: 'system', text: '存档失败：未连接服务器' },
-      ]);
-      return;
-    }
-    onSave();
-  }, [connected, onSave]);
 
   const handleOpenLoad = useCallback(() => {
     if (!connected) {
@@ -363,32 +357,9 @@ export function ChatBox({
               </button>
               <button
                 type="button"
-                onClick={handleSave}
-                aria-label="存档"
-                title="存档（同一会话可多次存入同一文件）"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-emerald-400"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                  aria-hidden
-                >
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
-              </button>
-              <button
-                type="button"
                 onClick={handleOpenLoad}
-                aria-label="读档"
-                title="读档 / 回档"
+                aria-label="存档槽"
+                title="整局存档：每轮对话自动写入当前槽；也可新开一局"
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-sky-400"
               >
                 <svg
@@ -425,7 +396,7 @@ export function ChatBox({
               <p className="text-slate-500 text-sm">开始对话吧</p>
             )}
             {!connected && (
-              <p className="text-red-400 text-sm">未连接服务器，请先启动 server（3010）</p>
+              <p className="text-red-400 text-sm">未连接服务器，请先启动 server（4000）</p>
             )}
             {history.map((item, i) => (
               <div
