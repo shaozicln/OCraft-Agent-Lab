@@ -108,6 +108,11 @@ exports.packExchangeEventSchema = zod_1.z.object({
     speakers: zod_1.z.tuple([exports.packIdSchema, exports.packIdSchema]),
     /** 软剧本提示，非逐字稿 */
     beat_hints: zod_1.z.array(zod_1.z.string()).default([]),
+    /**
+     * 与 speakers 对齐的保底短句；LLM 护栏失败时使用。
+     * 长度可为 0～speakers.length。
+     */
+    fallback_lines: zod_1.z.array(zod_1.z.string()).default([]),
     set_flags: zod_1.z.array(exports.packFlagSetEntrySchema).default([]),
     /**
      * true（默认）：若 set_flags 中任一 flag 已置位则不再触发（一次）。

@@ -149,7 +149,7 @@ export class AgentHarnessService {
       toolCalls.length > 0
         ? `\n\n【本轮已执行工具】\n${toolCalls.map((t) => `- ${t.tool}: ${t.observation}`).join('\n')}`
         : '';
-    const replySystem = `${systemAfter}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}${toolObs}\n\n请用角色口吻直接回复玩家，不要再输出工具调用。`;
+    const replySystem = `${systemAfter}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}${toolObs}\n\n请用角色口吻直接回复玩家，不要再输出工具调用。\n禁止自称 AI/助手/语言模型；不要总结剧情或宣布升章。`;
 
     const replyMessages = this.conversationService.buildDialogMessages(
       playerId,

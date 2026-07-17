@@ -7,6 +7,7 @@ import type {
 import { LlmService } from './llm.service';
 import { AgentTraceService } from './agent-trace.service';
 import { evaluateExchangeEvents } from './npc-exchange';
+import { looksLikeAiSlop } from './reply-guard';
 import { NpcService } from '../npc/npc.service';
 import { WorldProgressService } from '../story/world-progress.service';
 import { PackService } from '../story/pack.service';
@@ -60,11 +61,12 @@ export class NpcExchangeService {
       for (let i = 0; i < event.speakers.length; i++) {
         const speakerId = event.speakers[i];
         const otherId = i === 0 ? speakerB : speakerA;
-        const text = await this.generateLine({
+        const text = await this.generateLineWithGuard({
           playerId,
           event,
           speakerId,
           otherId,
+          speakerIndex: i,
           chapterState,
           playerMessage,
           assistantReply,
@@ -117,15 +119,71 @@ export class NpcExchangeService {
     }
   }
 
+  private resolveFallback(
+    event: PackExchangeEvent,
+    speakerIndex: number,
+    speakerName: string,
+    otherName: string,
+  ): string {
+    const fromPack = event.fallback_lines?.[speakerIndex]?.trim();
+    if (fromPack) return fromPack;
+    const generics = [
+      `${otherName}……你也听到那些传闻了？`,
+      `……嗯。先别声张。`,
+    ];
+    return generics[speakerIndex % generics.length] ?? `${speakerName}：……`;
+  }
+
+  private async generateLineWithGuard(opts: {
+    playerId: string;
+    event: PackExchangeEvent;
+    speakerId: string;
+    otherId: string;
+    speakerIndex: number;
+    chapterState: string;
+    playerMessage: string;
+    assistantReply: string;
+    priorLines: NpcExchangeEvent['lines'];
+  }): Promise<string> {
+    const pack = this.packService.getPack();
+    const speakerName =
+      pack.npcs.find((n) => n.npc_id === opts.speakerId)?.name ??
+      opts.speakerId;
+    const otherName =
+      pack.npcs.find((n) => n.npc_id === opts.otherId)?.name ?? opts.otherId;
+
+    let text = await this.generateLine({ ...opts, forceRewrite: false });
+    if (looksLikeAiSlop(text)) {
+      this.logger.warn(
+        `Exchange AI-slop retry event=${opts.event.id} speaker=${opts.speakerId}`,
+      );
+      text = await this.generateLine({ ...opts, forceRewrite: true });
+    }
+    if (looksLikeAiSlop(text)) {
+      text = this.resolveFallback(
+        opts.event,
+        opts.speakerIndex,
+        speakerName,
+        otherName,
+      );
+      this.logger.warn(
+        `Exchange fallback event=${opts.event.id} speaker=${opts.speakerId}`,
+      );
+    }
+    return text.trim();
+  }
+
   private async generateLine(opts: {
     playerId: string;
     event: PackExchangeEvent;
     speakerId: string;
     otherId: string;
+    speakerIndex: number;
     chapterState: string;
     playerMessage: string;
     assistantReply: string;
     priorLines: NpcExchangeEvent['lines'];
+    forceRewrite?: boolean;
   }): Promise<string> {
     const {
       playerId,
@@ -136,6 +194,7 @@ export class NpcExchangeService {
       playerMessage,
       assistantReply,
       priorLines,
+      forceRewrite,
     } = opts;
     const pack = this.packService.getPack();
     const otherName =
@@ -153,8 +212,13 @@ export class NpcExchangeService {
       storyFlags,
     });
 
-    const beat =
-      event.beat_hints.length > 0
+    const beatHint =
+      event.beat_hints[opts.speakerIndex] ??
+      event.beat_hints[0] ??
+      '';
+    const beat = beatHint
+      ? `【本段应触及】\n- ${beatHint}`
+      : event.beat_hints.length > 0
         ? `【本段应触及】\n${event.beat_hints.map((h) => `- ${h}`).join('\n')}`
         : '';
 
@@ -162,7 +226,11 @@ export class NpcExchangeService {
       '【互聊模式·旁听戏】',
       `你正在对「${otherName}」说话，不是对玩家沈檐。`,
       '只说 1～2 句口语短对白；禁止替对方说话；禁止总结剧情；禁止宣布升章或改结局。',
-      '不要输出工具调用或 JSON。',
+      '严禁自称 AI / 语言模型 / 助手；不要输出工具调用或 JSON。',
+      '禁止说：游戏、存档、模拟、结局、世界是假的（除非对方先说且你只含糊带过）。',
+      forceRewrite
+        ? '上一稿不合格（像讲解或AI腔），请完全重写成角色口语短句。'
+        : '',
       beat,
     ]
       .filter(Boolean)
@@ -186,8 +254,8 @@ export class NpcExchangeService {
     ];
 
     return this.llmService.complete(messages, {
-      temperature: 0.4,
-      maxTokens: 120,
+      temperature: forceRewrite ? 0.25 : 0.4,
+      maxTokens: 100,
     });
   }
 }

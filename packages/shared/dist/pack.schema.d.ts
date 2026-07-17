@@ -91,6 +91,7 @@ export declare const packExchangeEventSchema: z.ZodObject<{
     require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
     speakers: z.ZodTuple<[z.ZodString, z.ZodString], null>;
     beat_hints: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    fallback_lines: z.ZodDefault<z.ZodArray<z.ZodString>>;
     set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
         name: z.ZodString;
         value: z.ZodDefault<z.ZodString>;
@@ -130,6 +131,7 @@ export declare const packTriggersFileSchema: z.ZodObject<{
         require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
         speakers: z.ZodTuple<[z.ZodString, z.ZodString], null>;
         beat_hints: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        fallback_lines: z.ZodDefault<z.ZodArray<z.ZodString>>;
         set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
             name: z.ZodString;
             value: z.ZodDefault<z.ZodString>;
@@ -414,6 +416,7 @@ export declare const storyPackSchema: z.ZodObject<{
             require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
             speakers: z.ZodTuple<[z.ZodString, z.ZodString], null>;
             beat_hints: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            fallback_lines: z.ZodDefault<z.ZodArray<z.ZodString>>;
             set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
                 name: z.ZodString;
                 value: z.ZodDefault<z.ZodString>;

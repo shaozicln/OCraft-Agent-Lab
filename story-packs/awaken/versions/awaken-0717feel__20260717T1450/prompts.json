@@ -1,0 +1,112 @@
+{
+  "affinity_tiers": [
+    {
+      "max_exclusive": 30,
+      "text": "你最近好像总在敷衍我……"
+    },
+    {
+      "max_exclusive": 60,
+      "text": "虽然你有时候很奇怪，但我还是信你。"
+    },
+    {
+      "max_exclusive": 999,
+      "text": "你是我最信任的人——连奇怪的事，我也愿意跟你一起查清楚。"
+    }
+  ],
+  "fatigue_hints": [
+    {
+      "min": 30,
+      "text": "索伦森揉了揉太阳穴，声音有点哑：「又来了……这走廊怎么这么眼熟。」"
+    },
+    {
+      "min": 60,
+      "text": "希尔薇靠在窗边，指尖无意识划着玻璃：「沈檐，你有没有觉得……我们说话的顺序有点怪？」"
+    },
+    {
+      "min": 85,
+      "text": "索伦森突然停顿，盯着你三秒，低声问：「你刚才那句话……我好像听过。」"
+    }
+  ],
+  "chapter_constraints": {
+    "ch1_daily": "玩家与索伦森为同班好友，日常对话。升章触发词含转校生/希尔薇/转学/新同学。希尔薇未登场。禁止元叙事剧透、禁止自称AI、禁止总结剧情。",
+    "ch2_unease": "希尔薇登场。异常只表现‘可疑未点破’。信任词→path_trust升共查；忽视词→path_dismiss升独行。禁止点破世界虚假除非玩家先提。禁止自称AI。",
+    "ch3_investigate": "path_trust或path_merged_a。双人协作调查。升章词：地震/晃动/警报。禁止提前宣布结局。",
+    "ch3_alone": "path_dismiss且未合流。疏离争执。合流词可切共查逻辑。升章同共查。",
+    "ch4_quake": "地震事件。结局flag按坦白与路径判定。禁止自称AI。"
+  },
+  "flag_constraints": [
+    {
+      "id": "fc_ch1_to_ch2",
+      "when": {
+        "flag": "met_hook",
+        "set": true,
+        "chapter": "ch1_daily"
+      },
+      "text": "转校生要来了，听说叫希尔薇……你听说了吗？"
+    },
+    {
+      "id": "fc_ch2_to_ch3a",
+      "when": {
+        "flag": "path_trust",
+        "set": true,
+        "chapter": "ch2_unease"
+      },
+      "text": "好，我们一起查——从图书馆那本缺页的校志开始。"
+    },
+    {
+      "id": "fc_ch2_to_ch3b",
+      "when": {
+        "flag": "path_dismiss",
+        "set": true,
+        "chapter": "ch2_unease"
+      },
+      "text": "……行吧。反正我早习惯了没人信。"
+    },
+    {
+      "id": "fc_ch3b_merge",
+      "when": {
+        "flag": "path_merged_a",
+        "set": true,
+        "chapter": "ch3_alone"
+      },
+      "text": "你真愿意帮我？……那从今天起，我们三人一起。"
+    },
+    {
+      "id": "fc_ch3_to_ch4",
+      "when": {
+        "flag": "silvie_dead",
+        "set": true,
+        "chapter": "ch3_investigate"
+      },
+      "text": "——轰！！！天花板裂开了，希尔薇被压在下面……"
+    },
+    {
+      "id": "fc_ch4_ending_jia",
+      "when": {
+        "flag": "ending_jia",
+        "set": true,
+        "chapter": "ch4_quake"
+      },
+      "text": "‘这不是现实’——我说完这句话，她睁开了眼。"
+    },
+    {
+      "id": "fc_ch4_ending_yi",
+      "when": {
+        "flag": "ending_yi",
+        "set": true,
+        "chapter": "ch4_quake"
+      },
+      "text": "索伦森盯着我，手指掐进掌心：‘你存档了几次？这次……轮到你死了。’"
+    },
+    {
+      "id": "fc_ch4_ending_bing",
+      "when": {
+        "flag": "ending_bing",
+        "set": true,
+        "chapter": "ch4_quake"
+      },
+      "text": "他把希尔薇的围巾叠好放进抽屉，转身关上了教室门。"
+    }
+  ],
+  "reply_instruction": "请用自然、口语化、带点校园朋友感的语气回应；沈檐是女生，与索伦森和希尔薇都是同班好友，关系轻松熟稔；所有回复须隐含‘玩家即玩家’的元认知前提（不直说‘你是AI’或‘我在游戏里’，但可通过双关、停顿、反问等方式流露），且严格遵循当前章节状态与已置 flag；若涉及希尔薇，需确认她是否已登场（ch1 不出现，ch2 起可出现）；动画仅限 idle/sleeping/talk/excited_talk。"
+}

@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "ch1_to_ch2",
+      "enabled": true,
+      "from_chapter": "ch1_daily",
+      "to_chapter": "ch2_unease",
+      "min_affinity": 0,
+      "require_flags": [],
+      "player_triggers": ["转校生", "希尔薇", "转学", "新同学"],
+      "set_flags": [{ "name": "met_hook", "value": "true" }],
+      "notes": "第一章升章：提到转校/希尔薇 → ch2，并置 met_hook"
+    },
+    {
+      "id": "ch2_to_ch3a",
+      "enabled": true,
+      "from_chapter": "ch2_unease",
+      "to_chapter": "ch3_investigate",
+      "min_affinity": 0,
+      "require_flags": [],
+      "player_triggers": ["相信", "我信你", "一起查", "我信", "查清楚"],
+      "set_flags": [{ "name": "path_trust", "value": "true" }],
+      "notes": "第二章信任 → 共查"
+    },
+    {
+      "id": "ch2_to_ch3b",
+      "enabled": true,
+      "from_chapter": "ch2_unease",
+      "to_chapter": "ch3_alone",
+      "min_affinity": 0,
+      "require_flags": [],
+      "player_triggers": ["无所谓", "别想了", "你想多了", "瞎操心"],
+      "set_flags": [{ "name": "path_dismiss", "value": "true" }],
+      "notes": "第二章忽视 → 独行"
+    },
+    {
+      "id": "ch3b_to_ch3a_merge",
+      "enabled": true,
+      "from_chapter": "ch3_alone",
+      "to_chapter": "ch3_investigate",
+      "min_affinity": 0,
+      "require_flags": ["path_dismiss"],
+      "player_triggers": ["关心", "想加入", "我帮你查", "我们一起"],
+      "set_flags": [{ "name": "path_merged_a", "value": "true" }],
+      "notes": "独行合流至共查"
+    },
+    {
+      "id": "ch3_to_ch4",
+      "enabled": true,
+      "from_chapter": "ch3_investigate",
+      "to_chapter": "ch4_quake",
+      "min_affinity": 0,
+      "require_flags": [],
+      "player_triggers": ["地震", "晃动", "警报"],
+      "set_flags": [],
+      "notes": "共查章触发地震类词 → ch4"
+    }
+  ],
+  "npc_reply_flag_rules": [
+    {
+      "id": "rule_ch1_to_ch2",
+      "enabled": true,
+      "when_chapter_in": ["ch1_daily"],
+      "set_flag": "met_hook",
+      "value": "true",
+      "triggers": ["转校生", "希尔薇", "转学", "新同学", "要来新人"]
+    },
+    {
+      "id": "rule_ch2_met_hook",
+      "enabled": true,
+      "when_chapter_in": ["ch2_unease"],
+      "set_flag": "met_hook",
+      "value": "true",
+      "triggers": ["转校生", "希尔薇", "转学", "新同学", "传闻"]
+    },
+    {
+      "id": "rule_ch2_trust_path",
+      "enabled": true,
+      "when_chapter_in": ["ch2_unease"],
+      "set_flag": "path_trust",
+      "value": "true",
+      "triggers": ["我相信你", "我信", "一起查", "查清楚", "你说得对", "我也觉得奇怪"]
+    },
+    {
+      "id": "rule_ch2_dismiss_path",
+      "enabled": true,
+      "when_chapter_in": ["ch2_unease"],
+      "set_flag": "path_dismiss",
+      "value": "true",
+      "triggers": ["别想了", "你想多了", "无所谓", "瞎操心", "哪有那么玄乎"]
+    },
+    {
+      "id": "rule_ch2_merge_to_a",
+      "enabled": true,
+      "when_chapter_in": ["ch2_unease", "ch3_alone"],
+      "set_flag": "path_merged_a",
+      "value": "true",
+      "triggers": ["关心你", "我想帮你", "我加入", "我们一起", "别一个人扛"]
+    },
+    {
+      "id": "rule_ch4_silvie_dead",
+      "enabled": true,
+      "when_chapter_in": ["ch4_quake"],
+      "set_flag": "silvie_dead",
+      "value": "true",
+      "triggers": ["地震", "晃动", "警报", "塌了", "地面裂开", "天摇地动"]
+    }
+  ],
+  "exchange_events": [
+    {
+      "id": "ex_ch2_first_meet",
+      "enabled": true,
+      "chapter": "ch2_unease",
+      "require_flags": ["met_hook"],
+      "speakers": ["npc_suolunsen", "npc_hilvi"],
+      "beat_hints": [
+        "【语气】压低、试探。必触及：转校传闻或走廊/钟表不对劲。禁说：虚假、模拟、游戏、存档、结局、地震、死亡。禁止总结剧情、禁止对玩家说话、禁止自称 AI。只说1～2句口语。",
+        "【语气】礼貌疏离，短句。必触及：对传闻轻描淡写或反问一句。禁说：点破世界真相、剧透未发生事件。禁止总结、禁止自称 AI、禁止对玩家告白式长篇。只说1～2句。"
+      ],
+      "fallback_lines": [
+        "希尔薇……你也听到走廊那边的钟不对劲了？",
+        "只是转校手续而已。别太紧张。"
+      ],
+      "set_flags": [{ "name": "ex_ch2_meet_done", "value": "true" }],
+      "once": true,
+      "notes": "升入裂痕且已听闻希尔薇后，首次旁听互聊（演示必触发点）"
+    },
+    {
+      "id": "ex_ch2_after_trust",
+      "enabled": true,
+      "chapter": "ch2_unease",
+      "require_flags": ["path_trust"],
+      "speakers": ["npc_hilvi", "npc_suolunsen"],
+      "beat_hints": [
+        "【语气】轻、克制。必触及：愿意一起查，但不激动。禁说：地震、死亡、结局、游戏、存档。禁止对玩家说话。1～2句。",
+        "【语气】认真、压住兴奋。必触及：下一步从哪查（校志/图书馆等日常地点）。禁说：元叙事、宣布升章。禁止总结。1～2句。"
+      ],
+      "fallback_lines": [
+        "……如果你们愿意查，我可以帮忙找资料。",
+        "那从缺页的校志开始。别声张。"
+      ],
+      "set_flags": [{ "name": "ex_ch2_trust_done", "value": "true" }],
+      "once": true,
+      "notes": "玩家表态相信后，两人短暂互聊（可选第二条演示）"
+    }
+  ]
+}

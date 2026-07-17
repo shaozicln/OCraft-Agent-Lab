@@ -107,6 +107,11 @@ export const packExchangeEventSchema = z.object({
   speakers: z.tuple([packIdSchema, packIdSchema]),
   /** 软剧本提示，非逐字稿 */
   beat_hints: z.array(z.string()).default([]),
+  /**
+   * 与 speakers 对齐的保底短句；LLM 护栏失败时使用。
+   * 长度可为 0～speakers.length。
+   */
+  fallback_lines: z.array(z.string()).default([]),
   set_flags: z.array(packFlagSetEntrySchema).default([]),
   /**
    * true（默认）：若 set_flags 中任一 flag 已置位则不再触发（一次）。
