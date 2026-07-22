@@ -97,16 +97,21 @@ export async function loginAccount(
 export async function validateAuthSession(
   session: AuthSession,
 ): Promise<AuthSession | null> {
-  const res = await fetch(`${GAME_SERVER_URL}/auth/me`, {
-    headers: { Authorization: `Bearer ${session.token}` },
-  });
+  try {
+    const res = await fetch(`${GAME_SERVER_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${session.token}` },
+    });
 
-  if (!res.ok) return null;
+    if (!res.ok) return null;
 
-  const data = await res.json().catch(() => null);
-  if (!data) return null;
+    const data = await res.json().catch(() => null);
+    if (!data) return null;
 
-  const next = authSessionSchema.parse(data);
-  setAuthSession(next);
-  return next;
+    const next = authSessionSchema.parse(data);
+    setAuthSession(next);
+    return next;
+  } catch {
+    // 后端未启动 / 网络中断时勿抛到页面；当作未登录
+    return null;
+  }
 }

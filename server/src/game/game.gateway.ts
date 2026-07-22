@@ -24,6 +24,7 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { AgentHarnessService } from '../agent/agent-harness.service';
 import { NpcExchangeService } from '../agent/npc-exchange.service';
+import { NpcAsideService } from '../agent/npc-aside.service';
 import { PackService } from '../story/pack.service';
 import { ConversationService } from './conversation.service';
 import { NpcService } from '../npc/npc.service';
@@ -48,6 +49,7 @@ export class GameGateway implements OnGatewayConnection {
     private readonly authService: AuthService,
     private readonly agentHarness: AgentHarnessService,
     private readonly npcExchange: NpcExchangeService,
+    private readonly npcAside: NpcAsideService,
     private readonly conversationService: ConversationService,
     private readonly npcService: NpcService,
     private readonly packService: PackService,
@@ -185,12 +187,12 @@ export class GameGateway implements OnGatewayConnection {
     }
 
     const playerId = this.requirePlayerId(client);
-    const { npcId, message } = parsed.data;
+    const { npcId, message, nearbyNpcIds } = parsed.data;
 
     return this.packService.runWithPlayerAsync(playerId, async () => {
       await this.conversationService.ensureSession(playerId, npcId);
       this.logger.log(
-        `player_chat player=${playerId} npc=${npcId} msg="${message}"`,
+        `player_chat player=${playerId} npc=${npcId} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
       );
 
       try {
@@ -234,6 +236,10 @@ export class GameGateway implements OnGatewayConnection {
           traceId: result.traceId,
         });
         if (exchange) {
+          await this.conversationService.appendExchangeToSceneLog(
+            playerId,
+            exchange,
+          );
           client.emit('npc_exchange', exchange);
           client.emit(
             'npc_state_update',
@@ -244,6 +250,21 @@ export class GameGateway implements OnGatewayConnection {
               'npc_state_update',
               this.buildStatePayload(playerId, npcId),
             );
+          }
+        } else {
+          const aside = await this.npcAside.tryNearbyAside({
+            playerId,
+            chatNpcId: npcId,
+            nearbyNpcIds: nearbyNpcIds ?? [],
+            playerMessage: message,
+            assistantReply: fullReply,
+          });
+          if (aside) {
+            await this.conversationService.appendAsideToSceneLog(
+              playerId,
+              aside,
+            );
+            client.emit('npc_aside', aside);
           }
         }
 
@@ -373,6 +394,7 @@ export class GameGateway implements OnGatewayConnection {
         },
         scope: restored.scope,
         restored_npc_ids: restored.restoredNpcIds,
+        scene_log: restored.sceneLog,
       });
       client.emit(
         'story_map',

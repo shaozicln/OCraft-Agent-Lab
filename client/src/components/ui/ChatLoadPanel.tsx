@@ -1,13 +1,15 @@
 'use client';
 
 import type { ConversationArchiveSummary } from '@ocraft/shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface ChatLoadPanelProps {
   open: boolean;
   archives: ConversationArchiveSummary[] | null;
   loading: boolean;
   error: string | null;
+  /** 当前活跃存档槽 filename（高亮 +「继续」） */
+  activeFilename?: string | null;
   /** chapterId → 展示名（来自当前 Pack） */
   chapterLabels?: Record<string, string>;
   onClose: () => void;
@@ -30,11 +32,17 @@ function formatTime(iso: string) {
   }
 }
 
+function latestSnap(archive: ConversationArchiveSummary) {
+  if (!archive.snapshots.length) return null;
+  return archive.snapshots[archive.snapshots.length - 1]!;
+}
+
 export function ChatLoadPanel({
   open,
   archives,
   loading,
   error,
+  activeFilename = null,
   chapterLabels = {},
   onClose,
   onLoad,
@@ -48,6 +56,7 @@ export function ChatLoadPanel({
   } | null>(null);
   const [renameFor, setRenameFor] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [expandedOlder, setExpandedOlder] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,6 +69,26 @@ export function ChatLoadPanel({
     return () => window.removeEventListener('mousedown', close);
   }, [menu]);
 
+  useEffect(() => {
+    if (!open) {
+      setExpandedOlder(null);
+      setMenu(null);
+      setRenameFor(null);
+    }
+  }, [open]);
+
+  const sorted = useMemo(() => {
+    if (!archives) return [];
+    return [...archives].sort((a, b) => {
+      const aActive = a.filename === activeFilename ? 1 : 0;
+      const bActive = b.filename === activeFilename ? 1 : 0;
+      if (aActive !== bActive) return bActive - aActive;
+      const aT = latestSnap(a)?.saved_at ?? a.session_started_at;
+      const bT = latestSnap(b)?.saved_at ?? b.session_started_at;
+      return bT.localeCompare(aT);
+    });
+  }, [archives, activeFilename]);
+
   if (!open) return null;
 
   const labelOf = (chapterId: string) =>
@@ -67,6 +96,18 @@ export function ChatLoadPanel({
 
   const titleOf = (archive: ConversationArchiveSummary) =>
     archive.display_name?.trim() || archive.filename;
+
+  const handlePrimary = (archive: ConversationArchiveSummary) => {
+    const snap = latestSnap(archive);
+    if (!snap) return;
+    const isCurrent = archive.filename === activeFilename;
+    if (isCurrent) {
+      // 已在当前槽：关闭面板即可「继续玩」
+      onClose();
+      return;
+    }
+    onLoad(archive.filename, snap.index);
+  };
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-50 flex items-end justify-center px-4 pb-48">
@@ -76,36 +117,21 @@ export function ChatLoadPanel({
         aria-label="关闭读档面板"
         onClick={onClose}
       />
-      <div className="relative flex max-h-72 w-full max-w-md flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
+      <div className="relative flex max-h-80 w-full max-w-md flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-700 px-4 py-2">
-          <span className="text-sm font-medium text-white">整局存档</span>
-          <div className="flex items-center gap-2">
-            {onNewRunFromStart && (
-              <button
-                type="button"
-                className="rounded px-2 py-1 text-xs text-amber-300 hover:bg-slate-800"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      '新建一局存档槽并从第一章开始？之后每轮对话都会自动写入这个新槽；旧槽仍可在列表读回。',
-                    )
-                  ) {
-                    onNewRunFromStart();
-                    onClose();
-                  }
-                }}
-              >
-                新开一局
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-2 py-1 text-xs text-slate-400 hover:text-white"
-            >
-              关闭
-            </button>
+          <div className="min-w-0">
+            <span className="text-sm font-medium text-white">整局存档</span>
+            <p className="text-[11px] text-slate-500 truncate">
+              每轮对话自动写入当前槽 · 「继续」= 当前局，「读取」= 换一局
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 px-2 py-1 text-xs text-slate-400 hover:text-white"
+          >
+            关闭
+          </button>
         </div>
 
         <div className="flex-1 space-y-2 overflow-y-auto px-2 py-2">
@@ -117,70 +143,168 @@ export function ChatLoadPanel({
           {error && (
             <p className="py-2 text-center text-sm text-red-400">{error}</p>
           )}
-          {!loading && !error && archives?.length === 0 && (
-            <p className="py-4 text-center text-sm text-slate-500">
-              暂无存档槽。开聊后会自动创建并每轮写入；也可点右上角「新开一局」。
-            </p>
+          {!loading && !error && sorted.length === 0 && (
+            <div className="space-y-3 px-2 py-6 text-center">
+              <p className="text-sm text-slate-400">还没有存档槽</p>
+              <p className="text-xs text-slate-500">
+                开聊后会自动创建；也可以直接新开一局。
+              </p>
+              {onNewRunFromStart && (
+                <button
+                  type="button"
+                  className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-500"
+                  onClick={() => {
+                    onNewRunFromStart();
+                    onClose();
+                  }}
+                >
+                  新开一局
+                </button>
+              )}
+            </div>
           )}
-          {archives?.map((archive) => (
-            <div
-              key={archive.filename}
-              className="overflow-hidden rounded-lg border border-slate-700 bg-slate-800/80"
-            >
+
+          {sorted.map((archive) => {
+            const isCurrent = archive.filename === activeFilename;
+            const latest = latestSnap(archive);
+            const older =
+              archive.snapshots.length > 1
+                ? archive.snapshots.slice(0, -1).reverse()
+                : [];
+            const chapterId = latest?.npc_state.chapter_state;
+            const chapterLabel = chapterId ? labelOf(chapterId) : null;
+
+            return (
               <div
-                className="cursor-context-menu border-b border-slate-700 px-3 py-1.5 text-xs text-slate-300"
-                title="右键可重命名"
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setMenu({
-                    x: e.clientX,
-                    y: e.clientY,
-                    filename: archive.filename,
-                  });
-                }}
+                key={archive.filename}
+                className={`overflow-hidden rounded-lg border ${
+                  isCurrent
+                    ? 'border-sky-500/70 bg-sky-950/40 ring-1 ring-sky-500/30'
+                    : 'border-slate-700 bg-slate-800/80'
+                }`}
               >
-                <span className="font-medium text-white">
-                  {titleOf(archive)}
-                </span>
-                <span className="ml-2 rounded bg-emerald-950 px-1.5 py-0.5 text-[10px] text-emerald-300">
-                  自动保存
-                </span>
-                {archive.display_name ? (
-                  <span className="ml-2 text-slate-500">{archive.filename}</span>
-                ) : null}
-                <span className="ml-2 text-slate-500">
-                  · {formatTime(archive.session_started_at)}
-                </span>
-              </div>
-              <ul className="divide-y divide-slate-700/80">
-                {archive.snapshots.map((snap) => (
-                  <li key={`${archive.filename}-${snap.index}`}>
+                <div
+                  className="cursor-context-menu px-3 py-2"
+                  title="右键可重命名"
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      filename: archive.filename,
+                    });
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate text-sm font-medium text-white">
+                          {titleOf(archive)}
+                        </span>
+                        {isCurrent && (
+                          <span className="shrink-0 rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                            当前
+                          </span>
+                        )}
+                        <span className="shrink-0 rounded bg-emerald-950 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                          自动保存
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-400">
+                        {latest
+                          ? `${latest.message_count} 条 · ${formatTime(latest.saved_at)}`
+                          : formatTime(archive.session_started_at)}
+                        {chapterLabel ? ` · ${chapterLabel}` : ''}
+                        {latest
+                          ? ` · 好感 ${latest.npc_state.affinity}`
+                          : ''}
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => onLoad(archive.filename, snap.index)}
-                      className="w-full px-3 py-2 text-left transition-colors hover:bg-slate-700/60"
+                      disabled={!latest}
+                      onClick={() => handlePrimary(archive)}
+                      className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 ${
+                        isCurrent
+                          ? 'bg-sky-600 text-white hover:bg-sky-500'
+                          : 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                      }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-white">
-                          快照 #{snap.index + 1}
-                        </span>
-                        <span className="shrink-0 text-xs text-slate-400">
-                          {formatTime(snap.saved_at)}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 text-xs text-slate-400">
-                        {snap.message_count} 条对话 · 好感{' '}
-                        {snap.npc_state.affinity} · 疲惫{' '}
-                        {snap.npc_state.fatigue} ·{' '}
-                        {labelOf(snap.npc_state.chapter_state)}
-                      </div>
+                      {isCurrent ? '继续' : '读取'}
                     </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+                  </div>
+
+                  {older.length > 0 && (
+                    <div className="mt-2 border-t border-slate-700/80 pt-1.5">
+                      <button
+                        type="button"
+                        className="text-[11px] text-slate-500 hover:text-slate-300"
+                        onClick={() =>
+                          setExpandedOlder((prev) =>
+                            prev === archive.filename ? null : archive.filename,
+                          )
+                        }
+                      >
+                        {expandedOlder === archive.filename
+                          ? '收起更早快照'
+                          : `更早快照（${older.length}）`}
+                      </button>
+                      {expandedOlder === archive.filename && (
+                        <ul className="mt-1 space-y-1">
+                          {older.map((snap) => (
+                            <li key={`${archive.filename}-${snap.index}`}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onLoad(archive.filename, snap.index)
+                                }
+                                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-slate-400 hover:bg-slate-700/50 hover:text-slate-200"
+                              >
+                                <span>
+                                  快照 #{snap.index + 1} · {snap.message_count}{' '}
+                                  条 · {labelOf(snap.npc_state.chapter_state)}
+                                </span>
+                                <span className="shrink-0">
+                                  {formatTime(snap.saved_at)} · 读取
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
+
+        {/* 新开一局：与读档列表隔离 */}
+        {onNewRunFromStart && sorted.length > 0 && (
+          <div className="shrink-0 border-t border-slate-700 bg-slate-950/80 px-4 py-3">
+            <p className="text-[11px] text-slate-500">
+              新开会创建<strong className="text-slate-400">新槽</strong>
+              ，旧槽仍留在上方列表，不会覆盖删除。
+            </p>
+            <button
+              type="button"
+              className="mt-2 w-full rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-200 hover:bg-amber-900/50"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    '新建一局存档槽并从起始章开始？\n\n旧槽仍会留在列表里，可随时读回；之后每轮对话写入这个新槽。',
+                  )
+                ) {
+                  onNewRunFromStart();
+                  onClose();
+                }
+              }}
+            >
+              新开一局（保留旧槽）
+            </button>
+          </div>
+        )}
       </div>
 
       {menu && (

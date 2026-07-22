@@ -9,17 +9,21 @@ import type {
   ConversationLoadedEvent,
   ConversationSavedEvent,
   NewRunStartedEvent,
+  NpcAsideEvent,
   NpcExchangeEvent,
+  SceneUtterance,
 } from '@ocraft/shared';
 
 interface ChatBoxProps {
   open: boolean;
+  npcId: string;
   npcName: string;
   streamText: string;
   isStreaming: boolean;
   connected: boolean;
   lastSaved: ConversationSavedEvent | null;
   lastExchange?: NpcExchangeEvent | null;
+  lastAside?: NpcAsideEvent | null;
   archivesList: ConversationArchiveSummary[] | null;
   loadedConversation: ConversationLoadedEvent | null;
   saveError: string | null;
@@ -44,6 +48,53 @@ interface ChatBoxProps {
   onClearLastSaved: () => void;
   onClearLastNewRun?: () => void;
   onClearLastExchange?: () => void;
+  onClearLastAside?: () => void;
+  /** 旁听逐句时：当前开口的 NPC；结束传 null（驱动 3D talk） */
+  onExchangeSpeak?: (npcId: string | null) => void;
+}
+
+function sceneLogToChatMessages(log: SceneUtterance[]): ChatMessage[] {
+  return log.map((u) => {
+    switch (u.kind) {
+      case 'player_to_npc':
+        return {
+          role: 'player' as const,
+          text: u.text,
+          speakerId: u.speaker_id,
+          speakerName: u.speaker_name,
+        };
+      case 'npc_to_player':
+        if (u.meta?.aside) {
+          return {
+            role: 'aside' as const,
+            text: u.text,
+            speakerId: u.speaker_id,
+            speakerName: u.speaker_name,
+          };
+        }
+        return {
+          role: 'npc' as const,
+          text: u.text,
+          speakerId: u.speaker_id,
+          speakerName: u.speaker_name,
+        };
+      case 'npc_to_npc':
+        return {
+          role: 'exchange' as const,
+          text: u.text,
+          speakerId: u.speaker_id,
+          speakerName: u.speaker_name,
+        };
+      case 'system':
+      default:
+        return {
+          role: 'system' as const,
+          text: u.text,
+          speakerId: u.speaker_id,
+          speakerName: u.speaker_name,
+        };
+    }
+  });
 }
 
 function archivedToChatMessages(
@@ -55,14 +106,23 @@ function archivedToChatMessages(
   }));
 }
 
+function loadedToChatMessages(loaded: ConversationLoadedEvent): ChatMessage[] {
+  if (loaded.scene_log && loaded.scene_log.length > 0) {
+    return sceneLogToChatMessages(loaded.scene_log);
+  }
+  return archivedToChatMessages(loaded.messages);
+}
+
 export function ChatBox({
   open,
+  npcId,
   npcName,
   streamText,
   isStreaming,
   connected,
   lastSaved,
   lastExchange,
+  lastAside,
   archivesList,
   loadedConversation,
   saveError,
@@ -86,6 +146,8 @@ export function ChatBox({
   onClearLastSaved,
   onClearLastNewRun,
   onClearLastExchange,
+  onClearLastAside,
+  onExchangeSpeak,
 }: ChatBoxProps) {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<ChatMessage[]>([]);
@@ -93,17 +155,27 @@ export function ChatBox({
   const [loadPanelOpen, setLoadPanelOpen] = useState(false);
   const [archivesLoading, setArchivesLoading] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  /** 旁听逐句播放中：禁输入 */
+  const [listening, setListening] = useState(false);
+  /** 当前活跃存档槽（高亮 / 顶栏） */
+  const [activeSlotFilename, setActiveSlotFilename] = useState<string | null>(
+    null,
+  );
+  const [activeSlotTitle, setActiveSlotTitle] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastStreamRef = useRef('');
+  const streamNpcIdRef = useRef(npcId);
   const historyFullscreenRef = useRef(historyFullscreen);
   const loadPanelOpenRef = useRef(loadPanelOpen);
   historyFullscreenRef.current = historyFullscreen;
   loadPanelOpenRef.current = loadPanelOpen;
 
+  const inputLocked = isStreaming || listening;
+
   useEffect(() => {
     if (!open) {
-      setHistory([]);
+      // 关闭聊天窗不清空整场流（Q1=B）；仅收起面板
       setInput('');
       setHistoryFullscreen(false);
       setLoadPanelOpen(false);
@@ -120,13 +192,40 @@ export function ChatBox({
 
   useEffect(() => {
     if (!loadedConversation) return;
-    setHistory(archivedToChatMessages(loadedConversation.messages));
+    const filename = loadedConversation.filename;
+    setActiveSlotFilename(filename);
+    const fromList = archivesList?.find((a) => a.filename === filename);
+    const title =
+      fromList?.display_name?.trim() || filename;
+    setActiveSlotTitle(title);
+    const chapterId = loadedConversation.npc_state.chapter_state;
+    const chapterLabel = chapterId
+      ? (chapterLabels?.[chapterId] ?? chapterId)
+      : chapterDisplayName;
+    const sceneMsgs = loadedToChatMessages(loadedConversation);
+    setHistory([
+      {
+        role: 'system',
+        text: chapterLabel
+          ? `已回到：${title} · ${chapterLabel}`
+          : `已回到：${title}`,
+      },
+      ...sceneMsgs,
+    ]);
     lastStreamRef.current = '';
     onClearLoadedConversation();
-  }, [loadedConversation, npcName, onClearLoadedConversation]);
+  }, [
+    loadedConversation,
+    archivesList,
+    chapterLabels,
+    chapterDisplayName,
+    onClearLoadedConversation,
+  ]);
 
   useEffect(() => {
     if (!lastSaved) return;
+    setActiveSlotFilename(lastSaved.filename);
+    setActiveSlotTitle(lastSaved.filename);
     // 每轮都会自动存；仅升章/立旗时在聊天里提示（普通回合 world_changed=false）
     if (lastSaved.world_changed === false) {
       onClearLastSaved();
@@ -150,32 +249,102 @@ export function ChatBox({
 
   useEffect(() => {
     if (!lastNewRun) return;
+    const title = lastNewRun.display_name || lastNewRun.filename;
+    setActiveSlotFilename(lastNewRun.filename);
+    setActiveSlotTitle(title);
     setHistory([
       {
         role: 'system',
-        text: `已新开存档槽「${lastNewRun.display_name || lastNewRun.filename}」，从当前节点开始。`,
+        text: `已新开存档槽「${title}」，旧槽仍在列表中；从当前节点开始。`,
       },
     ]);
     lastStreamRef.current = '';
     onClearLastNewRun?.();
   }, [lastNewRun, onClearLastNewRun]);
 
+  // 列表刷新后补全当前槽显示名
+  useEffect(() => {
+    if (!activeSlotFilename || !archivesList) return;
+    const arch = archivesList.find((a) => a.filename === activeSlotFilename);
+    if (arch) {
+      setActiveSlotTitle(arch.display_name?.trim() || arch.filename);
+    }
+  }, [archivesList, activeSlotFilename]);
+
   useEffect(() => {
     if (!lastExchange) return;
+    const event = lastExchange;
+    let cancelled = false;
+
+    setListening(true);
+    setSuggestionsOpen(false);
+
+    const delay = (ms: number) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, ms);
+      });
+
+    void (async () => {
+      for (let i = 0; i < event.lines.length; i++) {
+        if (cancelled) return;
+        const wait =
+          i === 0 ? 350 : 400 + Math.floor(Math.random() * 301);
+        await delay(wait);
+        if (cancelled) return;
+        const line = event.lines[i]!;
+        onExchangeSpeak?.(line.npcId);
+        setHistory((prev) => {
+          const next = [...prev];
+          if (i === 0) {
+            next.push({ role: 'system', text: '……旁边有人在说话' });
+          }
+          next.push({
+            role: 'exchange' as const,
+            text: line.text,
+            speakerName: line.name,
+            speakerId: line.npcId,
+          });
+          return next;
+        });
+      }
+      if (cancelled) return;
+      await delay(450);
+      if (cancelled) return;
+      setListening(false);
+      onExchangeSpeak?.(null);
+      onClearLastExchange?.();
+    })();
+
+    return () => {
+      cancelled = true;
+      setListening(false);
+      onExchangeSpeak?.(null);
+    };
+  }, [lastExchange, onClearLastExchange, onExchangeSpeak]);
+
+  useEffect(() => {
+    if (!lastAside) return;
+    const aside = lastAside;
+    onClearLastAside?.();
+    onExchangeSpeak?.(aside.npcId);
     setHistory((prev) => [
       ...prev,
       {
-        role: 'system',
-        text: '—— 旁听 · 关系事件 ——',
+        role: 'aside' as const,
+        text: aside.text,
+        speakerName: aside.name,
+        speakerId: aside.npcId,
       },
-      ...lastExchange.lines.map((line) => ({
-        role: 'exchange' as const,
-        text: line.text,
-        speakerName: line.name,
-      })),
     ]);
-    onClearLastExchange?.();
-  }, [lastExchange, onClearLastExchange]);
+    const t = window.setTimeout(() => onExchangeSpeak?.(null), 900);
+    return () => window.clearTimeout(t);
+  }, [lastAside, onClearLastAside, onExchangeSpeak]);
+
+  useEffect(() => {
+    return () => {
+      onExchangeSpeak?.(null);
+    };
+  }, [onExchangeSpeak]);
 
   useEffect(() => {
     if (!saveError) return;
@@ -210,21 +379,42 @@ export function ChatBox({
   }, [open, onClose]);
 
   useEffect(() => {
+    // 切人：按 npcId 吞掉旧流，绝不能覆盖上一 NPC 已落盘的气泡
+    if (streamNpcIdRef.current !== npcId) {
+      streamNpcIdRef.current = npcId;
+      lastStreamRef.current = streamText;
+      return;
+    }
     if (streamText === lastStreamRef.current) return;
     lastStreamRef.current = streamText;
     if (!streamText) return;
 
     setHistory((prev) => {
       const last = prev[prev.length - 1];
-      if (last?.role === 'npc' && isStreaming) {
-        return [...prev.slice(0, -1), { role: 'npc', text: streamText }];
+      const sameSpeaker = last?.role === 'npc' && last.speakerId === npcId;
+      if (sameSpeaker) {
+        return [
+          ...prev.slice(0, -1),
+          {
+            role: 'npc',
+            text: streamText,
+            speakerName: npcName,
+            speakerId: npcId,
+          },
+        ];
       }
-      if (last?.role === 'npc') {
-        return [...prev.slice(0, -1), { role: 'npc', text: streamText }];
-      }
-      return [...prev, { role: 'npc', text: streamText }];
+      if (!isStreaming) return prev;
+      return [
+        ...prev,
+        {
+          role: 'npc',
+          text: streamText,
+          speakerName: npcName,
+          speakerId: npcId,
+        },
+      ];
     });
-  }, [streamText, isStreaming]);
+  }, [streamText, isStreaming, npcId, npcName]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -238,7 +428,7 @@ export function ChatBox({
 
   const handleSend = useCallback(() => {
     const msg = input.trim();
-    if (!msg || isStreaming) return;
+    if (!msg || inputLocked) return;
 
     if (!connected) {
       setHistory((prev) => [
@@ -262,7 +452,7 @@ export function ChatBox({
     setSuggestionsOpen(false);
     lastStreamRef.current = '';
     window.setTimeout(() => inputRef.current?.focus(), 0);
-  }, [connected, input, isStreaming, onSend]);
+  }, [connected, input, inputLocked, onSend]);
 
   const handleOpenLoad = useCallback(() => {
     if (!connected) {
@@ -287,7 +477,7 @@ export function ChatBox({
   );
 
   const handleViewSuggestions = useCallback(() => {
-    if (!connected || isStreaming || suggestionsLoading) return;
+    if (!connected || inputLocked || suggestionsLoading) return;
     setSuggestionsOpen(true);
     const ok = onRequestSuggestions();
     if (!ok) {
@@ -297,7 +487,7 @@ export function ChatBox({
       ]);
       setSuggestionsOpen(false);
     }
-  }, [connected, isStreaming, suggestionsLoading, onRequestSuggestions]);
+  }, [connected, inputLocked, suggestionsLoading, onRequestSuggestions]);
 
   const handlePickSuggestion = useCallback((text: string) => {
     setInput(text);
@@ -310,6 +500,7 @@ export function ChatBox({
     <>
       <ChatHistoryFullscreen
         open={historyFullscreen}
+        npcId={npcId}
         npcName={npcName}
         history={history}
         isStreaming={isStreaming}
@@ -321,6 +512,7 @@ export function ChatBox({
         archives={archivesList}
         loading={archivesLoading}
         error={loadError}
+        activeFilename={activeSlotFilename}
         chapterLabels={chapterLabels}
         onClose={() => setLoadPanelOpen(false)}
         onLoad={handleLoad}
@@ -378,9 +570,16 @@ export function ChatBox({
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
               </button>
-              <span className="text-sm font-medium text-white truncate ml-0.5">
-                💬 {npcName}
-              </span>
+              <div className="min-w-0 ml-0.5">
+                <span className="block text-sm font-medium text-white truncate">
+                  场景 · 正在与 {npcName} 交谈
+                </span>
+                {activeSlotTitle && (
+                  <span className="block text-[10px] text-slate-500 truncate">
+                    自动保存 · {activeSlotTitle}
+                  </span>
+                )}
+              </div>
             </div>
             <button
               type="button"
@@ -407,8 +606,10 @@ export function ChatBox({
                     : item.role === 'system'
                       ? 'text-amber-400 text-center'
                       : item.role === 'exchange'
-                        ? 'text-violet-300'
-                        : 'text-slate-200'
+                        ? 'text-violet-300/90 italic'
+                        : item.role === 'aside'
+                          ? 'text-slate-400/90 italic text-xs'
+                          : 'text-slate-200'
                 }`}
               >
                 {item.role === 'player'
@@ -417,9 +618,14 @@ export function ChatBox({
                     ? ''
                     : item.role === 'exchange'
                       ? `旁听·${item.speakerName ?? 'NPC'}：`
-                      : `${npcName}：`}
+                      : item.role === 'aside'
+                        ? `插话·${item.speakerName ?? 'NPC'}：`
+                        : `${item.speakerName ?? 'NPC'}：`}
                 {item.text}
-                {item.role === 'npc' && isStreaming && i === history.length - 1 && (
+                {item.role === 'npc' &&
+                  isStreaming &&
+                  i === history.length - 1 &&
+                  item.speakerId === npcId && (
                   <span className="inline-block w-1.5 h-4 ml-0.5 bg-slate-400 animate-pulse align-middle" />
                 )}
               </div>
@@ -471,7 +677,7 @@ export function ChatBox({
                 <button
                   type="button"
                   onClick={handleViewSuggestions}
-                  disabled={!connected || isStreaming}
+                  disabled={!connected || inputLocked}
                   className="text-xs text-sky-400 hover:text-sky-300 disabled:text-slate-600"
                 >
                   换一批
@@ -490,7 +696,7 @@ export function ChatBox({
             <button
               type="button"
               onClick={handleViewSuggestions}
-              disabled={!connected || isStreaming || suggestionsLoading}
+              disabled={!connected || inputLocked || suggestionsLoading}
               title="根据当前剧情生成可选回复"
               className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed border border-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
             >
@@ -501,13 +707,22 @@ export function ChatBox({
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={connected ? '输入对话…' : '等待连接服务器…'}
+              disabled={inputLocked || !connected}
+              placeholder={
+                !connected
+                  ? '等待连接服务器…'
+                  : listening
+                    ? '…正在旁听'
+                    : isStreaming
+                      ? '对方正在说话…'
+                      : '输入对话…'
+              }
               autoComplete="off"
-              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <button
               type="submit"
-              disabled={isStreaming || !input.trim()}
+              disabled={inputLocked || !input.trim()}
               className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
             >
               发送

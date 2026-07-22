@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV2Schema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
+exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV3Schema = exports.conversationSnapshotV2Schema = exports.SCENE_PLAYER_DISPLAY_NAME = exports.SCENE_PLAYER_ID = exports.sceneUtteranceSchema = exports.sceneUtteranceKindSchema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.npcAsideEventSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
 const zod_1 = require("zod");
 const story_schema_1 = require("./story.schema");
 /**
@@ -14,6 +14,8 @@ exports.playerIdSchema = zod_1.z
 exports.playerChatPayloadSchema = zod_1.z.object({
     npcId: zod_1.z.string().min(1).max(64),
     message: zod_1.z.string().trim().min(1).max(500),
+    /** 客户端上报的附近 NPC（同场短接话用）；可空 */
+    nearbyNpcIds: zod_1.z.array(zod_1.z.string().min(1).max(64)).max(16).optional(),
 });
 exports.requestNpcStatePayloadSchema = zod_1.z.object({
     npcId: zod_1.z.string().min(1).max(64),
@@ -66,6 +68,13 @@ exports.npcExchangeEventSchema = zod_1.z.object({
     chatNpcId: zod_1.z.string(),
     lines: zod_1.z.array(exports.npcExchangeLineSchema).min(1),
 });
+/** 同场短接话：附近另一人插一句（非完整 exchange） */
+exports.npcAsideEventSchema = zod_1.z.object({
+    chatNpcId: zod_1.z.string(),
+    npcId: zod_1.z.string(),
+    name: zod_1.z.string(),
+    text: zod_1.z.string(),
+});
 exports.saveConversationPayloadSchema = zod_1.z.object({
     npcId: zod_1.z.string().min(1).max(64),
 });
@@ -100,6 +109,27 @@ exports.archivedNpcSlotSchema = zod_1.z.object({
     story_flags: story_schema_1.storyFlagsSnapshotSchema.default({}),
     messages: zod_1.z.array(exports.archivedMessageSchema).default([]),
 });
+/** 整场公共对话流中的一条发言（run 级） */
+exports.sceneUtteranceKindSchema = zod_1.z.enum([
+    'player_to_npc',
+    'npc_to_player',
+    'npc_to_npc',
+    'system',
+]);
+exports.sceneUtteranceSchema = zod_1.z.object({
+    id: zod_1.z.string().min(1),
+    at: zod_1.z.string(),
+    kind: exports.sceneUtteranceKindSchema,
+    speaker_id: zod_1.z.string().min(1),
+    speaker_name: zod_1.z.string(),
+    addressee_id: zod_1.z.string().optional(),
+    addressee_name: zod_1.z.string().optional(),
+    text: zod_1.z.string(),
+    meta: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).optional(),
+});
+/** 玩家在 scene_log 中的稳定 id / 默认显示名 */
+exports.SCENE_PLAYER_ID = 'player';
+exports.SCENE_PLAYER_DISPLAY_NAME = '沈檐';
 /**
  * 存档快照 v2（一局一档）
  * 仍在 DB 的 npc_state/messages 列写入「焦点 NPC」镜像，便于旧列表预览；
@@ -117,6 +147,22 @@ exports.conversationSnapshotV2Schema = zod_1.z.object({
     npc_state: exports.archivedNpcStateSchema,
     messages: zod_1.z.array(exports.archivedMessageSchema),
     npcs: zod_1.z.record(zod_1.z.string(), exports.archivedNpcSlotSchema),
+});
+/**
+ * 存档快照 v3 = v2 + run 级 scene_log（整场对白时间线）
+ */
+exports.conversationSnapshotV3Schema = zod_1.z.object({
+    schema_version: zod_1.z.literal(3),
+    saved_at: zod_1.z.string(),
+    focus_npc_id: zod_1.z.string().min(1),
+    world: zod_1.z.object({
+        chapter_state: exports.chapterStateSchema,
+        story_flags: story_schema_1.storyFlagsSnapshotSchema.default({}),
+    }),
+    npc_state: exports.archivedNpcStateSchema,
+    messages: zod_1.z.array(exports.archivedMessageSchema),
+    npcs: zod_1.z.record(zod_1.z.string(), exports.archivedNpcSlotSchema),
+    scene_log: zod_1.z.array(exports.sceneUtteranceSchema).default([]),
 });
 exports.conversationSnapshotSummarySchema = zod_1.z.object({
     index: zod_1.z.number().int(),
@@ -160,6 +206,8 @@ exports.conversationLoadedEventSchema = zod_1.z.object({
     scope: exports.archiveScopeSchema.optional(),
     /** 一局档：一并恢复的其他 NPC id（便于前端拉状态） */
     restored_npc_ids: zod_1.z.array(zod_1.z.string()).optional(),
+    /** 整场对白时间线（v3）；缺省时前端回退 messages */
+    scene_log: zod_1.z.array(exports.sceneUtteranceSchema).optional(),
 });
 /** 新开一局 / 从某章或某分歧回溯为新存档槽 */
 exports.startNewRunPayloadSchema = zod_1.z.object({

@@ -336,6 +336,12 @@ export class AgentHarnessService {
       'assistant',
       assistantReply,
     );
+    await this.conversationService.appendChatPairToSceneLog(
+      playerId,
+      npcId,
+      userMessage,
+      assistantReply,
+    );
 
     const chapterState = this.worldProgress.getChapter(playerId);
     const flags = this.worldProgress.getFlags(playerId);

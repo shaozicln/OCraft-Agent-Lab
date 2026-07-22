@@ -15,16 +15,24 @@ import { useNpcConfig } from '@/hooks/useNpcConfig';
 import { usePackRuntime } from '@/hooks/usePackRuntime';
 import type { NearbyNpc } from '@/components/r3f/Player';
 
+/** 具名角色优先：衣服色 + 肤色，避免糖果粉蓝糊成一团 */
+const NPC_COLOR_BY_ID: Record<string, { color: string; headColor: string }> = {
+  npc_suolunsen: { color: '#2F4A5C', headColor: '#E4B892' }, // 墨蓝外套 · 暖肤
+  npc_hilvi: { color: '#6E4E5C', headColor: '#EFD4C6' }, // 暮紫外套 · 浅肤
+};
+
 const NPC_PALETTE = [
-  { color: '#93C5FD', headColor: '#BFDBFE' },
-  { color: '#F9A8D4', headColor: '#FBCFE8' },
-  { color: '#86EFAC', headColor: '#BBF7D0' },
-  { color: '#FCD34D', headColor: '#FDE68A' },
-  { color: '#C4B5FD', headColor: '#DDD6FE' },
+  { color: '#2F4A5C', headColor: '#E4B892' },
+  { color: '#6E4E5C', headColor: '#EFD4C6' },
+  { color: '#3F5E4A', headColor: '#E6C4A8' },
+  { color: '#5C4A3A', headColor: '#E8C9B0' },
+  { color: '#4A4E6A', headColor: '#E2C2B0' },
 ] as const;
 
 /** 按 npc_id 稳定取色，升章刷人后颜色不漂移 */
 function paletteForNpc(npcId: string) {
+  const named = NPC_COLOR_BY_ID[npcId];
+  if (named) return named;
   let h = 0;
   for (let i = 0; i < npcId.length; i++) {
     h = (h * 31 + npcId.charCodeAt(i)) >>> 0;
@@ -85,6 +93,10 @@ function GamePageInner({
   );
   const prevChapterRef = useRef<string | undefined>(undefined);
   const [chapterCue, setChapterCue] = useState<ChapterCue | null>(null);
+  /** 旁听逐句：当前开口的 NPC → talk 动画 */
+  const [exchangeSpeakNpcId, setExchangeSpeakNpcId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (defaultNpcId) setActiveNpcId((id) => id || defaultNpcId);
@@ -105,6 +117,7 @@ function GamePageInner({
     isStreaming,
     lastSaved,
     lastExchange,
+    lastAside,
     archivesList,
     loadedConversation,
     saveError,
@@ -128,6 +141,7 @@ function GamePageInner({
     clearLastSaved,
     clearLastNewRun,
     clearLastExchange,
+    clearLastAside,
   } = useGameSocket(token, activeNpcId || defaultNpcId, {
     progressNpcId: defaultNpcId,
     trackNpcIds: allNpcIds.length ? allNpcIds : [defaultNpcId],
@@ -155,16 +169,18 @@ function GamePageInner({
       visibleNpcs.map((n) => {
         const palette = paletteForNpc(n.npc_id);
         const st = npcStates[n.npc_id];
+        const baseAnim = asAnim(st?.animation ?? st?.current_status);
         return {
           npcId: n.npc_id,
           name: n.name,
           spawn: n.spawn_position,
           color: palette.color,
           headColor: palette.headColor,
-          animation: asAnim(st?.animation ?? st?.current_status),
+          animation:
+            exchangeSpeakNpcId === n.npc_id ? 'excited_talk' : baseAnim,
         };
       }),
-    [visibleNpcs, npcStates],
+    [visibleNpcs, npcStates, exchangeSpeakNpcId],
   );
 
   const interactTargets = useMemo(
@@ -194,6 +210,24 @@ function GamePageInner({
       }
       return nearby;
     });
+  }, []);
+
+  const handleSendChat = useCallback(
+    (message: string) => {
+      // 同场短接话：交互圈内 + 当前场景已出场的其他人（spawn 相距常 > 交互距离）
+      const ids = [
+        ...new Set([
+          ...nearbyNpcs.map((n) => n.npcId),
+          ...visibleNpcs.map((n) => n.npc_id),
+        ]),
+      ];
+      return sendChat(message, { nearbyNpcIds: ids });
+    },
+    [sendChat, nearbyNpcs, visibleNpcs],
+  );
+
+  const handleExchangeSpeak = useCallback((id: string | null) => {
+    setExchangeSpeakNpcId(id);
   }, []);
 
   const openChat = useCallback(
@@ -340,7 +374,9 @@ function GamePageInner({
   const runtimeNpcName =
     runtime.npcs.find((n) => n.npc_id === (activeNpcId || defaultNpcId))
       ?.name ?? 'NPC';
-  const chatNpcName = npcState?.name ?? npc?.name ?? runtimeNpcName;
+  // 显示名以 Pack 为准，避免切人时 useNpcConfig 短暂残留上一任名字导致流式盖写
+  const chatNpcName = runtimeNpcName;
+  const chatNpcId = activeNpcId || defaultNpcId;
 
   const affinity = npcState?.affinity ?? npc?.runtime.affinity ?? 0;
   const fatigue = npcState?.fatigue ?? npc?.runtime.fatigue ?? 0;
@@ -372,6 +408,7 @@ function GamePageInner({
         lookEnabled={lookEnabled}
         onPointerLockChange={setPointerLocked}
         uiOverlayActive={uiBlocking}
+        speakingNpcId={exchangeSpeakNpcId}
       />
 
       <div className="absolute top-4 left-4 z-30 space-y-2">
@@ -439,12 +476,14 @@ function GamePageInner({
 
       <ChatBox
         open={chatOpen}
+        npcId={chatNpcId}
         npcName={chatNpcName}
         streamText={streamText}
         isStreaming={isStreaming}
         connected={connected}
         lastSaved={lastSaved}
         lastExchange={lastExchange}
+        lastAside={lastAside}
         archivesList={archivesList}
         loadedConversation={loadedConversation}
         saveError={saveError}
@@ -456,7 +495,7 @@ function GamePageInner({
         suggestionsLoading={suggestionsLoading}
         suggestionsError={suggestionsError}
         onClose={closeChat}
-        onSend={sendChat}
+        onSend={handleSendChat}
         onRequestSuggestions={requestSuggestions}
         onClearSuggestions={clearSuggestions}
         onSave={saveConversation}
@@ -468,6 +507,8 @@ function GamePageInner({
         onClearLastSaved={clearLastSaved}
         onClearLastNewRun={clearLastNewRun}
         onClearLastExchange={clearLastExchange}
+        onClearLastAside={clearLastAside}
+        onExchangeSpeak={handleExchangeSpeak}
       />
 
       <EscMenu

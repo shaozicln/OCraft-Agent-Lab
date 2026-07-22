@@ -26,6 +26,9 @@ export function Humanoid({
 }: HumanoidProps) {
   const groupRef = useRef<THREE.Group>(null);
   const bodyRef = useRef<THREE.Mesh>(null);
+  const headRef = useRef<THREE.Mesh>(null);
+  const leftArmRef = useRef<THREE.Mesh>(null);
+  const rightArmRef = useRef<THREE.Mesh>(null);
   const animationRef = useRef(animation);
   const rotationYRef = useRef(rotationY);
   const baseYRef = useRef(position[1]);
@@ -49,8 +52,13 @@ export function Humanoid({
       );
     }
 
+    const resetLimbs = () => {
+      if (headRef.current) headRef.current.rotation.x = 0;
+      if (leftArmRef.current) leftArmRef.current.rotation.x = 0;
+      if (rightArmRef.current) rightArmRef.current.rotation.x = 0;
+    };
+
     if (anim === 'idle') {
-      // idle：无位移/晃动时跳过写入，减 CPU
       if (Math.abs(groupRef.current.rotation.x) > 0.001) {
         groupRef.current.rotation.x = THREE.MathUtils.lerp(
           groupRef.current.rotation.x,
@@ -62,6 +70,7 @@ export function Humanoid({
       }
       groupRef.current.position.y = baseY;
       bodyRef.current.rotation.z = 0;
+      resetLimbs();
       return;
     }
 
@@ -73,28 +82,35 @@ export function Humanoid({
       );
       groupRef.current.position.y = baseY + Math.sin(t * 1.2) * 0.015;
       bodyRef.current.rotation.z = 0;
+      resetLimbs();
       return;
     }
 
-    if (anim === 'excited_talk') {
-      groupRef.current.rotation.x = THREE.MathUtils.lerp(
-        groupRef.current.rotation.x,
-        0,
-        0.1,
-      );
-      groupRef.current.position.y = baseY + Math.abs(Math.sin(t * 5)) * 0.04;
-      bodyRef.current.rotation.z = Math.sin(t * 7) * 0.04;
-      return;
-    }
+    // talk / excited_talk：幅度加大，旁听时一眼能看出谁在开口
+    const excited = anim === 'excited_talk';
+    const bobAmp = excited ? 0.07 : 0.05;
+    const bobHz = excited ? 9 : 7;
+    const sway = excited ? 0.1 : 0.07;
+    const arm = excited ? 0.55 : 0.4;
+    const nod = excited ? 0.22 : 0.16;
 
-    // talk
     groupRef.current.rotation.x = THREE.MathUtils.lerp(
       groupRef.current.rotation.x,
       0,
-      0.08,
+      0.12,
     );
-    groupRef.current.position.y = baseY + Math.sin(t * 2.5) * 0.02;
-    bodyRef.current.rotation.z = 0;
+    groupRef.current.position.y =
+      baseY + Math.abs(Math.sin(t * bobHz)) * bobAmp;
+    bodyRef.current.rotation.z = Math.sin(t * (excited ? 8 : 6)) * sway;
+    if (headRef.current) {
+      headRef.current.rotation.x = Math.sin(t * bobHz * 1.1) * nod;
+    }
+    if (leftArmRef.current) {
+      leftArmRef.current.rotation.x = -arm + Math.sin(t * bobHz) * 0.25;
+    }
+    if (rightArmRef.current) {
+      rightArmRef.current.rotation.x = -arm * 0.7 + Math.cos(t * bobHz) * 0.3;
+    }
   });
 
   return (
@@ -111,15 +127,15 @@ export function Humanoid({
         <boxGeometry args={[0.38, 0.48, 0.2]} />
         <meshLambertMaterial color={color} />
       </mesh>
-      <mesh position={[0, 1.02, 0]} castShadow>
+      <mesh ref={headRef} position={[0, 1.02, 0]} castShadow>
         <sphereGeometry args={[0.17, 10, 10]} />
         <meshLambertMaterial color={headColor ?? color} />
       </mesh>
-      <mesh position={[-0.28, 0.7, 0]} castShadow>
+      <mesh ref={leftArmRef} position={[-0.28, 0.7, 0]} castShadow>
         <boxGeometry args={[0.1, 0.38, 0.1]} />
         <meshLambertMaterial color={color} />
       </mesh>
-      <mesh position={[0.28, 0.7, 0]} castShadow>
+      <mesh ref={rightArmRef} position={[0.28, 0.7, 0]} castShadow>
         <boxGeometry args={[0.1, 0.38, 0.1]} />
         <meshLambertMaterial color={color} />
       </mesh>

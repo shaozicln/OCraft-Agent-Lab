@@ -1,14 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import * as path from 'path';
 import {
   getDefaultNpcId,
   getFirstChapterId,
+  SCENE_PLAYER_DISPLAY_NAME,
+  SCENE_PLAYER_ID,
   type ArchivedNpcSlot,
   type ArchiveScope,
   type ChapterState,
-  type ConversationSnapshotV2,
+  type ConversationSnapshotV3,
   type LlmMessage,
+  type NpcAsideEvent,
+  type NpcExchangeEvent,
   type NpcRuntimeState,
+  type SceneUtterance,
   type StartNewRunPayload,
   type StoryFlagsSnapshot,
   type StoryMapEvent,
@@ -49,6 +55,7 @@ export interface RestoreSnapshotResult {
   storyFlags: StoryFlagsSnapshot;
   scope: ArchiveScope;
   restoredNpcIds: string[];
+  sceneLog: SceneUtterance[];
 }
 
 @Injectable()
@@ -61,6 +68,10 @@ export class ConversationService {
   private readonly sessionArchiveFiles = new Map<string, string>();
   /** 一局档文件名：player:world:pack */
   private readonly runArchiveFiles = new Map<string, string>();
+  /** 一局整场对白时间线：runKey → scene_log */
+  private readonly sceneLogs = new Map<string, SceneUtterance[]>();
+  /** 已从存档灌入过 scene_log 的 runKey（避免重启后写空覆盖） */
+  private readonly sceneLogHydrated = new Set<string>();
   private readonly hydrated = new Set<string>();
 
   constructor(
@@ -95,6 +106,166 @@ export class ConversationService {
 
   private defaultChapter(): ChapterState {
     return this.packService.getDefaultChapter();
+  }
+
+  private npcDisplayName(npcId: string): string {
+    return (
+      this.packService.getPack().npcs.find((n) => n.npc_id === npcId)?.name ??
+      npcId
+    );
+  }
+
+  getSceneLog(playerId: string): SceneUtterance[] {
+    return [...(this.sceneLogs.get(this.runKey(playerId)) ?? [])];
+  }
+
+  /** 进程重启后从活跃一局档最新快照灌回 scene_log */
+  private async ensureSceneLogHydrated(playerId: string): Promise<void> {
+    const rk = this.runKey(playerId);
+    if (this.sceneLogHydrated.has(rk)) return;
+
+    const focus = this.progressNpcId();
+    const filename =
+      this.runArchiveFiles.get(rk) ??
+      (await this.resolveActiveRunFilename(playerId, focus));
+
+    if (!filename) {
+      if (!this.sceneLogs.has(rk)) this.sceneLogs.set(rk, []);
+      this.sceneLogHydrated.add(rk);
+      return;
+    }
+
+    this.runArchiveFiles.set(rk, filename);
+
+    try {
+      const { worldId, packVersionId } = this.progressKey();
+      const list = await this.archiveService.listArchives(playerId, focus, {
+        worldId,
+        packVersionId,
+      });
+      const arch = list.find((a) => a.filename === filename);
+      const idx = arch?.snapshots[arch.snapshots.length - 1]?.index ?? 0;
+      const loaded = await this.archiveService.loadSnapshot(
+        playerId,
+        filename,
+        idx,
+      );
+      const migrated = migrateSave(
+        loaded.snapshot.payload ?? {
+          npc_state: loaded.snapshot.npc_state,
+          messages: loaded.snapshot.messages,
+          saved_at: loaded.snapshot.saved_at,
+          focus_npc_id: focus,
+        },
+      );
+      if (!this.sceneLogs.has(rk)) {
+        this.sceneLogs.set(rk, [...(migrated?.scene_log ?? [])]);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `scene_log hydrate failed player=${playerId}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+      if (!this.sceneLogs.has(rk)) this.sceneLogs.set(rk, []);
+    }
+    this.sceneLogHydrated.add(rk);
+  }
+
+  private pushSceneUtterance(
+    playerId: string,
+    partial: Omit<SceneUtterance, 'id' | 'at'> &
+      Partial<Pick<SceneUtterance, 'id' | 'at'>>,
+  ): SceneUtterance {
+    const rk = this.runKey(playerId);
+    const list = this.sceneLogs.get(rk) ?? [];
+    const utterance: SceneUtterance = {
+      id: partial.id ?? randomUUID(),
+      at: partial.at ?? new Date().toISOString(),
+      kind: partial.kind,
+      speaker_id: partial.speaker_id,
+      speaker_name: partial.speaker_name,
+      addressee_id: partial.addressee_id,
+      addressee_name: partial.addressee_name,
+      text: partial.text,
+      meta: partial.meta,
+    };
+    list.push(utterance);
+    this.sceneLogs.set(rk, list);
+    return utterance;
+  }
+
+  /** 私聊双写：scene_log + 分人 messages（messages 仍由 appendTurn 写） */
+  async appendChatPairToSceneLog(
+    playerId: string,
+    npcId: string,
+    userMessage: string,
+    assistantReply: string,
+  ) {
+    await this.ensureSceneLogHydrated(playerId);
+    const npcName = this.npcDisplayName(npcId);
+    const t0 = new Date().toISOString();
+    this.pushSceneUtterance(playerId, {
+      at: t0,
+      kind: 'player_to_npc',
+      speaker_id: SCENE_PLAYER_ID,
+      speaker_name: SCENE_PLAYER_DISPLAY_NAME,
+      addressee_id: npcId,
+      addressee_name: npcName,
+      text: userMessage,
+    });
+    this.pushSceneUtterance(playerId, {
+      kind: 'npc_to_player',
+      speaker_id: npcId,
+      speaker_name: npcName,
+      addressee_id: SCENE_PLAYER_ID,
+      addressee_name: SCENE_PLAYER_DISPLAY_NAME,
+      text: assistantReply,
+    });
+  }
+
+  /** 互聊旁听写入整场流（每句一条） */
+  async appendExchangeToSceneLog(playerId: string, exchange: NpcExchangeEvent) {
+    await this.ensureSceneLogHydrated(playerId);
+    const participantIds = [
+      ...new Set(exchange.lines.map((l) => l.npcId)),
+    ];
+    const nameById = new Map(
+      exchange.lines.map((l) => [l.npcId, l.name] as const),
+    );
+    for (const line of exchange.lines) {
+      const otherId = participantIds.find((id) => id !== line.npcId);
+      this.pushSceneUtterance(playerId, {
+        kind: 'npc_to_npc',
+        speaker_id: line.npcId,
+        speaker_name: line.name,
+        addressee_id: otherId,
+        addressee_name: otherId ? nameById.get(otherId) : undefined,
+        text: line.text,
+        meta: {
+          event_id: exchange.eventId,
+          exchange: true,
+          chat_npc_id: exchange.chatNpcId,
+        },
+      });
+    }
+  }
+
+  /** 同场短接话写入整场流 */
+  async appendAsideToSceneLog(playerId: string, aside: NpcAsideEvent) {
+    await this.ensureSceneLogHydrated(playerId);
+    this.pushSceneUtterance(playerId, {
+      kind: 'npc_to_player',
+      speaker_id: aside.npcId,
+      speaker_name: aside.name,
+      addressee_id: SCENE_PLAYER_ID,
+      addressee_name: SCENE_PLAYER_DISPLAY_NAME,
+      text: aside.text,
+      meta: {
+        aside: true,
+        chat_npc_id: aside.chatNpcId,
+      },
+    });
   }
 
   /** 进度里的章节必须属于当前 Pack；旧版遗留 id（如 uneasy）纠正为默认章 */
@@ -173,17 +344,21 @@ export class ConversationService {
     if (session.activeArchiveFilename) {
       this.sessionArchiveFiles.set(k, session.activeArchiveFilename);
       // 任一 NPC 绑的若是一局档，恢复后继续往同一文件追加
-      void this.playerStateRepo
-        .findArchiveByFilename(playerId, session.activeArchiveFilename)
-        .then((arch) => {
-          if (arch?.scope === 'run') {
-            this.runArchiveFiles.set(
-              this.runKey(playerId),
-              session.activeArchiveFilename!,
-            );
-          }
-        })
-        .catch(() => undefined);
+      try {
+        const arch = await this.playerStateRepo.findArchiveByFilename(
+          playerId,
+          session.activeArchiveFilename,
+        );
+        if (arch?.scope === 'run') {
+          this.runArchiveFiles.set(
+            this.runKey(playerId),
+            session.activeArchiveFilename,
+          );
+          await this.ensureSceneLogHydrated(playerId);
+        }
+      } catch {
+        /* ignore */
+      }
     }
 
     this.hydrated.add(k);
@@ -299,6 +474,7 @@ export class ConversationService {
     for (const id of this.allNpcIds()) {
       await this.ensureSession(playerId, id);
     }
+    await this.ensureSceneLogHydrated(playerId);
 
     const focusKey = this.key(playerId, focusNpcId);
     const focusTranscript = this.transcripts.get(focusKey);
@@ -324,8 +500,8 @@ export class ConversationService {
       : npcs[focusNpcId]?.messages ?? [];
 
     const savedAt = new Date().toISOString();
-    const payload: ConversationSnapshotV2 = {
-      schema_version: 2,
+    const payload: ConversationSnapshotV3 = {
+      schema_version: 3,
       saved_at: savedAt,
       focus_npc_id: focusNpcId,
       world: {
@@ -341,6 +517,7 @@ export class ConversationService {
       },
       messages: focusMessages,
       npcs,
+      scene_log: this.getSceneLog(playerId),
     };
 
     return {
@@ -550,11 +727,11 @@ export class ConversationService {
       focus_npc_id: focusNpcId,
     });
 
-    // —— v2 一局档（含 v1 迁移结果）——
-    if (migrated?.schema_version === 2) {
-      const v2 = migrated;
-      const worldChapter = this.resolveValidChapter(v2.world.chapter_state);
-      const worldFlagsSnap: StoryFlagsSnapshot = { ...v2.world.story_flags };
+    // —— v3 一局档（含 v1/v2 迁移结果）——
+    if (migrated?.schema_version === 3) {
+      const v3 = migrated;
+      const worldChapter = this.resolveValidChapter(v3.world.chapter_state);
+      const worldFlagsSnap: StoryFlagsSnapshot = { ...v3.world.story_flags };
 
       await this.playerStateRepo.transaction(async (tx) => {
         await this.worldProgress.replaceWorld(
@@ -566,7 +743,7 @@ export class ConversationService {
         this.mirrorChapterToNpcCaches(playerId, worldChapter);
 
         for (const id of this.allNpcIds()) {
-          const slot = v2.npcs[id];
+          const slot = v3.npcs[id];
           const k = this.key(playerId, id);
           const defaults = this.npcService.getDefaultRuntimeState(id);
           const runtime: NpcRuntimeState = slot
@@ -583,7 +760,7 @@ export class ConversationService {
 
           const messages = slot?.messages ?? [];
           const transcript: SessionTranscript = {
-            startedAt: messages[0]?.at ?? v2.saved_at,
+            startedAt: messages[0]?.at ?? v3.saved_at,
             messages: [...messages],
           };
           this.transcripts.set(k, transcript);
@@ -631,9 +808,11 @@ export class ConversationService {
 
       this.worldProgress.consumeDirty(playerId);
       this.runArchiveFiles.set(this.runKey(playerId), safeFilename);
+      this.sceneLogs.set(this.runKey(playerId), [...(v3.scene_log ?? [])]);
+      this.sceneLogHydrated.add(this.runKey(playerId));
 
-      const focusSlot = v2.npcs[focusNpcId] ?? v2.npcs[progressNpcId];
-      const focusMessages = focusSlot?.messages ?? v2.messages ?? [];
+      const focusSlot = v3.npcs[focusNpcId] ?? v3.npcs[progressNpcId];
+      const focusMessages = focusSlot?.messages ?? v3.messages ?? [];
 
       return {
         filename: safeFilename,
@@ -650,6 +829,7 @@ export class ConversationService {
         storyFlags: worldFlagsSnap,
         scope: 'run',
         restoredNpcIds: this.allNpcIds(),
+        sceneLog: [...(v3.scene_log ?? [])],
       };
     }
 
@@ -737,6 +917,7 @@ export class ConversationService {
       storyFlags,
       scope: scope === 'run' ? 'run' : 'npc',
       restoredNpcIds: [npcId],
+      sceneLog: [],
     };
   }
 
@@ -862,8 +1043,8 @@ export class ConversationService {
       opts.displayName?.trim() ||
       `第${(pack.world.chapters.find((c) => c.id === chapterId)?.rank ?? 0) + 1}章起·${new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
 
-    const payload: ConversationSnapshotV2 = {
-      schema_version: 2,
+    const payload: ConversationSnapshotV3 = {
+      schema_version: 3,
       saved_at: startedAt,
       focus_npc_id: focusNpcId,
       world: {
@@ -879,6 +1060,7 @@ export class ConversationService {
       },
       messages: [],
       npcs,
+      scene_log: [],
     };
 
     const snapshot: ConversationSnapshot = {
@@ -900,6 +1082,8 @@ export class ConversationService {
     });
 
     this.runArchiveFiles.set(this.runKey(playerId), filename);
+    this.sceneLogs.set(this.runKey(playerId), []);
+    this.sceneLogHydrated.add(this.runKey(playerId));
     for (const id of this.allNpcIds()) {
       this.sessionArchiveFiles.set(this.key(playerId, id), filename);
       await this.playerStateRepo.saveFullSession(

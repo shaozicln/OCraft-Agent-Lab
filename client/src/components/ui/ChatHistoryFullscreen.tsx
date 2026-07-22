@@ -5,6 +5,7 @@ import type { ChatMessage } from './chat-types';
 
 interface ChatHistoryFullscreenProps {
   open: boolean;
+  npcId: string;
   npcName: string;
   history: ChatMessage[];
   isStreaming: boolean;
@@ -13,6 +14,7 @@ interface ChatHistoryFullscreenProps {
 
 export function ChatHistoryFullscreen({
   open,
+  npcId,
   npcName,
   history,
   isStreaming,
@@ -66,7 +68,12 @@ export function ChatHistoryFullscreen({
             <path d="M12 19l-7-7 7-7" />
           </svg>
         </button>
-        <h2 className="text-base font-medium text-white">与 {npcName} 的对话记录</h2>
+        <div className="min-w-0 flex flex-col">
+          <h2 className="text-base font-medium text-white">整场对话记录</h2>
+          <span className="text-xs text-slate-500 truncate">
+            当前交互：{npcName}
+          </span>
+        </div>
       </header>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
@@ -84,7 +91,9 @@ export function ChatHistoryFullscreen({
                     ? 'text-center text-amber-400'
                     : item.role === 'exchange'
                       ? 'text-left text-violet-300'
-                      : 'text-left text-slate-200'
+                      : item.role === 'aside'
+                        ? 'text-left text-slate-400 italic'
+                        : 'text-left text-slate-200'
               }`}
             >
               <span className="text-slate-500 text-xs">
@@ -94,10 +103,15 @@ export function ChatHistoryFullscreen({
                     ? '系统'
                     : item.role === 'exchange'
                       ? `旁听·${item.speakerName ?? 'NPC'}`
-                      : npcName}
+                      : item.role === 'aside'
+                        ? `插话·${item.speakerName ?? 'NPC'}`
+                        : item.speakerName ?? 'NPC'}
               </span>
               <p className="mt-1 whitespace-pre-wrap">{item.text}</p>
-              {item.role === 'npc' && isStreaming && i === history.length - 1 && (
+              {item.role === 'npc' &&
+                isStreaming &&
+                i === history.length - 1 &&
+                item.speakerId === npcId && (
                 <span className="inline-block w-1.5 h-4 ml-0.5 bg-slate-400 animate-pulse align-middle" />
               )}
             </div>

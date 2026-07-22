@@ -15,6 +15,8 @@ export const playerIdSchema = z
 export const playerChatPayloadSchema = z.object({
   npcId: z.string().min(1).max(64),
   message: z.string().trim().min(1).max(500),
+  /** 客户端上报的附近 NPC（同场短接话用）；可空 */
+  nearbyNpcIds: z.array(z.string().min(1).max(64)).max(16).optional(),
 });
 
 export const requestNpcStatePayloadSchema = z.object({
@@ -77,6 +79,14 @@ export const npcExchangeEventSchema = z.object({
   lines: z.array(npcExchangeLineSchema).min(1),
 });
 
+/** 同场短接话：附近另一人插一句（非完整 exchange） */
+export const npcAsideEventSchema = z.object({
+  chatNpcId: z.string(),
+  npcId: z.string(),
+  name: z.string(),
+  text: z.string(),
+});
+
 export const saveConversationPayloadSchema = z.object({
   npcId: z.string().min(1).max(64),
 });
@@ -120,6 +130,32 @@ export const archivedNpcSlotSchema = z.object({
 });
 export type ArchivedNpcSlot = z.infer<typeof archivedNpcSlotSchema>;
 
+/** 整场公共对话流中的一条发言（run 级） */
+export const sceneUtteranceKindSchema = z.enum([
+  'player_to_npc',
+  'npc_to_player',
+  'npc_to_npc',
+  'system',
+]);
+export type SceneUtteranceKind = z.infer<typeof sceneUtteranceKindSchema>;
+
+export const sceneUtteranceSchema = z.object({
+  id: z.string().min(1),
+  at: z.string(),
+  kind: sceneUtteranceKindSchema,
+  speaker_id: z.string().min(1),
+  speaker_name: z.string(),
+  addressee_id: z.string().optional(),
+  addressee_name: z.string().optional(),
+  text: z.string(),
+  meta: z.record(z.string(), z.unknown()).optional(),
+});
+export type SceneUtterance = z.infer<typeof sceneUtteranceSchema>;
+
+/** 玩家在 scene_log 中的稳定 id / 默认显示名 */
+export const SCENE_PLAYER_ID = 'player' as const;
+export const SCENE_PLAYER_DISPLAY_NAME = '沈檐' as const;
+
 /**
  * 存档快照 v2（一局一档）
  * 仍在 DB 的 npc_state/messages 列写入「焦点 NPC」镜像，便于旧列表预览；
@@ -139,6 +175,26 @@ export const conversationSnapshotV2Schema = z.object({
   npcs: z.record(z.string(), archivedNpcSlotSchema),
 });
 export type ConversationSnapshotV2 = z.infer<typeof conversationSnapshotV2Schema>;
+
+/**
+ * 存档快照 v3 = v2 + run 级 scene_log（整场对白时间线）
+ */
+export const conversationSnapshotV3Schema = z.object({
+  schema_version: z.literal(3),
+  saved_at: z.string(),
+  focus_npc_id: z.string().min(1),
+  world: z.object({
+    chapter_state: chapterStateSchema,
+    story_flags: storyFlagsSnapshotSchema.default({}),
+  }),
+  npc_state: archivedNpcStateSchema,
+  messages: z.array(archivedMessageSchema),
+  npcs: z.record(z.string(), archivedNpcSlotSchema),
+  scene_log: z.array(sceneUtteranceSchema).default([]),
+});
+export type ConversationSnapshotV3 = z.infer<typeof conversationSnapshotV3Schema>;
+/** 当前写入版本别名 */
+export type ConversationSnapshotPayload = ConversationSnapshotV3;
 
 export const conversationSnapshotSummarySchema = z.object({
   index: z.number().int(),
@@ -186,6 +242,8 @@ export const conversationLoadedEventSchema = z.object({
   scope: archiveScopeSchema.optional(),
   /** 一局档：一并恢复的其他 NPC id（便于前端拉状态） */
   restored_npc_ids: z.array(z.string()).optional(),
+  /** 整场对白时间线（v3）；缺省时前端回退 messages */
+  scene_log: z.array(sceneUtteranceSchema).optional(),
 });
 
 /** 新开一局 / 从某章或某分歧回溯为新存档槽 */
@@ -286,3 +344,4 @@ export type ConversationArchivesListEvent = z.infer<
 export type ConversationLoadedEvent = z.infer<typeof conversationLoadedEventSchema>;
 export type NpcExchangeLine = z.infer<typeof npcExchangeLineSchema>;
 export type NpcExchangeEvent = z.infer<typeof npcExchangeEventSchema>;
+export type NpcAsideEvent = z.infer<typeof npcAsideEventSchema>;

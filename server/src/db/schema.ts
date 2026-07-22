@@ -32,7 +32,7 @@ import type {
   ArchivedMessage,
   ArchivedNpcState,
   ChapterState,
-  ConversationSnapshotV2,
+  ConversationSnapshotPayload,
   LlmMessage,
   PlayerExtra,
   PlayerGender,
@@ -292,8 +292,8 @@ export const conversationSnapshots = pgTable(
     npcState: jsonb('npc_state').notNull().$type<ArchivedNpcState>(),
     /** 焦点 NPC 聊天镜像 */
     messages: jsonb('messages').notNull().$type<ArchivedMessage[]>(),
-    /** schema_version=2 一局全文；空则按旧 npc_state+messages */
-    payload: jsonb('payload').$type<ConversationSnapshotV2 | null>(),
+    /** schema_version=3 一局全文（含 scene_log）；空则按旧 npc_state+messages */
+    payload: jsonb('payload').$type<ConversationSnapshotPayload | null>(),
   },
   (t) => [
     uniqueIndex('snapshots_archive_index_idx').on(

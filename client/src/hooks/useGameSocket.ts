@@ -8,6 +8,7 @@ import type {
   ConversationLoadedEvent,
   ConversationSavedEvent,
   NewRunStartedEvent,
+  NpcAsideEvent,
   NpcExchangeEvent,
   NpcStateUpdate,
   StoryMapEvent,
@@ -44,6 +45,7 @@ export function useGameSocket(
   const [lastExchange, setLastExchange] = useState<NpcExchangeEvent | null>(
     null,
   );
+  const [lastAside, setLastAside] = useState<NpcAsideEvent | null>(null);
   const [archivesList, setArchivesList] = useState<
     ConversationArchiveSummary[] | null
   >(null);
@@ -56,6 +58,12 @@ export function useGameSocket(
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [storyMap, setStoryMap] = useState<StoryMapEvent | null>(null);
   const [lastNewRun, setLastNewRun] = useState<NewRunStartedEvent | null>(null);
+
+  // 切 NPC 时丢掉上一任的流式缓冲，避免 ChatBox 把旧回复挂到新人头上
+  useEffect(() => {
+    setStreamText('');
+    setIsStreaming(false);
+  }, [activeNpcId]);
 
   useEffect(() => {
     if (!token || trackNpcIds.length === 0) return;
@@ -94,6 +102,11 @@ export function useGameSocket(
     socket.on('npc_exchange', (data: NpcExchangeEvent) => {
       if (data.chatNpcId !== activeNpcIdRef.current) return;
       setLastExchange(data);
+    });
+
+    socket.on('npc_aside', (data: NpcAsideEvent) => {
+      if (data.chatNpcId !== activeNpcIdRef.current) return;
+      setLastAside(data);
     });
 
     socket.on('npc_error', (data: { npcId?: string }) => {
@@ -270,21 +283,28 @@ export function useGameSocket(
     [],
   );
 
-  const sendChat = useCallback((message: string): boolean => {
-    if (!socketRef.current?.connected) {
-      setIsStreaming(false);
-      return false;
-    }
-    setStreamText('');
-    setIsStreaming(true);
-    setSuggestions(null);
-    setSuggestionsError(null);
-    socketRef.current.emit('player_chat', {
-      npcId: activeNpcIdRef.current,
-      message,
-    });
-    return true;
-  }, []);
+  const sendChat = useCallback(
+    (
+      message: string,
+      chatOpts?: { nearbyNpcIds?: string[] },
+    ): boolean => {
+      if (!socketRef.current?.connected) {
+        setIsStreaming(false);
+        return false;
+      }
+      setStreamText('');
+      setIsStreaming(true);
+      setSuggestions(null);
+      setSuggestionsError(null);
+      socketRef.current.emit('player_chat', {
+        npcId: activeNpcIdRef.current,
+        message,
+        nearbyNpcIds: chatOpts?.nearbyNpcIds,
+      });
+      return true;
+    },
+    [],
+  );
 
   const requestSuggestions = useCallback((): boolean => {
     if (!socketRef.current?.connected) return false;
@@ -343,6 +363,7 @@ export function useGameSocket(
   const clearLastSaved = useCallback(() => setLastSaved(null), []);
   const clearLastNewRun = useCallback(() => setLastNewRun(null), []);
   const clearLastExchange = useCallback(() => setLastExchange(null), []);
+  const clearLastAside = useCallback(() => setLastAside(null), []);
 
   return {
     connected,
@@ -354,6 +375,7 @@ export function useGameSocket(
     isStreaming,
     lastSaved,
     lastExchange,
+    lastAside,
     archivesList,
     loadedConversation,
     saveError,
@@ -377,5 +399,6 @@ export function useGameSocket(
     clearLastSaved,
     clearLastNewRun,
     clearLastExchange,
+    clearLastAside,
   };
 }

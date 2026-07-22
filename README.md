@@ -126,27 +126,37 @@ npm run dev
 > 首次若报 `@ocraft/shared` 找不到，先执行：  
 > `cd packages/shared && npm install && npm run build`
 
-## 自定义更改（已做可视化页面）
+## 协议速查
+
+默认 HTTP：`http://localhost:4000` · WS：同端口 Socket.io（需登录 token）
+
+### HTTP（Harness 相关）
 
 
-| 改什么             | 文件                                                            | 说明                                                          |
-| --------------- | ------------------------------------------------------------- | ----------------------------------------------------------- |
-| NPC 人设、口癖、初始数值  | `server/src/mock-data/npc.json`                               | 名字、`system_prompt_template`、好感/疲惫初值、`favorite_things` + 同义词 |
-| NPC 长期记忆（RAG）   | 同上 `memories[]`                                               | 每条记忆有 `keywords`、`content`；`min_chapter` 控制哪章节能检索到          |
-| 3D 位置 / 模型 / 头像 | 同上 `meta`                                                     | spawn_position`、`model_path`、`avatar`                       |
-| 章节剧情边界          | `server/src/npc/prompt-builder.ts`                            | `daily` / `uneasy` / `dream_reveal` 各能说什么、不能说什么             |
-| 章节推进触发词         | `srver/src/agent/chapter-transition.ts`                       | 如「没睡好」进 uneasy，「做梦」进 dream_reveal；含好感门槛                     |
-| 聊天触发数值变化        | `server/src/agent/agent-harness.service.ts`                   | 工作词加疲惫、兴趣词加好感减疲惫；数值 delta 在这里                               |
-| Mock 固定回复       | `packages/shared/src/mock-reply.ts`                           | 没配 LLM Key 时走这里，不是真 AI                                      |
-| 对话存档            | PostgreSQL `conversation_archives` / `conversation_snapshots` | 按 `playerId` 隔离；旧 `conversation-archives/*.json` 不再写入       |
-| 移动 / 交互距离 / 镜头  | `client/src/config/game.ts`                                   | 速度、按 F 的距离、相机远近                                             |
-| 后端地址            | `client/.env` 或 `NEXT_PUBLIC_GAME_SERVER_URL`                 | 本项目启动默认 `http://localhost:3010`                             |
-| 大模型             | `server/.env`                                                 | `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`                    |
+| 方法             | 路径                               | 用途                              |
+| -------------- | -------------------------------- | ------------------------------- |
+| GET/PUT/DELETE | `/packs/selection`               | 选用 / 切换 / 取消剧情包                 |
+| GET            | `/packs/runtime`                 | 进场摘要（章标签、NPC 列表）                |
+| GET            | `/packs/worlds`…                 | 列世界 / 版本 / 拉 Pack               |
+| GET            | `/agent/traces`                  | 本账号 Agent 决策轨迹（tool / 升章 / 互聊等） |
+| DELETE         | `/agent/traces`                  | 清空 Trace                        |
+| POST           | `/auth/login` · `/auth/register` | 登录注册（后续请求带 Bearer）              |
 
 
-**改完 npc.json 后**：重启 server；若改了 `packages/shared`，需 `npm run build`。
+### WebSocket（对白 / 存档）
 
-PS：未配置 LLM Key 时，是写死的固定回复。
+
+| 方向  | 事件                                                         | 用途                           |
+| --- | ---------------------------------------------------------- | ---------------------------- |
+| C→S | `player_chat`                                              | 玩家发言 → 走 Harness（tool→规则→表演） |
+| S→C | `npc_stream`                                               | 对白流式输出                       |
+| S→C | `npc_state_update`                                         | 好感/疲惫/章/旗等                   |
+| S→C | `npc_exchange`                                             | 关系互聊旁听                       |
+| S→C | `conversation_saved`                                       | 自动存档成功                       |
+| C→S | `list_conversation_archives` / `load_conversation_archive` | 列档 / 读档                      |
+| C→S | `start_new_run`                                            | 新开一个档                        |
+| C→S | `request_story_map`                                        | 剧情进度图                        |
+
 
 *还要做好多东西啊。。。不然可能打不出预想中的自定义和多结局ORZ*
 

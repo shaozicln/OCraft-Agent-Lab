@@ -5,7 +5,7 @@ import type {
   ArchivedNpcState,
   ArchiveScope,
   ConversationArchiveSummary,
-  ConversationSnapshotV2,
+  ConversationSnapshotPayload,
 } from '@ocraft/shared';
 import { PlayerStateRepository } from '../db/player-state.repository';
 import type { AppDatabase } from '../db/db.service';
@@ -15,12 +15,12 @@ import {
 } from '../db/schema';
 import { migrateSave } from './save-migrate';
 
-/** 内存/返回用：统一带上可选 v2 payload */
+/** 内存/返回用：统一带上可选 payload（当前 v3） */
 export interface ConversationSnapshot {
   saved_at: string;
   npc_state: ArchivedNpcState;
   messages: ArchivedMessage[];
-  payload?: ConversationSnapshotV2 | null;
+  payload?: ConversationSnapshotPayload | null;
 }
 
 export interface CreateArchiveOpts {
@@ -304,7 +304,7 @@ export class ConversationArchiveService {
       );
     }
 
-    let payload: ConversationSnapshotV2 | null = null;
+    let payload: ConversationSnapshotPayload | null = null;
     if (row.payload) {
       payload = migrateSave(row.payload);
     }

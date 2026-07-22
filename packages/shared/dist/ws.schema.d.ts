@@ -9,6 +9,7 @@ export declare const playerIdSchema: z.ZodString;
 export declare const playerChatPayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
     message: z.ZodString;
+    nearbyNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 export declare const requestNpcStatePayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
@@ -67,6 +68,13 @@ export declare const npcExchangeEventSchema: z.ZodObject<{
         text: z.ZodString;
     }, z.core.$strip>>;
 }, z.core.$strip>;
+/** 同场短接话：附近另一人插一句（非完整 exchange） */
+export declare const npcAsideEventSchema: z.ZodObject<{
+    chatNpcId: z.ZodString;
+    npcId: z.ZodString;
+    name: z.ZodString;
+    text: z.ZodString;
+}, z.core.$strip>;
 export declare const saveConversationPayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
 }, z.core.$strip>;
@@ -115,6 +123,34 @@ export declare const archivedNpcSlotSchema: z.ZodObject<{
     }, z.core.$strip>>>;
 }, z.core.$strip>;
 export type ArchivedNpcSlot = z.infer<typeof archivedNpcSlotSchema>;
+/** 整场公共对话流中的一条发言（run 级） */
+export declare const sceneUtteranceKindSchema: z.ZodEnum<{
+    player_to_npc: "player_to_npc";
+    npc_to_player: "npc_to_player";
+    npc_to_npc: "npc_to_npc";
+    system: "system";
+}>;
+export type SceneUtteranceKind = z.infer<typeof sceneUtteranceKindSchema>;
+export declare const sceneUtteranceSchema: z.ZodObject<{
+    id: z.ZodString;
+    at: z.ZodString;
+    kind: z.ZodEnum<{
+        player_to_npc: "player_to_npc";
+        npc_to_player: "npc_to_player";
+        npc_to_npc: "npc_to_npc";
+        system: "system";
+    }>;
+    speaker_id: z.ZodString;
+    speaker_name: z.ZodString;
+    addressee_id: z.ZodOptional<z.ZodString>;
+    addressee_name: z.ZodOptional<z.ZodString>;
+    text: z.ZodString;
+    meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+}, z.core.$strip>;
+export type SceneUtterance = z.infer<typeof sceneUtteranceSchema>;
+/** 玩家在 scene_log 中的稳定 id / 默认显示名 */
+export declare const SCENE_PLAYER_ID: "player";
+export declare const SCENE_PLAYER_DISPLAY_NAME: "\u6C88\u6A90";
 /**
  * 存档快照 v2（一局一档）
  * 仍在 DB 的 npc_state/messages 列写入「焦点 NPC」镜像，便于旧列表预览；
@@ -159,6 +195,66 @@ export declare const conversationSnapshotV2Schema: z.ZodObject<{
     }, z.core.$strip>>;
 }, z.core.$strip>;
 export type ConversationSnapshotV2 = z.infer<typeof conversationSnapshotV2Schema>;
+/**
+ * 存档快照 v3 = v2 + run 级 scene_log（整场对白时间线）
+ */
+export declare const conversationSnapshotV3Schema: z.ZodObject<{
+    schema_version: z.ZodLiteral<3>;
+    saved_at: z.ZodString;
+    focus_npc_id: z.ZodString;
+    world: z.ZodObject<{
+        chapter_state: z.ZodString;
+        story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
+    }, z.core.$strip>;
+    npc_state: z.ZodObject<{
+        affinity: z.ZodNumber;
+        fatigue: z.ZodNumber;
+        current_status: z.ZodString;
+        chapter_state: z.ZodString;
+        story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
+    }, z.core.$strip>;
+    messages: z.ZodArray<z.ZodObject<{
+        role: z.ZodEnum<{
+            user: "user";
+            assistant: "assistant";
+        }>;
+        content: z.ZodString;
+        at: z.ZodString;
+    }, z.core.$strip>>;
+    npcs: z.ZodRecord<z.ZodString, z.ZodObject<{
+        affinity: z.ZodNumber;
+        fatigue: z.ZodNumber;
+        current_status: z.ZodString;
+        story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
+        messages: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            role: z.ZodEnum<{
+                user: "user";
+                assistant: "assistant";
+            }>;
+            content: z.ZodString;
+            at: z.ZodString;
+        }, z.core.$strip>>>;
+    }, z.core.$strip>>;
+    scene_log: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        at: z.ZodString;
+        kind: z.ZodEnum<{
+            player_to_npc: "player_to_npc";
+            npc_to_player: "npc_to_player";
+            npc_to_npc: "npc_to_npc";
+            system: "system";
+        }>;
+        speaker_id: z.ZodString;
+        speaker_name: z.ZodString;
+        addressee_id: z.ZodOptional<z.ZodString>;
+        addressee_name: z.ZodOptional<z.ZodString>;
+        text: z.ZodString;
+        meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    }, z.core.$strip>>>;
+}, z.core.$strip>;
+export type ConversationSnapshotV3 = z.infer<typeof conversationSnapshotV3Schema>;
+/** 当前写入版本别名 */
+export type ConversationSnapshotPayload = ConversationSnapshotV3;
 export declare const conversationSnapshotSummarySchema: z.ZodObject<{
     index: z.ZodNumber;
     saved_at: z.ZodString;
@@ -252,6 +348,22 @@ export declare const conversationLoadedEventSchema: z.ZodObject<{
         npc: "npc";
     }>>;
     restored_npc_ids: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    scene_log: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        at: z.ZodString;
+        kind: z.ZodEnum<{
+            player_to_npc: "player_to_npc";
+            npc_to_player: "npc_to_player";
+            npc_to_npc: "npc_to_npc";
+            system: "system";
+        }>;
+        speaker_id: z.ZodString;
+        speaker_name: z.ZodString;
+        addressee_id: z.ZodOptional<z.ZodString>;
+        addressee_name: z.ZodOptional<z.ZodString>;
+        text: z.ZodString;
+        meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    }, z.core.$strip>>>;
 }, z.core.$strip>;
 /** 新开一局 / 从某章或某分歧回溯为新存档槽 */
 export declare const startNewRunPayloadSchema: z.ZodObject<{
@@ -330,3 +442,4 @@ export type ConversationArchivesListEvent = z.infer<typeof conversationArchivesL
 export type ConversationLoadedEvent = z.infer<typeof conversationLoadedEventSchema>;
 export type NpcExchangeLine = z.infer<typeof npcExchangeLineSchema>;
 export type NpcExchangeEvent = z.infer<typeof npcExchangeEventSchema>;
+export type NpcAsideEvent = z.infer<typeof npcAsideEventSchema>;

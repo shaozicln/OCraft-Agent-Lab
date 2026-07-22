@@ -2,6 +2,7 @@
 
 import { Suspense, memo, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { OfficeScene } from './OfficeScene';
 import { Player, type NearbyNpc } from './Player';
@@ -25,6 +26,8 @@ interface GameCanvasProps {
   lookEnabled: boolean;
   onPointerLockChange: (locked: boolean) => void;
   uiOverlayActive?: boolean;
+  /** 旁听时当前开口的 NPC，头顶显示说话标记 */
+  speakingNpcId?: string | null;
 }
 
 export const GameCanvas = memo(function GameCanvas({
@@ -34,6 +37,7 @@ export const GameCanvas = memo(function GameCanvas({
   lookEnabled,
   onPointerLockChange,
   uiOverlayActive = false,
+  speakingNpcId = null,
 }: GameCanvasProps) {
   const npcSpawns = useMemo(
     () => npcs.map((n) => ({ npcId: n.npcId, position: n.spawn })),
@@ -78,13 +82,26 @@ export const GameCanvas = memo(function GameCanvas({
         <Suspense fallback={null}>
           <OfficeScene />
           {npcs.map((n) => (
-            <Humanoid
-              key={n.npcId}
-              color={n.color}
-              headColor={n.headColor}
-              position={n.spawn}
-              animation={n.animation}
-            />
+            <group key={n.npcId} position={n.spawn}>
+              <Humanoid
+                color={n.color}
+                headColor={n.headColor}
+                position={[0, 0, 0]}
+                animation={n.animation}
+              />
+              {speakingNpcId === n.npcId && (
+                <Html
+                  position={[0, 1.55, 0]}
+                  center
+                  distanceFactor={8}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  <div className="rounded-full bg-violet-600/90 px-2 py-0.5 text-xs font-medium text-white shadow-md whitespace-nowrap">
+                    {n.name} · 说话中
+                  </div>
+                </Html>
+              )}
+            </group>
           ))}
           <Player
             npcSpawns={npcSpawns}
