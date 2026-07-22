@@ -17,6 +17,8 @@ export const playerChatPayloadSchema = z.object({
   message: z.string().trim().min(1).max(500),
   /** 客户端上报的附近 NPC（同场短接话用）；可空 */
   nearbyNpcIds: z.array(z.string().min(1).max(64)).max(16).optional(),
+  /** 悄悄话：仅目标 NPC 听见；跳过 aside/exchange；scene_log 标 meta.whisper */
+  whisper: z.boolean().optional(),
 });
 
 export const requestNpcStatePayloadSchema = z.object({
@@ -178,6 +180,7 @@ export type ConversationSnapshotV2 = z.infer<typeof conversationSnapshotV2Schema
 
 /**
  * 存档快照 v3 = v2 + run 级 scene_log（整场对白时间线）
+ * selected_npc_ids：null/缺省 = 全部已可出场；非空数组 = 在已可出场中筛选（至少 1 人）
  */
 export const conversationSnapshotV3Schema = z.object({
   schema_version: z.literal(3),
@@ -191,6 +194,13 @@ export const conversationSnapshotV3Schema = z.object({
   messages: z.array(archivedMessageSchema),
   npcs: z.record(z.string(), archivedNpcSlotSchema),
   scene_log: z.array(sceneUtteranceSchema).default([]),
+  /** null = 全部已可出场；string[] = 子集；缺省视为全部 */
+  selected_npc_ids: z
+    .array(z.string().min(1).max(64))
+    .min(1)
+    .max(32)
+    .nullable()
+    .optional(),
 });
 export type ConversationSnapshotV3 = z.infer<typeof conversationSnapshotV3Schema>;
 /** 当前写入版本别名 */
@@ -244,6 +254,31 @@ export const conversationLoadedEventSchema = z.object({
   restored_npc_ids: z.array(z.string()).optional(),
   /** 整场对白时间线（v3）；缺省时前端回退 messages */
   scene_log: z.array(sceneUtteranceSchema).optional(),
+  /** null = 全部已可出场；缺省视为全部 */
+  selected_npc_ids: z
+    .array(z.string().min(1).max(64))
+    .min(1)
+    .max(32)
+    .nullable()
+    .optional(),
+});
+
+/** 本局出场选用：null = 恢复为全部已可出场 */
+export const setRunNpcSelectionPayloadSchema = z.object({
+  npcIds: z
+    .array(z.string().min(1).max(64))
+    .min(1)
+    .max(32)
+    .nullable(),
+});
+
+export const runNpcSelectionEventSchema = z.object({
+  /** null = 全部已可出场 */
+  selected_npc_ids: z
+    .array(z.string().min(1).max(64))
+    .min(1)
+    .max(32)
+    .nullable(),
 });
 
 /** 新开一局 / 从某章或某分歧回溯为新存档槽 */
@@ -298,6 +333,13 @@ export const newRunStartedEventSchema = z.object({
   display_name: z.string().optional(),
   chapter_state: chapterStateSchema,
   story_flags: z.record(z.string(), z.string()),
+  /** 新开一局重置为全部已可出场 */
+  selected_npc_ids: z
+    .array(z.string().min(1).max(64))
+    .min(1)
+    .max(32)
+    .nullable()
+    .optional(),
 });
 
 export const archiveRenamedEventSchema = z.object({
@@ -329,6 +371,10 @@ export type StoryMapEdge = z.infer<typeof storyMapEdgeSchema>;
 export type StoryMapEvent = z.infer<typeof storyMapEventSchema>;
 export type NewRunStartedEvent = z.infer<typeof newRunStartedEventSchema>;
 export type ArchiveRenamedEvent = z.infer<typeof archiveRenamedEventSchema>;
+export type SetRunNpcSelectionPayload = z.infer<
+  typeof setRunNpcSelectionPayloadSchema
+>;
+export type RunNpcSelectionEvent = z.infer<typeof runNpcSelectionEventSchema>;
 export type ArchivedNpcState = z.infer<typeof archivedNpcStateSchema>;
 export type ArchivedMessage = z.infer<typeof archivedMessageSchema>;
 export type ConversationSnapshotSummary = z.infer<

@@ -5,4 +5,6 @@ export type ChatMessage = {
   speakerName?: string;
   /** 稳定 id：流式更新只覆盖同一 speakerId，避免切人时盖掉上一句 */
   speakerId?: string;
+  /** 悄悄话：仅目标 NPC 与玩家这一轮 */
+  whisper?: boolean;
 };

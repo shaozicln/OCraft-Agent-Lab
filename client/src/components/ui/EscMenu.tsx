@@ -56,6 +56,11 @@ interface EscMenuProps {
   packVersionId?: string;
   storyMap?: StoryMapEvent | null;
   runBusy?: boolean;
+  /** 本包全部 NPC + 是否已满足出场条件 */
+  sceneNpcs?: Array<{ npcId: string; name: string; eligible: boolean }>;
+  /** null = 全部已可出场 */
+  selectedNpcIds?: string[] | null;
+  onNpcSelectionChange?: (npcIds: string[] | null) => void;
   onClose: () => void;
   onLogout: () => void;
   onSessionUpdate?: (session: AuthSession) => void;
@@ -76,6 +81,9 @@ export function EscMenu({
   packVersionId,
   storyMap = null,
   runBusy = false,
+  sceneNpcs = [],
+  selectedNpcIds = null,
+  onNpcSelectionChange,
   onClose,
   onLogout,
   onSessionUpdate,
@@ -226,6 +234,50 @@ export function EscMenu({
       : '/settings?tab=editor';
 
   const profileFields = packProfile ? resolveProfileFields(packProfile) : [];
+
+  const eligibleSceneNpcs = sceneNpcs.filter((n) => n.eligible);
+
+  const isNpcChecked = useCallback(
+    (npcId: string, eligible: boolean) => {
+      if (!eligible) return false;
+      if (selectedNpcIds === null) return true;
+      return selectedNpcIds.includes(npcId);
+    },
+    [selectedNpcIds],
+  );
+
+  const toggleSceneNpc = useCallback(
+    (npcId: string, eligible: boolean) => {
+      if (!eligible || !onNpcSelectionChange) return;
+      const currentlyChecked = eligibleSceneNpcs
+        .filter((n) => isNpcChecked(n.npcId, true))
+        .map((n) => n.npcId);
+
+      let next: string[];
+      if (currentlyChecked.includes(npcId)) {
+        next = currentlyChecked.filter((id) => id !== npcId);
+      } else {
+        next = [...currentlyChecked, npcId];
+      }
+
+      if (next.length < 1) {
+        setError('至少保留一名可出场 NPC');
+        return;
+      }
+      setError(null);
+
+      const allEligibleIds = eligibleSceneNpcs.map((n) => n.npcId);
+      const isAll =
+        next.length === allEligibleIds.length &&
+        allEligibleIds.every((id) => next.includes(id));
+      onNpcSelectionChange(isAll ? null : next);
+    },
+    [
+      eligibleSceneNpcs,
+      isNpcChecked,
+      onNpcSelectionChange,
+    ],
+  );
 
   return (
     <div className="absolute inset-0 z-50 flex">
@@ -391,6 +443,65 @@ export function EscMenu({
               当前包：{packLabel || '—'}
             </p>
           </section>
+
+          {sceneNpcs.length > 0 && onNpcSelectionChange && (
+            <section>
+              <h3 className="esc-rail__section-label">本局出场</h3>
+              <p
+                className="mb-2 text-xs"
+                style={{ color: 'var(--ui-fg-muted)' }}
+              >
+                仅从已满足出场条件的角色中筛选；未解锁者不可强制上场。
+              </p>
+              <ul className="space-y-1.5">
+                {sceneNpcs.map((n) => {
+                  const checked = isNpcChecked(n.npcId, n.eligible);
+                  return (
+                    <li key={n.npcId}>
+                      <label
+                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-sm ${
+                          n.eligible ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+                        }`}
+                        style={{
+                          borderColor: 'var(--ui-border)',
+                          background: 'var(--ui-bg-elevated)',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!n.eligible}
+                          onChange={() => toggleSceneNpc(n.npcId, n.eligible)}
+                          className="accent-sky-500"
+                        />
+                        <span className="flex-1 truncate">{n.name}</span>
+                        {!n.eligible && (
+                          <span
+                            className="shrink-0 text-xs"
+                            style={{ color: 'var(--ui-fg-muted)' }}
+                          >
+                            未出场
+                          </span>
+                        )}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              {selectedNpcIds !== null && (
+                <button
+                  type="button"
+                  className="esc-rail__link mt-2"
+                  onClick={() => {
+                    setError(null);
+                    onNpcSelectionChange(null);
+                  }}
+                >
+                  恢复全部可出场
+                </button>
+              )}
+            </section>
+          )}
 
           {onStartNewRun && (
             <section>

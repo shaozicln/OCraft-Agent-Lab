@@ -15,6 +15,8 @@ interface HumanoidProps {
   position?: [number, number, number];
   animation?: HumanoidAnimation;
   rotationY?: number;
+  /** 离场淡出用，默认 1 */
+  opacity?: number;
 }
 
 export function Humanoid({
@@ -23,6 +25,7 @@ export function Humanoid({
   position = [0, 0, 0],
   animation = 'idle',
   rotationY = 0,
+  opacity = 1,
 }: HumanoidProps) {
   const groupRef = useRef<THREE.Group>(null);
   const bodyRef = useRef<THREE.Mesh>(null);
@@ -113,31 +116,63 @@ export function Humanoid({
     }
   });
 
+  const transparent = opacity < 0.999;
+
   return (
     <group ref={groupRef} position={position}>
       <mesh position={[-0.1, 0.21, 0]} castShadow>
         <boxGeometry args={[0.14, 0.42, 0.14]} />
-        <meshLambertMaterial color={color} />
+        <meshLambertMaterial
+          color={color}
+          transparent={transparent}
+          opacity={opacity}
+          depthWrite={!transparent}
+        />
       </mesh>
       <mesh position={[0.1, 0.21, 0]} castShadow>
         <boxGeometry args={[0.14, 0.42, 0.14]} />
-        <meshLambertMaterial color={color} />
+        <meshLambertMaterial
+          color={color}
+          transparent={transparent}
+          opacity={opacity}
+          depthWrite={!transparent}
+        />
       </mesh>
       <mesh ref={bodyRef} position={[0, 0.68, 0]} castShadow>
         <boxGeometry args={[0.38, 0.48, 0.2]} />
-        <meshLambertMaterial color={color} />
+        <meshLambertMaterial
+          color={color}
+          transparent={transparent}
+          opacity={opacity}
+          depthWrite={!transparent}
+        />
       </mesh>
       <mesh ref={headRef} position={[0, 1.02, 0]} castShadow>
         <sphereGeometry args={[0.17, 10, 10]} />
-        <meshLambertMaterial color={headColor ?? color} />
+        <meshLambertMaterial
+          color={headColor ?? color}
+          transparent={transparent}
+          opacity={opacity}
+          depthWrite={!transparent}
+        />
       </mesh>
       <mesh ref={leftArmRef} position={[-0.28, 0.7, 0]} castShadow>
         <boxGeometry args={[0.1, 0.38, 0.1]} />
-        <meshLambertMaterial color={color} />
+        <meshLambertMaterial
+          color={color}
+          transparent={transparent}
+          opacity={opacity}
+          depthWrite={!transparent}
+        />
       </mesh>
       <mesh ref={rightArmRef} position={[0.28, 0.7, 0]} castShadow>
         <boxGeometry args={[0.1, 0.38, 0.1]} />
-        <meshLambertMaterial color={color} />
+        <meshLambertMaterial
+          color={color}
+          transparent={transparent}
+          opacity={opacity}
+          depthWrite={!transparent}
+        />
       </mesh>
     </group>
   );

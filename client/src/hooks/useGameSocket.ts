@@ -11,6 +11,7 @@ import type {
   NpcAsideEvent,
   NpcExchangeEvent,
   NpcStateUpdate,
+  RunNpcSelectionEvent,
   StoryMapEvent,
 } from '@ocraft/shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -58,6 +59,8 @@ export function useGameSocket(
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [storyMap, setStoryMap] = useState<StoryMapEvent | null>(null);
   const [lastNewRun, setLastNewRun] = useState<NewRunStartedEvent | null>(null);
+  /** null = 全部已可出场 */
+  const [selectedNpcIds, setSelectedNpcIds] = useState<string[] | null>(null);
 
   // 切 NPC 时丢掉上一任的流式缓冲，避免 ChatBox 把旧回复挂到新人头上
   useEffect(() => {
@@ -140,6 +143,9 @@ export function useGameSocket(
       setSuggestions(null);
       setSuggestionsLoading(false);
       setSuggestionsError(null);
+      if (data.selected_npc_ids !== undefined) {
+        setSelectedNpcIds(data.selected_npc_ids);
+      }
       // 同步世界章/旗到进度订阅键（可能与 focus 不同）
       setNpcStates((prev) => ({
         ...prev,
@@ -164,6 +170,10 @@ export function useGameSocket(
       }));
     });
 
+    socket.on('run_npc_selection', (data: RunNpcSelectionEvent) => {
+      setSelectedNpcIds(data.selected_npc_ids);
+    });
+
     socket.on('story_map', (data: StoryMapEvent) => {
       setStoryMap(data);
     });
@@ -174,6 +184,9 @@ export function useGameSocket(
       setIsStreaming(false);
       setLoadedConversation(null);
       setSuggestions(null);
+      setSelectedNpcIds(
+        data.selected_npc_ids === undefined ? null : data.selected_npc_ids,
+      );
       setNpcStates((prev) => {
         const next = { ...prev };
         const applyWorld = (id: string) => {
@@ -286,7 +299,7 @@ export function useGameSocket(
   const sendChat = useCallback(
     (
       message: string,
-      chatOpts?: { nearbyNpcIds?: string[] },
+      chatOpts?: { nearbyNpcIds?: string[]; whisper?: boolean },
     ): boolean => {
       if (!socketRef.current?.connected) {
         setIsStreaming(false);
@@ -300,6 +313,7 @@ export function useGameSocket(
         npcId: activeNpcIdRef.current,
         message,
         nearbyNpcIds: chatOpts?.nearbyNpcIds,
+        whisper: chatOpts?.whisper === true ? true : undefined,
       });
       return true;
     },
@@ -356,6 +370,15 @@ export function useGameSocket(
     [],
   );
 
+  const setRunNpcSelection = useCallback(
+    (npcIds: string[] | null): boolean => {
+      if (!socketRef.current?.connected) return false;
+      socketRef.current.emit('set_run_npc_selection', { npcIds });
+      return true;
+    },
+    [],
+  );
+
   const clearLoadedConversation = useCallback(
     () => setLoadedConversation(null),
     [],
@@ -382,6 +405,7 @@ export function useGameSocket(
     loadError,
     storyMap,
     lastNewRun,
+    selectedNpcIds,
     requestNpcState,
     requestStoryMap,
     startNewRun,
@@ -395,6 +419,7 @@ export function useGameSocket(
     saveConversation,
     listArchives,
     loadArchive,
+    setRunNpcSelection,
     clearLoadedConversation,
     clearLastSaved,
     clearLastNewRun,

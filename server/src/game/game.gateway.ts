@@ -19,6 +19,7 @@ import {
   requestNpcStatePayloadSchema,
   requestStoryMapPayloadSchema,
   saveConversationPayloadSchema,
+  setRunNpcSelectionPayloadSchema,
   startNewRunPayloadSchema,
 } from '@ocraft/shared';
 import { AuthService } from '../auth/auth.service';
@@ -137,10 +138,14 @@ export class GameGateway implements OnGatewayConnection {
     const { npcId } = parsed.data;
     return this.packService.runWithPlayerAsync(playerId, async () => {
       await this.conversationService.ensureSession(playerId, npcId);
+      await this.conversationService.ensureNpcSelectionHydrated(playerId);
       client.emit(
         'npc_state_update',
         this.buildStatePayload(playerId, npcId),
       );
+      client.emit('run_npc_selection', {
+        selected_npc_ids: this.conversationService.getNpcSelection(playerId),
+      });
     });
   }
 
@@ -187,12 +192,13 @@ export class GameGateway implements OnGatewayConnection {
     }
 
     const playerId = this.requirePlayerId(client);
-    const { npcId, message, nearbyNpcIds } = parsed.data;
+    const { npcId, message, nearbyNpcIds, whisper } = parsed.data;
+    const isWhisper = whisper === true;
 
     return this.packService.runWithPlayerAsync(playerId, async () => {
       await this.conversationService.ensureSession(playerId, npcId);
       this.logger.log(
-        `player_chat player=${playerId} npc=${npcId} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
+        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
       );
 
       try {
@@ -212,6 +218,7 @@ export class GameGateway implements OnGatewayConnection {
           npcId,
           message,
           fullReply,
+          { whisper: isWhisper },
         );
 
         client.emit('npc_state_update', {
@@ -228,43 +235,46 @@ export class GameGateway implements OnGatewayConnection {
           );
         }
 
-        const exchange = await this.npcExchange.tryRunAfterChat({
-          playerId,
-          chatNpcId: npcId,
-          playerMessage: message,
-          assistantReply: fullReply,
-          traceId: result.traceId,
-        });
-        if (exchange) {
-          await this.conversationService.appendExchangeToSceneLog(
-            playerId,
-            exchange,
-          );
-          client.emit('npc_exchange', exchange);
-          client.emit(
-            'npc_state_update',
-            this.buildStatePayload(playerId, progressNpcId),
-          );
-          if (progressNpcId !== npcId) {
-            client.emit(
-              'npc_state_update',
-              this.buildStatePayload(playerId, npcId),
-            );
-          }
-        } else {
-          const aside = await this.npcAside.tryNearbyAside({
+        // 悄悄话：同场其他人听不见 → 不跑互聊 / 旁听
+        if (!isWhisper) {
+          const exchange = await this.npcExchange.tryRunAfterChat({
             playerId,
             chatNpcId: npcId,
-            nearbyNpcIds: nearbyNpcIds ?? [],
             playerMessage: message,
             assistantReply: fullReply,
+            traceId: result.traceId,
           });
-          if (aside) {
-            await this.conversationService.appendAsideToSceneLog(
+          if (exchange) {
+            await this.conversationService.appendExchangeToSceneLog(
               playerId,
-              aside,
+              exchange,
             );
-            client.emit('npc_aside', aside);
+            client.emit('npc_exchange', exchange);
+            client.emit(
+              'npc_state_update',
+              this.buildStatePayload(playerId, progressNpcId),
+            );
+            if (progressNpcId !== npcId) {
+              client.emit(
+                'npc_state_update',
+                this.buildStatePayload(playerId, npcId),
+              );
+            }
+          } else {
+            const aside = await this.npcAside.tryNearbyAside({
+              playerId,
+              chatNpcId: npcId,
+              nearbyNpcIds: nearbyNpcIds ?? [],
+              playerMessage: message,
+              assistantReply: fullReply,
+            });
+            if (aside) {
+              await this.conversationService.appendAsideToSceneLog(
+                playerId,
+                aside,
+              );
+              client.emit('npc_aside', aside);
+            }
           }
         }
 
@@ -395,7 +405,12 @@ export class GameGateway implements OnGatewayConnection {
         scope: restored.scope,
         restored_npc_ids: restored.restoredNpcIds,
         scene_log: restored.sceneLog,
+        selected_npc_ids: restored.selectedNpcIds ?? null,
       });
+      client.emit(
+        'run_npc_selection',
+        { selected_npc_ids: restored.selectedNpcIds ?? null },
+      );
       client.emit(
         'story_map',
         this.conversationService.buildStoryMap(playerId, npcId),
@@ -447,7 +462,9 @@ export class GameGateway implements OnGatewayConnection {
           display_name: result.display_name,
           chapter_state: result.chapterState,
           story_flags: result.storyFlags,
+          selected_npc_ids: null,
         });
+        client.emit('run_npc_selection', { selected_npc_ids: null });
         this.emitAllNpcStates(client, playerId);
         client.emit('story_map', this.conversationService.buildStoryMap(playerId, npcId));
         const archives = await this.conversationService.listArchives(
@@ -458,6 +475,56 @@ export class GameGateway implements OnGatewayConnection {
       } catch (err) {
         throw new WsException(
           err instanceof Error ? err.message : '新开一局失败',
+        );
+      }
+    });
+  }
+
+  @SubscribeMessage('set_run_npc_selection')
+  async handleSetRunNpcSelection(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: unknown,
+  ) {
+    const parsed = setRunNpcSelectionPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new WsException(parsed.error.message);
+    }
+    const playerId = this.requirePlayerId(client);
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      try {
+        const selected = await this.conversationService.setNpcSelection(
+          playerId,
+          parsed.data.npcIds,
+        );
+        client.emit('run_npc_selection', { selected_npc_ids: selected });
+
+        const focusNpcId = getDefaultNpcId(this.packService.getPack());
+        try {
+          const saved = await this.conversationService.autoSaveActiveRun(
+            playerId,
+            focusNpcId,
+          );
+          if (saved) {
+            client.emit('conversation_saved', {
+              npcId: focusNpcId,
+              filename: saved.filename,
+              snapshotIndex: saved.snapshotIndex,
+              savedAt: saved.savedAt,
+              chapter_state: saved.chapterState,
+              scope: saved.scope,
+              world_changed: false,
+            });
+          }
+        } catch (autoErr) {
+          this.logger.warn(
+            `autoSave after npc_selection skipped player=${playerId}: ${
+              autoErr instanceof Error ? autoErr.message : autoErr
+            }`,
+          );
+        }
+      } catch (err) {
+        throw new WsException(
+          err instanceof Error ? err.message : '更新出场选用失败',
         );
       }
     });

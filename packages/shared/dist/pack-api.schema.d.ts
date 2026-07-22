@@ -58,6 +58,7 @@ export declare const packRuntimeNpcSchema: z.ZodObject<{
     npc_id: z.ZodString;
     name: z.ZodString;
     spawn_position: z.ZodTuple<[z.ZodNumber, z.ZodNumber, z.ZodNumber], null>;
+    model_path: z.ZodOptional<z.ZodString>;
     appear_from_chapter: z.ZodOptional<z.ZodString>;
     appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
@@ -81,6 +82,7 @@ export declare const packRuntimeSchema: z.ZodObject<{
         npc_id: z.ZodString;
         name: z.ZodString;
         spawn_position: z.ZodTuple<[z.ZodNumber, z.ZodNumber, z.ZodNumber], null>;
+        model_path: z.ZodOptional<z.ZodString>;
         appear_from_chapter: z.ZodOptional<z.ZodString>;
         appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
     }, z.core.$strip>>;

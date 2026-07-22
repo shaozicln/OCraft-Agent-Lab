@@ -36,7 +36,7 @@ interface ChatBoxProps {
   suggestionsLoading: boolean;
   suggestionsError: string | null;
   onClose: () => void;
-  onSend: (message: string) => boolean;
+  onSend: (message: string, opts?: { whisper?: boolean }) => boolean;
   onRequestSuggestions: () => boolean;
   onClearSuggestions: () => void;
   onSave: () => boolean;
@@ -55,6 +55,7 @@ interface ChatBoxProps {
 
 function sceneLogToChatMessages(log: SceneUtterance[]): ChatMessage[] {
   return log.map((u) => {
+    const whisper = u.meta?.whisper === true;
     switch (u.kind) {
       case 'player_to_npc':
         return {
@@ -62,6 +63,7 @@ function sceneLogToChatMessages(log: SceneUtterance[]): ChatMessage[] {
           text: u.text,
           speakerId: u.speaker_id,
           speakerName: u.speaker_name,
+          whisper,
         };
       case 'npc_to_player':
         if (u.meta?.aside) {
@@ -77,6 +79,7 @@ function sceneLogToChatMessages(log: SceneUtterance[]): ChatMessage[] {
           text: u.text,
           speakerId: u.speaker_id,
           speakerName: u.speaker_name,
+          whisper,
         };
       case 'npc_to_npc':
         return {
@@ -157,6 +160,8 @@ export function ChatBox({
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   /** 旁听逐句播放中：禁输入 */
   const [listening, setListening] = useState(false);
+  /** 悄悄话开关（默认关；导演自动辨明为后续） */
+  const [whisperMode, setWhisperMode] = useState(false);
   /** 当前活跃存档槽（高亮 / 顶栏） */
   const [activeSlotFilename, setActiveSlotFilename] = useState<string | null>(
     null,
@@ -166,6 +171,8 @@ export function ChatBox({
   const inputRef = useRef<HTMLInputElement>(null);
   const lastStreamRef = useRef('');
   const streamNpcIdRef = useRef(npcId);
+  /** 本轮流式回复是否对应悄悄话 */
+  const pendingWhisperRef = useRef(false);
   const historyFullscreenRef = useRef(historyFullscreen);
   const loadPanelOpenRef = useRef(loadPanelOpen);
   historyFullscreenRef.current = historyFullscreen;
@@ -392,6 +399,7 @@ export function ChatBox({
     setHistory((prev) => {
       const last = prev[prev.length - 1];
       const sameSpeaker = last?.role === 'npc' && last.speakerId === npcId;
+      const whisper = pendingWhisperRef.current || last?.whisper === true;
       if (sameSpeaker) {
         return [
           ...prev.slice(0, -1),
@@ -400,6 +408,7 @@ export function ChatBox({
             text: streamText,
             speakerName: npcName,
             speakerId: npcId,
+            whisper,
           },
         ];
       }
@@ -411,10 +420,17 @@ export function ChatBox({
           text: streamText,
           speakerName: npcName,
           speakerId: npcId,
+          whisper: pendingWhisperRef.current,
         },
       ];
     });
   }, [streamText, isStreaming, npcId, npcName]);
+
+  useEffect(() => {
+    if (!isStreaming) {
+      pendingWhisperRef.current = false;
+    }
+  }, [isStreaming]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -429,20 +445,23 @@ export function ChatBox({
   const handleSend = useCallback(() => {
     const msg = input.trim();
     if (!msg || inputLocked) return;
+    const whisper = whisperMode;
 
     if (!connected) {
       setHistory((prev) => [
         ...prev,
-        { role: 'player', text: msg },
+        { role: 'player', text: msg, whisper },
         { role: 'system', text: '发送失败：未连接服务器（请先启动 server:4000）' },
       ]);
       setInput('');
       return;
     }
 
-    setHistory((prev) => [...prev, { role: 'player', text: msg }]);
-    const ok = onSend(msg);
+    pendingWhisperRef.current = whisper;
+    setHistory((prev) => [...prev, { role: 'player', text: msg, whisper }]);
+    const ok = onSend(msg, whisper ? { whisper: true } : undefined);
     if (!ok) {
+      pendingWhisperRef.current = false;
       setHistory((prev) => [
         ...prev,
         { role: 'system', text: '发送失败，请稍后重试' },
@@ -452,7 +471,7 @@ export function ChatBox({
     setSuggestionsOpen(false);
     lastStreamRef.current = '';
     window.setTimeout(() => inputRef.current?.focus(), 0);
-  }, [connected, input, inputLocked, onSend]);
+  }, [connected, input, inputLocked, onSend, whisperMode]);
 
   const handleOpenLoad = useCallback(() => {
     if (!connected) {
@@ -613,14 +632,18 @@ export function ChatBox({
                 }`}
               >
                 {item.role === 'player'
-                  ? '你：'
+                  ? item.whisper
+                    ? '悄悄话·你：'
+                    : '你：'
                   : item.role === 'system'
                     ? ''
                     : item.role === 'exchange'
                       ? `旁听·${item.speakerName ?? 'NPC'}：`
                       : item.role === 'aside'
                         ? `插话·${item.speakerName ?? 'NPC'}：`
-                        : `${item.speakerName ?? 'NPC'}：`}
+                        : item.whisper
+                          ? `悄悄话·${item.speakerName ?? 'NPC'}：`
+                          : `${item.speakerName ?? 'NPC'}：`}
                 {item.text}
                 {item.role === 'npc' &&
                   isStreaming &&
@@ -702,6 +725,20 @@ export function ChatBox({
             >
               {suggestionsLoading ? '生成中…' : '查看建议'}
             </button>
+            <button
+              type="button"
+              onClick={() => setWhisperMode((v) => !v)}
+              disabled={inputLocked}
+              title="悄悄话：仅当前对话 NPC 听见，同场其他人不会插话或旁听"
+              aria-pressed={whisperMode}
+              className={`shrink-0 px-3 py-2 border rounded-lg text-sm transition-colors disabled:cursor-not-allowed ${
+                whisperMode
+                  ? 'bg-fuchsia-700/80 hover:bg-fuchsia-600 border-fuchsia-500 text-white'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 disabled:bg-slate-800 disabled:text-slate-600'
+              }`}
+            >
+              悄悄话
+            </button>
             <input
               ref={inputRef}
               type="text"
@@ -715,7 +752,9 @@ export function ChatBox({
                     ? '…正在旁听'
                     : isStreaming
                       ? '对方正在说话…'
-                      : '输入对话…'
+                      : whisperMode
+                        ? '悄悄话（仅对方听见）…'
+                        : '输入对话…'
               }
               autoComplete="off"
               className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 disabled:opacity-60 disabled:cursor-not-allowed"

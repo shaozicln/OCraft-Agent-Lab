@@ -328,6 +328,7 @@ export class AgentHarnessService {
     npcId: string,
     userMessage: string,
     assistantReply: string,
+    opts?: { whisper?: boolean },
   ) {
     await this.conversationService.appendTurn(playerId, npcId, 'user', userMessage);
     await this.conversationService.appendTurn(
@@ -341,6 +342,7 @@ export class AgentHarnessService {
       npcId,
       userMessage,
       assistantReply,
+      { whisper: opts?.whisper },
     );
 
     const chapterState = this.worldProgress.getChapter(playerId);

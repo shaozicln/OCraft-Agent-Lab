@@ -2,8 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
 import {
+  getChapterRankMap,
   getDefaultNpcId,
   getFirstChapterId,
+  isNpcPresent,
   SCENE_PLAYER_DISPLAY_NAME,
   SCENE_PLAYER_ID,
   type ArchivedNpcSlot,
@@ -56,6 +58,7 @@ export interface RestoreSnapshotResult {
   scope: ArchiveScope;
   restoredNpcIds: string[];
   sceneLog: SceneUtterance[];
+  selectedNpcIds: string[] | null;
 }
 
 @Injectable()
@@ -72,6 +75,12 @@ export class ConversationService {
   private readonly sceneLogs = new Map<string, SceneUtterance[]>();
   /** 已从存档灌入过 scene_log 的 runKey（避免重启后写空覆盖） */
   private readonly sceneLogHydrated = new Set<string>();
+  /**
+   * 本局出场选用：runKey → null=全部已可出场 / string[]=子集
+   * 未 hydrate 前不写入，避免空覆盖档内值
+   */
+  private readonly runNpcSelections = new Map<string, string[] | null>();
+  private readonly npcSelectionHydrated = new Set<string>();
   private readonly hydrated = new Set<string>();
 
   constructor(
@@ -117,6 +126,131 @@ export class ConversationService {
 
   getSceneLog(playerId: string): SceneUtterance[] {
     return [...(this.sceneLogs.get(this.runKey(playerId)) ?? [])];
+  }
+
+  /** 旁听/互聊等公开上下文：排除悄悄话 */
+  getPublicSceneLog(playerId: string): SceneUtterance[] {
+    return this.getSceneLog(playerId).filter((u) => !u.meta?.whisper);
+  }
+
+  /** 同步读取（调用方须先 ensureNpcSelectionHydrated） */
+  getNpcSelection(playerId: string): string[] | null {
+    const rk = this.runKey(playerId);
+    if (!this.runNpcSelections.has(rk)) return null;
+    return this.runNpcSelections.get(rk) ?? null;
+  }
+
+  async ensureNpcSelectionHydrated(playerId: string): Promise<void> {
+    const rk = this.runKey(playerId);
+    if (this.npcSelectionHydrated.has(rk)) return;
+
+    const focus = this.progressNpcId();
+    const filename =
+      this.runArchiveFiles.get(rk) ??
+      (await this.resolveActiveRunFilename(playerId, focus));
+
+    if (!filename) {
+      if (!this.runNpcSelections.has(rk)) {
+        this.runNpcSelections.set(rk, null);
+      }
+      this.npcSelectionHydrated.add(rk);
+      return;
+    }
+
+    this.runArchiveFiles.set(rk, filename);
+
+    try {
+      const { worldId, packVersionId } = this.progressKey();
+      const list = await this.archiveService.listArchives(playerId, focus, {
+        worldId,
+        packVersionId,
+      });
+      const arch = list.find((a) => a.filename === filename);
+      const idx = arch?.snapshots[arch.snapshots.length - 1]?.index ?? 0;
+      const loaded = await this.archiveService.loadSnapshot(
+        playerId,
+        filename,
+        idx,
+      );
+      const migrated = migrateSave(
+        loaded.snapshot.payload ?? {
+          npc_state: loaded.snapshot.npc_state,
+          messages: loaded.snapshot.messages,
+          saved_at: loaded.snapshot.saved_at,
+          focus_npc_id: focus,
+        },
+      );
+      if (!this.runNpcSelections.has(rk)) {
+        const raw = migrated?.selected_npc_ids;
+        this.runNpcSelections.set(
+          rk,
+          raw === undefined ? null : raw,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `npc_selection hydrate failed player=${playerId}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+      if (!this.runNpcSelections.has(rk)) {
+        this.runNpcSelections.set(rk, null);
+      }
+    }
+
+    this.npcSelectionHydrated.add(rk);
+  }
+
+  /**
+   * 设置本局出场子集。null = 全部已可出场。
+   * 子集须至少含 1 个「当前已可出场」的 NPC。
+   */
+  async setNpcSelection(
+    playerId: string,
+    npcIds: string[] | null,
+  ): Promise<string[] | null> {
+    await this.ensureNpcSelectionHydrated(playerId);
+    const rk = this.runKey(playerId);
+    const pack = this.packService.getPack();
+    const known = new Set(pack.npcs.map((n) => n.npc_id));
+
+    if (npcIds === null) {
+      this.runNpcSelections.set(rk, null);
+      return null;
+    }
+
+    const unique = [
+      ...new Set(npcIds.filter((id) => id && known.has(id))),
+    ];
+    if (unique.length < 1) {
+      throw new Error('至少选择一名 NPC');
+    }
+
+    await this.worldProgress.ensureHydrated(playerId);
+    const chapterState = this.worldProgress.getChapter(playerId);
+    const flags = this.worldProgress.getFlags(playerId);
+    const rankMap = getChapterRankMap(pack);
+    const eligibleIds = pack.npcs
+      .filter((n) =>
+        isNpcPresent({
+          appear_from_chapter: n.appear_from_chapter,
+          appear_require_flags: n.appear_require_flags,
+          chapterState,
+          flags,
+          rankMap,
+        }),
+      )
+      .map((n) => n.npc_id);
+
+    if (
+      eligibleIds.length > 0 &&
+      !unique.some((id) => eligibleIds.includes(id))
+    ) {
+      throw new Error('请至少选择一名当前可出场的 NPC');
+    }
+
+    this.runNpcSelections.set(rk, unique);
+    return unique;
   }
 
   /** 进程重启后从活跃一局档最新快照灌回 scene_log */
@@ -201,10 +335,12 @@ export class ConversationService {
     npcId: string,
     userMessage: string,
     assistantReply: string,
+    opts?: { whisper?: boolean },
   ) {
     await this.ensureSceneLogHydrated(playerId);
     const npcName = this.npcDisplayName(npcId);
     const t0 = new Date().toISOString();
+    const whisperMeta = opts?.whisper ? { whisper: true } : undefined;
     this.pushSceneUtterance(playerId, {
       at: t0,
       kind: 'player_to_npc',
@@ -213,6 +349,7 @@ export class ConversationService {
       addressee_id: npcId,
       addressee_name: npcName,
       text: userMessage,
+      meta: whisperMeta,
     });
     this.pushSceneUtterance(playerId, {
       kind: 'npc_to_player',
@@ -221,6 +358,7 @@ export class ConversationService {
       addressee_id: SCENE_PLAYER_ID,
       addressee_name: SCENE_PLAYER_DISPLAY_NAME,
       text: assistantReply,
+      meta: whisperMeta,
     });
   }
 
@@ -475,6 +613,7 @@ export class ConversationService {
       await this.ensureSession(playerId, id);
     }
     await this.ensureSceneLogHydrated(playerId);
+    await this.ensureNpcSelectionHydrated(playerId);
 
     const focusKey = this.key(playerId, focusNpcId);
     const focusTranscript = this.transcripts.get(focusKey);
@@ -518,6 +657,7 @@ export class ConversationService {
       messages: focusMessages,
       npcs,
       scene_log: this.getSceneLog(playerId),
+      selected_npc_ids: this.getNpcSelection(playerId),
     };
 
     return {
@@ -810,6 +950,10 @@ export class ConversationService {
       this.runArchiveFiles.set(this.runKey(playerId), safeFilename);
       this.sceneLogs.set(this.runKey(playerId), [...(v3.scene_log ?? [])]);
       this.sceneLogHydrated.add(this.runKey(playerId));
+      const sel =
+        v3.selected_npc_ids === undefined ? null : v3.selected_npc_ids;
+      this.runNpcSelections.set(this.runKey(playerId), sel);
+      this.npcSelectionHydrated.add(this.runKey(playerId));
 
       const focusSlot = v3.npcs[focusNpcId] ?? v3.npcs[progressNpcId];
       const focusMessages = focusSlot?.messages ?? v3.messages ?? [];
@@ -830,6 +974,7 @@ export class ConversationService {
         scope: 'run',
         restoredNpcIds: this.allNpcIds(),
         sceneLog: [...(v3.scene_log ?? [])],
+        selectedNpcIds: sel,
       };
     }
 
@@ -918,6 +1063,7 @@ export class ConversationService {
       scope: scope === 'run' ? 'run' : 'npc',
       restoredNpcIds: [npcId],
       sceneLog: [],
+      selectedNpcIds: null,
     };
   }
 
@@ -1061,6 +1207,7 @@ export class ConversationService {
       messages: [],
       npcs,
       scene_log: [],
+      selected_npc_ids: null,
     };
 
     const snapshot: ConversationSnapshot = {
@@ -1084,6 +1231,8 @@ export class ConversationService {
     this.runArchiveFiles.set(this.runKey(playerId), filename);
     this.sceneLogs.set(this.runKey(playerId), []);
     this.sceneLogHydrated.add(this.runKey(playerId));
+    this.runNpcSelections.set(this.runKey(playerId), null);
+    this.npcSelectionHydrated.add(this.runKey(playerId));
     for (const id of this.allNpcIds()) {
       this.sessionArchiveFiles.set(this.key(playerId, id), filename);
       await this.playerStateRepo.saveFullSession(

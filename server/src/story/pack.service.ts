@@ -464,6 +464,7 @@ export class PackService implements OnModuleInit {
         npc_id: n.npc_id,
         name: n.name,
         spawn_position: n.meta.spawn_position,
+        model_path: n.meta.model_path?.trim() || undefined,
         appear_from_chapter: n.appear_from_chapter,
         appear_require_flags: n.appear_require_flags ?? [],
       })),

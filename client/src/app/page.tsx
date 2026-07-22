@@ -97,6 +97,9 @@ function GamePageInner({
   const [exchangeSpeakNpcId, setExchangeSpeakNpcId] = useState<
     string | null
   >(null);
+  /** 读档/新开/首次进度就绪：场景 NPC 瞬现对齐，不播进场 */
+  const [presenceSnapToken, setPresenceSnapToken] = useState(0);
+  const presenceHydratedRef = useRef(false);
 
   useEffect(() => {
     if (defaultNpcId) setActiveNpcId((id) => id || defaultNpcId);
@@ -120,6 +123,8 @@ function GamePageInner({
     lastAside,
     archivesList,
     loadedConversation,
+    lastNewRun,
+    selectedNpcIds,
     saveError,
     loadError,
     requestNpcState,
@@ -136,7 +141,7 @@ function GamePageInner({
     startNewRun,
     requestStoryMap,
     storyMap,
-    lastNewRun,
+    setRunNpcSelection,
     clearLoadedConversation,
     clearLastSaved,
     clearLastNewRun,
@@ -151,7 +156,7 @@ function GamePageInner({
   const nearNpc = nearbyNpcs.length > 0;
   const primaryNearNpcId = nearbyNpcs[0]?.npcId ?? null;
 
-  const visibleNpcs = useMemo(() => {
+  const eligibleNpcs = useMemo(() => {
     if (!runtime) return [];
     return runtime.npcs.filter((n) =>
       isNpcPresent({
@@ -163,6 +168,37 @@ function GamePageInner({
       }),
     );
   }, [runtime, worldChapter, progressFlags, rankMap]);
+
+  /** 在已可出场里筛选；null 选用 = 全部已可出场 */
+  const visibleNpcs = useMemo(() => {
+    if (!selectedNpcIds) return eligibleNpcs;
+    const allow = new Set(selectedNpcIds);
+    return eligibleNpcs.filter((n) => allow.has(n.npc_id));
+  }, [eligibleNpcs, selectedNpcIds]);
+
+  const sceneNpcPicker = useMemo(() => {
+    if (!runtime) return [];
+    const eligibleIds = new Set(eligibleNpcs.map((n) => n.npc_id));
+    return runtime.npcs.map((n) => ({
+      npcId: n.npc_id,
+      name: n.name,
+      eligible: eligibleIds.has(n.npc_id),
+    }));
+  }, [runtime, eligibleNpcs]);
+
+  const handleNpcSelectionChange = useCallback(
+    (npcIds: string[] | null) => {
+      setRunNpcSelection(npcIds);
+    },
+    [setRunNpcSelection],
+  );
+
+  // 当前焦点 NPC 被移出本局出场时，切到仍在场的第一人
+  useEffect(() => {
+    if (visibleNpcs.length === 0) return;
+    if (visibleNpcs.some((n) => n.npc_id === activeNpcId)) return;
+    setActiveNpcId(visibleNpcs[0]!.npc_id);
+  }, [visibleNpcs, activeNpcId]);
 
   const sceneNpcs: SceneNpc[] = useMemo(
     () =>
@@ -176,12 +212,33 @@ function GamePageInner({
           spawn: n.spawn_position,
           color: palette.color,
           headColor: palette.headColor,
+          modelPath: n.model_path,
           animation:
             exchangeSpeakNpcId === n.npc_id ? 'excited_talk' : baseAnim,
         };
       }),
     [visibleNpcs, npcStates, exchangeSpeakNpcId],
   );
+
+  // 首次进度 hydrate：开场已在场的人站桩
+  useEffect(() => {
+    if (!runtime || progressChapter == null) return;
+    if (presenceHydratedRef.current) return;
+    presenceHydratedRef.current = true;
+    setPresenceSnapToken((t) => t + 1);
+  }, [runtime, progressChapter]);
+
+  // 读档：已该在场的人站桩，不重播进场
+  useEffect(() => {
+    if (!loadedConversation) return;
+    setPresenceSnapToken((t) => t + 1);
+  }, [loadedConversation]);
+
+  // 新开一局：重置在场，不走离场演出
+  useEffect(() => {
+    if (!lastNewRun) return;
+    setPresenceSnapToken((t) => t + 1);
+  }, [lastNewRun]);
 
   const interactTargets = useMemo(
     () =>
@@ -213,8 +270,12 @@ function GamePageInner({
   }, []);
 
   const handleSendChat = useCallback(
-    (message: string) => {
+    (message: string, opts?: { whisper?: boolean }) => {
       // 同场短接话：交互圈内 + 当前场景已出场的其他人（spawn 相距常 > 交互距离）
+      // 悄悄话不传 nearby（服务端也会跳过 aside/exchange）
+      if (opts?.whisper) {
+        return sendChat(message, { whisper: true });
+      }
       const ids = [
         ...new Set([
           ...nearbyNpcs.map((n) => n.npcId),
@@ -409,6 +470,7 @@ function GamePageInner({
         onPointerLockChange={setPointerLocked}
         uiOverlayActive={uiBlocking}
         speakingNpcId={exchangeSpeakNpcId}
+        presenceSnapToken={presenceSnapToken}
       />
 
       <div className="absolute top-4 left-4 z-30 space-y-2">
@@ -519,6 +581,9 @@ function GamePageInner({
         worldId={runtime.selection.world_id}
         packVersionId={runtime.selection.pack_version_id}
         storyMap={storyMap}
+        sceneNpcs={sceneNpcPicker}
+        selectedNpcIds={selectedNpcIds}
+        onNpcSelectionChange={handleNpcSelectionChange}
         onClose={closeMenu}
         onLogout={logout}
         onSessionUpdate={updateSession}

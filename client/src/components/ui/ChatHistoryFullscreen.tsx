@@ -98,14 +98,18 @@ export function ChatHistoryFullscreen({
             >
               <span className="text-slate-500 text-xs">
                 {item.role === 'player'
-                  ? '你'
+                  ? item.whisper
+                    ? '悄悄话·你'
+                    : '你'
                   : item.role === 'system'
                     ? '系统'
                     : item.role === 'exchange'
                       ? `旁听·${item.speakerName ?? 'NPC'}`
                       : item.role === 'aside'
                         ? `插话·${item.speakerName ?? 'NPC'}`
-                        : item.speakerName ?? 'NPC'}
+                        : item.whisper
+                          ? `悄悄话·${item.speakerName ?? 'NPC'}`
+                          : item.speakerName ?? 'NPC'}
               </span>
               <p className="mt-1 whitespace-pre-wrap">{item.text}</p>
               {item.role === 'npc' &&

@@ -62,6 +62,8 @@ exports.packRuntimeNpcSchema = zod_1.z.object({
     npc_id: pack_schema_1.packIdSchema,
     name: zod_1.z.string().min(1),
     spawn_position: zod_1.z.tuple([zod_1.z.number(), zod_1.z.number(), zod_1.z.number()]),
+    /** 相对 client/public；空或缺省 = 用 Humanoid */
+    model_path: zod_1.z.string().optional(),
     /** 省略 = 开场即出场 */
     appear_from_chapter: pack_schema_1.packIdSchema.optional(),
     appear_require_flags: zod_1.z.array(zod_1.z.string()).default([]),

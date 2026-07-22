@@ -10,6 +10,7 @@ export declare const playerChatPayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
     message: z.ZodString;
     nearbyNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    whisper: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
 export declare const requestNpcStatePayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
@@ -197,6 +198,7 @@ export declare const conversationSnapshotV2Schema: z.ZodObject<{
 export type ConversationSnapshotV2 = z.infer<typeof conversationSnapshotV2Schema>;
 /**
  * 存档快照 v3 = v2 + run 级 scene_log（整场对白时间线）
+ * selected_npc_ids：null/缺省 = 全部已可出场；非空数组 = 在已可出场中筛选（至少 1 人）
  */
 export declare const conversationSnapshotV3Schema: z.ZodObject<{
     schema_version: z.ZodLiteral<3>;
@@ -251,6 +253,7 @@ export declare const conversationSnapshotV3Schema: z.ZodObject<{
         text: z.ZodString;
         meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     }, z.core.$strip>>>;
+    selected_npc_ids: z.ZodOptional<z.ZodNullable<z.ZodArray<z.ZodString>>>;
 }, z.core.$strip>;
 export type ConversationSnapshotV3 = z.infer<typeof conversationSnapshotV3Schema>;
 /** 当前写入版本别名 */
@@ -364,6 +367,14 @@ export declare const conversationLoadedEventSchema: z.ZodObject<{
         text: z.ZodString;
         meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     }, z.core.$strip>>>;
+    selected_npc_ids: z.ZodOptional<z.ZodNullable<z.ZodArray<z.ZodString>>>;
+}, z.core.$strip>;
+/** 本局出场选用：null = 恢复为全部已可出场 */
+export declare const setRunNpcSelectionPayloadSchema: z.ZodObject<{
+    npcIds: z.ZodNullable<z.ZodArray<z.ZodString>>;
+}, z.core.$strip>;
+export declare const runNpcSelectionEventSchema: z.ZodObject<{
+    selected_npc_ids: z.ZodNullable<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 /** 新开一局 / 从某章或某分歧回溯为新存档槽 */
 export declare const startNewRunPayloadSchema: z.ZodObject<{
@@ -410,6 +421,7 @@ export declare const newRunStartedEventSchema: z.ZodObject<{
     display_name: z.ZodOptional<z.ZodString>;
     chapter_state: z.ZodString;
     story_flags: z.ZodRecord<z.ZodString, z.ZodString>;
+    selected_npc_ids: z.ZodOptional<z.ZodNullable<z.ZodArray<z.ZodString>>>;
 }, z.core.$strip>;
 export declare const archiveRenamedEventSchema: z.ZodObject<{
     npcId: z.ZodString;
@@ -433,6 +445,8 @@ export type StoryMapEdge = z.infer<typeof storyMapEdgeSchema>;
 export type StoryMapEvent = z.infer<typeof storyMapEventSchema>;
 export type NewRunStartedEvent = z.infer<typeof newRunStartedEventSchema>;
 export type ArchiveRenamedEvent = z.infer<typeof archiveRenamedEventSchema>;
+export type SetRunNpcSelectionPayload = z.infer<typeof setRunNpcSelectionPayloadSchema>;
+export type RunNpcSelectionEvent = z.infer<typeof runNpcSelectionEventSchema>;
 export type ArchivedNpcState = z.infer<typeof archivedNpcStateSchema>;
 export type ArchivedMessage = z.infer<typeof archivedMessageSchema>;
 export type ConversationSnapshotSummary = z.infer<typeof conversationSnapshotSummarySchema>;

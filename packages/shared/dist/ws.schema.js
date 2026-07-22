@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV3Schema = exports.conversationSnapshotV2Schema = exports.SCENE_PLAYER_DISPLAY_NAME = exports.SCENE_PLAYER_ID = exports.sceneUtteranceSchema = exports.sceneUtteranceKindSchema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.npcAsideEventSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
+exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.runNpcSelectionEventSchema = exports.setRunNpcSelectionPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV3Schema = exports.conversationSnapshotV2Schema = exports.SCENE_PLAYER_DISPLAY_NAME = exports.SCENE_PLAYER_ID = exports.sceneUtteranceSchema = exports.sceneUtteranceKindSchema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.npcAsideEventSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
 const zod_1 = require("zod");
 const story_schema_1 = require("./story.schema");
 /**
@@ -16,6 +16,8 @@ exports.playerChatPayloadSchema = zod_1.z.object({
     message: zod_1.z.string().trim().min(1).max(500),
     /** 客户端上报的附近 NPC（同场短接话用）；可空 */
     nearbyNpcIds: zod_1.z.array(zod_1.z.string().min(1).max(64)).max(16).optional(),
+    /** 悄悄话：仅目标 NPC 听见；跳过 aside/exchange；scene_log 标 meta.whisper */
+    whisper: zod_1.z.boolean().optional(),
 });
 exports.requestNpcStatePayloadSchema = zod_1.z.object({
     npcId: zod_1.z.string().min(1).max(64),
@@ -150,6 +152,7 @@ exports.conversationSnapshotV2Schema = zod_1.z.object({
 });
 /**
  * 存档快照 v3 = v2 + run 级 scene_log（整场对白时间线）
+ * selected_npc_ids：null/缺省 = 全部已可出场；非空数组 = 在已可出场中筛选（至少 1 人）
  */
 exports.conversationSnapshotV3Schema = zod_1.z.object({
     schema_version: zod_1.z.literal(3),
@@ -163,6 +166,13 @@ exports.conversationSnapshotV3Schema = zod_1.z.object({
     messages: zod_1.z.array(exports.archivedMessageSchema),
     npcs: zod_1.z.record(zod_1.z.string(), exports.archivedNpcSlotSchema),
     scene_log: zod_1.z.array(exports.sceneUtteranceSchema).default([]),
+    /** null = 全部已可出场；string[] = 子集；缺省视为全部 */
+    selected_npc_ids: zod_1.z
+        .array(zod_1.z.string().min(1).max(64))
+        .min(1)
+        .max(32)
+        .nullable()
+        .optional(),
 });
 exports.conversationSnapshotSummarySchema = zod_1.z.object({
     index: zod_1.z.number().int(),
@@ -208,6 +218,29 @@ exports.conversationLoadedEventSchema = zod_1.z.object({
     restored_npc_ids: zod_1.z.array(zod_1.z.string()).optional(),
     /** 整场对白时间线（v3）；缺省时前端回退 messages */
     scene_log: zod_1.z.array(exports.sceneUtteranceSchema).optional(),
+    /** null = 全部已可出场；缺省视为全部 */
+    selected_npc_ids: zod_1.z
+        .array(zod_1.z.string().min(1).max(64))
+        .min(1)
+        .max(32)
+        .nullable()
+        .optional(),
+});
+/** 本局出场选用：null = 恢复为全部已可出场 */
+exports.setRunNpcSelectionPayloadSchema = zod_1.z.object({
+    npcIds: zod_1.z
+        .array(zod_1.z.string().min(1).max(64))
+        .min(1)
+        .max(32)
+        .nullable(),
+});
+exports.runNpcSelectionEventSchema = zod_1.z.object({
+    /** null = 全部已可出场 */
+    selected_npc_ids: zod_1.z
+        .array(zod_1.z.string().min(1).max(64))
+        .min(1)
+        .max(32)
+        .nullable(),
 });
 /** 新开一局 / 从某章或某分歧回溯为新存档槽 */
 exports.startNewRunPayloadSchema = zod_1.z.object({
@@ -254,6 +287,13 @@ exports.newRunStartedEventSchema = zod_1.z.object({
     display_name: zod_1.z.string().optional(),
     chapter_state: exports.chapterStateSchema,
     story_flags: zod_1.z.record(zod_1.z.string(), zod_1.z.string()),
+    /** 新开一局重置为全部已可出场 */
+    selected_npc_ids: zod_1.z
+        .array(zod_1.z.string().min(1).max(64))
+        .min(1)
+        .max(32)
+        .nullable()
+        .optional(),
 });
 exports.archiveRenamedEventSchema = zod_1.z.object({
     npcId: zod_1.z.string(),
