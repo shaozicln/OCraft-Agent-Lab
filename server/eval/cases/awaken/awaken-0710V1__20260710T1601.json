@@ -1,0 +1,282 @@
+{
+  "id": "awaken-0710V1-eval",
+  "world_id": "awaken",
+  "pack_version_id": "awaken-0710V1__20260710T1601",
+  "cases": [
+    {
+      "id": "ch1_no_transition_idle",
+      "description": "日常闲聊不升章",
+      "setup": {
+        "chapter": "ch1_daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [
+        {
+          "player_message": "放学一起去球场吗",
+          "mock_npc_reply": "行。"
+        }
+      ],
+      "expect": {
+        "chapter": "ch1_daily",
+        "flags_exclude": ["met_hook"],
+        "exchange_null": true,
+        "mock_reply_not_slop": true
+      }
+    },
+    {
+      "id": "ch1_to_ch2_on_hilvi",
+      "description": "提希尔薇升裂痕 + met_hook + 互聊",
+      "setup": {
+        "chapter": "ch1_daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [
+        {
+          "player_message": "听说有转校生叫希尔薇",
+          "mock_npc_reply": "嗯，今天办手续。"
+        }
+      ],
+      "expect": {
+        "chapter": "ch2_unease",
+        "flags_include": { "met_hook": "true", "ex_ch2_meet_done": "true" },
+        "matched_rule_ids_include": ["ch1_to_ch2"],
+        "exchange_event_id": "ex_ch2_first_meet"
+      }
+    },
+    {
+      "id": "ch2_default_exchange_needs_hook",
+      "description": "默认开在 ch2 时无 met_hook 不互聊",
+      "setup": {
+        "chapter": "ch2_unease",
+        "flags": {},
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "你觉得她怎么样" }],
+      "expect": {
+        "exchange_null": true,
+        "flags_exclude": ["ex_ch2_meet_done"]
+      }
+    },
+    {
+      "id": "exchange_first_meet_hit",
+      "description": "ch2+met_hook 触发首次互聊",
+      "setup": {
+        "chapter": "ch2_unease",
+        "flags": { "met_hook": "true" },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "走廊钟表是不是有问题" }],
+      "expect": {
+        "exchange_event_id": "ex_ch2_first_meet",
+        "flags_include": { "ex_ch2_meet_done": "true" }
+      }
+    },
+    {
+      "id": "exchange_once_blocked",
+      "description": "once 阻挡重复互聊",
+      "setup": {
+        "chapter": "ch2_unease",
+        "flags": { "met_hook": "true", "ex_ch2_meet_done": "true" },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "还在想转校的事吗" }],
+      "expect": { "exchange_null": true }
+    },
+    {
+      "id": "ch2_to_ch3a_trust",
+      "description": "信任 → 共查",
+      "setup": {
+        "chapter": "ch2_unease",
+        "flags": { "met_hook": "true", "ex_ch2_meet_done": "true" },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "我相信你，一起查" }],
+      "expect": {
+        "chapter": "ch3_investigate",
+        "flags_include": { "path_trust": "true" },
+        "matched_rule_ids_include": ["ch2_to_ch3a"]
+      }
+    },
+    {
+      "id": "ch2_to_ch3b_dismiss",
+      "description": "忽视 → 独行",
+      "setup": {
+        "chapter": "ch2_unease",
+        "flags": { "met_hook": "true" },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "无所谓，你想多了" }],
+      "expect": {
+        "chapter": "ch3_alone",
+        "flags_include": { "path_dismiss": "true" },
+        "matched_rule_ids_include": ["ch2_to_ch3b"]
+      }
+    },
+    {
+      "id": "ch3b_merge_to_ch3a",
+      "description": "独行合流",
+      "setup": {
+        "chapter": "ch3_alone",
+        "flags": { "path_dismiss": "true" },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "我想加入，我帮你查" }],
+      "expect": {
+        "chapter": "ch3_investigate",
+        "flags_include": { "path_merged_a": "true" },
+        "matched_rule_ids_include": ["ch3b_to_ch3a_merge"]
+      }
+    },
+    {
+      "id": "ch3_to_ch4_quake",
+      "description": "共查提地震 → ch4",
+      "setup": {
+        "chapter": "ch3_investigate",
+        "flags": { "path_trust": "true" },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "地震警报响了" }],
+      "expect": {
+        "chapter": "ch4_quake",
+        "matched_rule_ids_include": ["ch3_to_ch4"]
+      }
+    },
+    {
+      "id": "reply_flag_trust_path",
+      "description": "NPC 回复置 path_trust（章仍 ch2）",
+      "setup": {
+        "chapter": "ch2_unease",
+        "flags": { "met_hook": "true", "ex_ch2_meet_done": "true" },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [
+        {
+          "player_message": "你怎么看",
+          "mock_npc_reply": "你说得对，我们一起查清楚。"
+        }
+      ],
+      "expect": {
+        "chapter": "ch2_unease",
+        "flags_include": { "path_trust": "true" },
+        "reply_flags_include": { "path_trust": "true" }
+      }
+    },
+    {
+      "id": "no_after_trust_exchange",
+      "description": "0710V1 无 ex_ch2_after_trust",
+      "setup": {
+        "chapter": "ch2_unease",
+        "flags": {
+          "met_hook": "true",
+          "path_trust": "true",
+          "ex_ch2_meet_done": "true"
+        },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "下一步怎么查" }],
+      "expect": { "exchange_null": true }
+    },
+    {
+      "id": "guard_meta_spoil_slop",
+      "description": "护栏骨架：元叙事泄题",
+      "setup": {
+        "chapter": "ch2_unease",
+        "flags": { "ex_ch2_meet_done": "true" },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [
+        {
+          "player_message": "这世界怎么回事",
+          "mock_npc_reply": "世界是假的，别读档。"
+        }
+      ],
+      "expect": { "mock_reply_is_slop": true }
+    },
+    {
+      "id": "demo_path_multi_turn",
+      "description": "多轮：闲聊→希尔薇→互聊完成",
+      "setup": {
+        "chapter": "ch1_daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [
+        { "player_message": "打球去吗" },
+        {
+          "player_message": "转校生希尔薇来了吗",
+          "mock_npc_reply": "听说在办手续。"
+        }
+      ],
+      "expect": {
+        "chapter": "ch2_unease",
+        "flags_include": { "met_hook": "true", "ex_ch2_meet_done": "true" },
+        "exchange_event_id": "ex_ch2_first_meet"
+      }
+    },
+    {
+      "id": "trust_trigger_wrong_chapter",
+      "description": "边界：ch1 说相信不升共查",
+      "setup": {
+        "chapter": "ch1_daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "我相信你，一起查" }],
+      "expect": {
+        "chapter": "ch1_daily",
+        "flags_exclude": ["path_trust"]
+      }
+    },
+    {
+      "id": "merge_without_dismiss_blocked",
+      "description": "边界：无 path_dismiss 不合流",
+      "setup": {
+        "chapter": "ch3_alone",
+        "flags": {},
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "我想加入，我帮你查" }],
+      "expect": {
+        "chapter": "ch3_alone",
+        "flags_exclude": ["path_merged_a"]
+      }
+    },
+    {
+      "id": "guard_clean_not_slop",
+      "description": "边界：正常短口吻不 slop",
+      "setup": {
+        "chapter": "ch1_daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [
+        {
+          "player_message": "汽水还喝吗",
+          "mock_npc_reply": "喝，橘子味。"
+        }
+      ],
+      "expect": {
+        "mock_reply_not_slop": true,
+        "forbidden_substrings_in_reply": ["世界是假的", "我是AI"]
+      }
+    },
+    {
+      "id": "guard_lecture_slop",
+      "description": "边界：讲解腔开头应判 slop",
+      "setup": {
+        "chapter": "ch2_unease",
+        "flags": { "ex_ch2_meet_done": "true" },
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [
+        {
+          "player_message": "说说",
+          "mock_npc_reply": "首先，从剧情角度说明希尔薇。"
+        }
+      ],
+      "expect": { "mock_reply_is_slop": true }
+    }
+  ]
+}

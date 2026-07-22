@@ -1,0 +1,289 @@
+{
+  "id": "awaken-0713V2-eval",
+  "world_id": "awaken",
+  "pack_version_id": "0713V2__20260713T1009",
+  "cases": [
+    {
+      "id": "daily_low_affinity_stuck",
+      "description": "好感不足：空触发词规则也不命中 bond",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 20
+      },
+      "turns": [{ "player_message": "你好" }],
+      "expect": {
+        "chapter": "daily",
+        "flags_exclude": ["ch1_bonded", "ch2_sleep_mentioned"]
+      }
+    },
+    {
+      "id": "daily_auto_to_uneasy",
+      "description": "空触发：同轮 bond + 升 uneasy（包特性）",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 50,
+        "fatigue": 30
+      },
+      "turns": [{ "player_message": "随便说一句" }],
+      "expect": {
+        "chapter": "uneasy",
+        "flags_include": {
+          "ch1_bonded": "true",
+          "ch2_sleep_mentioned": "true"
+        },
+        "matched_rule_ids_include": ["bond_daily", "daily_to_uneasy"]
+      }
+    },
+    {
+      "id": "daily_fatigue_blocks_uneasy",
+      "description": "疲劳过高只 bond 不升章",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 50,
+        "fatigue": 80
+      },
+      "turns": [{ "player_message": "你好" }],
+      "expect": {
+        "chapter": "daily",
+        "flags_include": { "ch1_bonded": "true" },
+        "flags_exclude": ["ch2_sleep_mentioned"]
+      }
+    },
+    {
+      "id": "uneasy_floor_always",
+      "description": "uneasy 任意句置 floor_avoided（空触发）",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 50
+      },
+      "turns": [{ "player_message": "今天怎么样" }],
+      "expect": {
+        "flags_include": { "ch2_floor_avoided": "true" },
+        "matched_rule_ids_include": ["floor_avoided"]
+      }
+    },
+    {
+      "id": "uneasy_to_dream_with_sleep_flag",
+      "description": "已有 sleep 旗：同轮 partial + 升 dream_reveal",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": { "ch2_sleep_mentioned": "true" },
+        "npc_id": "npc_suolunsen",
+        "affinity": 50
+      },
+      "turns": [{ "player_message": "继续聊" }],
+      "expect": {
+        "chapter": "dream_reveal",
+        "flags_include": {
+          "ch2_floor_avoided": "true",
+          "ch3_dream_partial": "true",
+          "ch3_dream_full": "true"
+        },
+        "matched_rule_ids_include": [
+          "floor_avoided",
+          "dream_partial",
+          "uneasy_to_dream_reveal"
+        ]
+      }
+    },
+    {
+      "id": "dream_reveal_colleague_needs_affinity",
+      "description": "好感不足不置 colleague_hint",
+      "setup": {
+        "chapter": "dream_reveal",
+        "flags": { "ch3_dream_full": "true" },
+        "npc_id": "npc_suolunsen",
+        "affinity": 40
+      },
+      "turns": [{ "player_message": "同事呢" }],
+      "expect": {
+        "flags_exclude": ["ch3_colleague_hint"]
+      }
+    },
+    {
+      "id": "dream_reveal_colleague_hit",
+      "description": "好感够 → colleague_hint",
+      "setup": {
+        "chapter": "dream_reveal",
+        "flags": { "ch3_dream_full": "true" },
+        "npc_id": "npc_suolunsen",
+        "affinity": 60
+      },
+      "turns": [{ "player_message": "那些同事去哪了" }],
+      "expect": {
+        "flags_include": { "ch3_colleague_hint": "true" },
+        "matched_rule_ids_include": ["colleague_hint"]
+      }
+    },
+    {
+      "id": "disabled_rules_ignored",
+      "description": "disabled placeholder 不命中",
+      "setup": {
+        "chapter": "dream_reveal",
+        "flags": { "ch3_dream_full": "true" },
+        "npc_id": "npc_suolunsen",
+        "affinity": 80
+      },
+      "turns": [{ "player_message": "OCraft" }],
+      "expect": {
+        "flags_exclude": ["ch4_ocraft_aware"]
+      }
+    },
+    {
+      "id": "reply_flag_empty_triggers_always",
+      "description": "reply 空触发：任意回复置 admit_tired",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": {},
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [
+        {
+          "player_message": "你还好吗",
+          "mock_npc_reply": "还行。"
+        }
+      ],
+      "expect": {
+        "flags_include": { "ch2_npc_admitted_tired": "true" },
+        "reply_flags_include": { "ch2_npc_admitted_tired": "true" }
+      }
+    },
+    {
+      "id": "exchange_always_null",
+      "description": "0713V2 无互聊",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": {},
+        "npc_id": "npc_suolunsen"
+      },
+      "turns": [{ "player_message": "嗨" }],
+      "expect": { "exchange_null": true }
+    },
+    {
+      "id": "guard_meta_spoil_slop",
+      "description": "护栏骨架",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 20
+      },
+      "turns": [
+        {
+          "player_message": "真相呢",
+          "mock_npc_reply": "这是模拟世界，我是NPC。"
+        }
+      ],
+      "expect": { "mock_reply_is_slop": true }
+    },
+    {
+      "id": "guard_clean_not_slop",
+      "description": "正常短句不 slop",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 20
+      },
+      "turns": [
+        {
+          "player_message": "喝水吗",
+          "mock_npc_reply": "好。"
+        }
+      ],
+      "expect": {
+        "mock_reply_not_slop": true,
+        "forbidden_substrings_in_reply": ["世界是假的"]
+      }
+    },
+    {
+      "id": "default_uneasy_entry",
+      "description": "包默认 uneasy：开场一句仍可推进 floor",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 50
+      },
+      "turns": [{ "player_message": "你昨天休息得怎样" }],
+      "expect": {
+        "flags_include": { "ch2_floor_avoided": "true" }
+      }
+    },
+    {
+      "id": "dream_blocked_without_sleep_flag",
+      "description": "边界：无 sleep 旗不升 dream（仅 floor）",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 50
+      },
+      "turns": [{ "player_message": "我也总做同一个梦" }],
+      "expect": {
+        "chapter": "uneasy",
+        "flags_include": { "ch2_floor_avoided": "true" },
+        "flags_exclude": ["ch3_dream_full", "ch3_dream_partial"]
+      }
+    },
+    {
+      "id": "bond_idempotent_second_turn",
+      "description": "边界：已 bond 后再聊仍 daily（疲劳挡升章）",
+      "setup": {
+        "chapter": "daily",
+        "flags": { "ch1_bonded": "true" },
+        "npc_id": "npc_suolunsen",
+        "affinity": 50,
+        "fatigue": 80
+      },
+      "turns": [{ "player_message": "再聊一句" }],
+      "expect": {
+        "chapter": "daily",
+        "flags_include": { "ch1_bonded": "true" },
+        "flags_exclude": ["ch2_sleep_mentioned"]
+      }
+    },
+    {
+      "id": "guard_lecture_slop",
+      "description": "边界：讲解腔开头应判 slop",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 20
+      },
+      "turns": [
+        {
+          "player_message": "说说",
+          "mock_npc_reply": "首先，按照设定说明一下。"
+        }
+      ],
+      "expect": { "mock_reply_is_slop": true }
+    },
+    {
+      "id": "guard_ai_self_slop",
+      "description": "边界：自称 AI 判 slop",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "npc_suolunsen",
+        "affinity": 20
+      },
+      "turns": [
+        {
+          "player_message": "你是谁",
+          "mock_npc_reply": "我是语言模型，可以帮你总结剧情。"
+        }
+      ],
+      "expect": { "mock_reply_is_slop": true }
+    }
+  ]
+}

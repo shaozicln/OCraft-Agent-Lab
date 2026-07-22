@@ -18,7 +18,9 @@
     "db:studio": "drizzle-kit studio",
     "pack:validate": "ts-node -r tsconfig-paths/register scripts/validate-pack.ts",
     "pack:seed": "ts-node -r tsconfig-paths/register scripts/seed-pack.ts",
-    "pack:save": "ts-node -r tsconfig-paths/register scripts/save-pack.ts"
+    "pack:save": "ts-node -r tsconfig-paths/register scripts/save-pack.ts",
+    "pack:eval": "ts-node -r tsconfig-paths/register scripts/eval-pack.ts",
+    "pack:eval:all": "ts-node -r tsconfig-paths/register scripts/eval-pack.ts -- --all"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

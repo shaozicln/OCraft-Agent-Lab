@@ -181,6 +181,46 @@ export function EscMenu({
     [],
   );
 
+  const eligibleSceneNpcs = sceneNpcs.filter((n) => n.eligible);
+
+  const isNpcChecked = useCallback(
+    (npcId: string, eligible: boolean) => {
+      if (!eligible) return false;
+      if (selectedNpcIds === null) return true;
+      return selectedNpcIds.includes(npcId);
+    },
+    [selectedNpcIds],
+  );
+
+  const toggleSceneNpc = useCallback(
+    (npcId: string, eligible: boolean) => {
+      if (!eligible || !onNpcSelectionChange) return;
+      const currentlyChecked = eligibleSceneNpcs
+        .filter((n) => isNpcChecked(n.npcId, true))
+        .map((n) => n.npcId);
+
+      let next: string[];
+      if (currentlyChecked.includes(npcId)) {
+        next = currentlyChecked.filter((id) => id !== npcId);
+      } else {
+        next = [...currentlyChecked, npcId];
+      }
+
+      if (next.length < 1) {
+        setError('至少保留一名可出场 NPC');
+        return;
+      }
+      setError(null);
+
+      const allEligibleIds = eligibleSceneNpcs.map((n) => n.npcId);
+      const isAll =
+        next.length === allEligibleIds.length &&
+        allEligibleIds.every((id) => next.includes(id));
+      onNpcSelectionChange(isAll ? null : next);
+    },
+    [eligibleSceneNpcs, isNpcChecked, onNpcSelectionChange],
+  );
+
   if (!open) return null;
 
   const saveAccount = async () => {
@@ -234,50 +274,6 @@ export function EscMenu({
       : '/settings?tab=editor';
 
   const profileFields = packProfile ? resolveProfileFields(packProfile) : [];
-
-  const eligibleSceneNpcs = sceneNpcs.filter((n) => n.eligible);
-
-  const isNpcChecked = useCallback(
-    (npcId: string, eligible: boolean) => {
-      if (!eligible) return false;
-      if (selectedNpcIds === null) return true;
-      return selectedNpcIds.includes(npcId);
-    },
-    [selectedNpcIds],
-  );
-
-  const toggleSceneNpc = useCallback(
-    (npcId: string, eligible: boolean) => {
-      if (!eligible || !onNpcSelectionChange) return;
-      const currentlyChecked = eligibleSceneNpcs
-        .filter((n) => isNpcChecked(n.npcId, true))
-        .map((n) => n.npcId);
-
-      let next: string[];
-      if (currentlyChecked.includes(npcId)) {
-        next = currentlyChecked.filter((id) => id !== npcId);
-      } else {
-        next = [...currentlyChecked, npcId];
-      }
-
-      if (next.length < 1) {
-        setError('至少保留一名可出场 NPC');
-        return;
-      }
-      setError(null);
-
-      const allEligibleIds = eligibleSceneNpcs.map((n) => n.npcId);
-      const isAll =
-        next.length === allEligibleIds.length &&
-        allEligibleIds.every((id) => next.includes(id));
-      onNpcSelectionChange(isAll ? null : next);
-    },
-    [
-      eligibleSceneNpcs,
-      isNpcChecked,
-      onNpcSelectionChange,
-    ],
-  );
 
   return (
     <div className="absolute inset-0 z-50 flex">

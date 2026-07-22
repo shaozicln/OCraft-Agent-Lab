@@ -116,7 +116,10 @@ export function evaluateNpcReplyFlags(
     if (!rule.enabled) continue;
     if (!rule.when_chapter_in.includes(chapterState)) continue;
     if (isFlagSet(flags, rule.set_flag)) continue;
-    const hit = rule.triggers.some((t) => msg.includes(t.toLowerCase()));
+    // 与玩家规则一致：triggers 空 = 任意回复都命中
+    const hit =
+      rule.triggers.length === 0 ||
+      rule.triggers.some((t) => msg.includes(t.toLowerCase()));
     if (hit) {
       out.push({ name: rule.set_flag, value: rule.value });
     }

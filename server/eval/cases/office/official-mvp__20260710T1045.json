@@ -1,0 +1,280 @@
+{
+  "id": "office-official-mvp-eval",
+  "world_id": "office",
+  "pack_version_id": "official-mvp__20260710T1045",
+  "cases": [
+    {
+      "id": "daily_low_affinity_no_bond",
+      "description": "好感不足：不置 ch1_bonded、不升章",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "colleague_chenyu",
+        "affinity": 20,
+        "fatigue": 30
+      },
+      "turns": [{ "player_message": "今天天气不错" }],
+      "expect": {
+        "chapter": "daily",
+        "flags_exclude": ["ch1_bonded", "ch2_sleep_mentioned"]
+      }
+    },
+    {
+      "id": "daily_bond_only",
+      "description": "好感够但无睡眠词：只置 ch1_bonded，仍 daily",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "colleague_chenyu",
+        "affinity": 50,
+        "fatigue": 30
+      },
+      "turns": [{ "player_message": "中午一起吃饭吗" }],
+      "expect": {
+        "chapter": "daily",
+        "flags_include": { "ch1_bonded": "true" },
+        "matched_rule_ids_include": ["bond_daily"],
+        "flags_exclude": ["ch2_sleep_mentioned"]
+      }
+    },
+    {
+      "id": "daily_to_uneasy_on_sleep",
+      "description": "同轮：搭子 + 没睡好 → uneasy",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "colleague_chenyu",
+        "affinity": 50,
+        "fatigue": 30
+      },
+      "turns": [{ "player_message": "你是不是也没睡好？" }],
+      "expect": {
+        "chapter": "uneasy",
+        "flags_include": {
+          "ch1_bonded": "true",
+          "ch2_sleep_mentioned": "true"
+        },
+        "matched_rule_ids_include": ["bond_daily", "daily_to_uneasy"]
+      }
+    },
+    {
+      "id": "daily_to_uneasy_blocked_by_fatigue",
+      "description": "fatigue>70：可 bond，但不升 uneasy",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "colleague_chenyu",
+        "affinity": 50,
+        "fatigue": 80
+      },
+      "turns": [{ "player_message": "你最近失眠吗" }],
+      "expect": {
+        "chapter": "daily",
+        "flags_include": { "ch1_bonded": "true" },
+        "flags_exclude": ["ch2_sleep_mentioned"]
+      }
+    },
+    {
+      "id": "uneasy_floor_flag",
+      "description": "问起十楼 → ch2_floor_avoided，不升章",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": { "ch1_bonded": "true", "ch2_sleep_mentioned": "true" },
+        "npc_id": "colleague_chenyu",
+        "affinity": 50
+      },
+      "turns": [{ "player_message": "十楼测试区是干什么的" }],
+      "expect": {
+        "chapter": "uneasy",
+        "flags_include": { "ch2_floor_avoided": "true" },
+        "matched_rule_ids_include": ["floor_avoided"]
+      }
+    },
+    {
+      "id": "uneasy_to_dream_reveal",
+      "description": "重复的梦 → dream_reveal + ch3_dream_full",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": { "ch2_sleep_mentioned": "true" },
+        "npc_id": "colleague_chenyu",
+        "affinity": 50
+      },
+      "turns": [{ "player_message": "我也老是做同一个梦" }],
+      "expect": {
+        "chapter": "dream_reveal",
+        "flags_include": { "ch3_dream_full": "true" },
+        "matched_rule_ids_include": ["uneasy_to_dream_reveal"]
+      }
+    },
+    {
+      "id": "dream_reveal_colleague_hint",
+      "description": "提离职同事 → ch3_colleague_hint",
+      "setup": {
+        "chapter": "dream_reveal",
+        "flags": { "ch3_dream_full": "true" },
+        "npc_id": "colleague_chenyu",
+        "affinity": 60
+      },
+      "turns": [{ "player_message": "那些离职同事的名单呢" }],
+      "expect": {
+        "chapter": "dream_reveal",
+        "flags_include": { "ch3_colleague_hint": "true" },
+        "matched_rule_ids_include": ["colleague_hint"]
+      }
+    },
+    {
+      "id": "disabled_ch4_placeholder",
+      "description": "未启用的 ch4 规则不应命中",
+      "setup": {
+        "chapter": "dream_reveal",
+        "flags": { "ch3_dream_full": "true" },
+        "npc_id": "colleague_chenyu",
+        "affinity": 80
+      },
+      "turns": [{ "player_message": "听说过 OCraft 人格校准吗" }],
+      "expect": {
+        "chapter": "dream_reveal",
+        "flags_exclude": ["ch4_ocraft_aware"]
+      }
+    },
+    {
+      "id": "reply_flag_admit_tired",
+      "description": "NPC 承认没睡好 → ch2_npc_admitted_tired",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": { "ch2_sleep_mentioned": "true" },
+        "npc_id": "colleague_chenyu",
+        "affinity": 50
+      },
+      "turns": [
+        {
+          "player_message": "你脸色不太好",
+          "mock_npc_reply": "嗯……昨晚也没睡好。"
+        }
+      ],
+      "expect": {
+        "flags_include": { "ch2_npc_admitted_tired": "true" },
+        "reply_flags_include": { "ch2_npc_admitted_tired": "true" },
+        "mock_reply_not_slop": true
+      }
+    },
+    {
+      "id": "exchange_always_null",
+      "description": "office 包无互聊事件",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": { "ch2_sleep_mentioned": "true" },
+        "npc_id": "colleague_chenyu"
+      },
+      "turns": [{ "player_message": "随便聊聊" }],
+      "expect": { "exchange_null": true }
+    },
+    {
+      "id": "guard_meta_spoil_slop",
+      "description": "护栏骨架：元叙事泄题",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "colleague_chenyu",
+        "affinity": 20
+      },
+      "turns": [
+        {
+          "player_message": "这是什么地方",
+          "mock_npc_reply": "世界是假的，这是模拟。"
+        }
+      ],
+      "expect": { "mock_reply_is_slop": true }
+    },
+    {
+      "id": "demo_path_multi_turn",
+      "description": "演示缩略：搭子闲聊 → 失眠升章 → 重复梦揭示",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "colleague_chenyu",
+        "affinity": 50,
+        "fatigue": 30
+      },
+      "turns": [
+        { "player_message": "咖啡续一杯？" },
+        { "player_message": "你看起来没睡好" },
+        { "player_message": "我也总做同一个梦" }
+      ],
+      "expect": {
+        "chapter": "dream_reveal",
+        "flags_include": {
+          "ch1_bonded": "true",
+          "ch2_sleep_mentioned": "true",
+          "ch3_dream_full": "true"
+        }
+      }
+    },
+    {
+      "id": "dream_blocked_without_sleep_flag",
+      "description": "边界：无 sleep 旗提梦不升 dream_reveal",
+      "setup": {
+        "chapter": "uneasy",
+        "flags": { "ch1_bonded": "true" },
+        "npc_id": "colleague_chenyu",
+        "affinity": 50
+      },
+      "turns": [{ "player_message": "我也老是做同一个梦" }],
+      "expect": {
+        "chapter": "uneasy",
+        "flags_exclude": ["ch3_dream_full"]
+      }
+    },
+    {
+      "id": "colleague_hint_low_affinity",
+      "description": "边界：好感不足不置 colleague_hint",
+      "setup": {
+        "chapter": "dream_reveal",
+        "flags": { "ch3_dream_full": "true" },
+        "npc_id": "colleague_chenyu",
+        "affinity": 40
+      },
+      "turns": [{ "player_message": "那些离职同事的名单呢" }],
+      "expect": {
+        "flags_exclude": ["ch3_colleague_hint"]
+      }
+    },
+    {
+      "id": "guard_clean_not_slop",
+      "description": "边界：正常短口吻不 slop",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "colleague_chenyu",
+        "affinity": 20
+      },
+      "turns": [
+        {
+          "player_message": "咖啡续一杯",
+          "mock_npc_reply": "来，美式。"
+        }
+      ],
+      "expect": {
+        "mock_reply_not_slop": true,
+        "forbidden_substrings_in_reply": ["世界是假的"]
+      }
+    },
+    {
+      "id": "guard_lecture_slop",
+      "description": "边界：讲解腔开头应判 slop",
+      "setup": {
+        "chapter": "daily",
+        "flags": {},
+        "npc_id": "colleague_chenyu",
+        "affinity": 20
+      },
+      "turns": [
+        {
+          "player_message": "说说项目",
+          "mock_npc_reply": "综上所述，需要注意的是项目进度。"
+        }
+      ],
+      "expect": { "mock_reply_is_slop": true }
+    }
+  ]
+}
