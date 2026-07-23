@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.agentTraceListResponseSchema = exports.agentTraceRecordSchema = exports.agentTraceRuntimeSchema = exports.agentTraceTransitionSchema = exports.agentTraceRagHitSchema = void 0;
+exports.agentTraceListResponseSchema = exports.agentTraceRecordSchema = exports.agentTraceDirectorSchema = exports.directorFallbackSchema = exports.directorFallbackReasonSchema = exports.directorModeSchema = exports.agentTraceRuntimeSchema = exports.agentTraceTransitionSchema = exports.agentTraceRagHitSchema = void 0;
 const zod_1 = require("zod");
 const ws_schema_1 = require("./ws.schema");
 exports.agentTraceRagHitSchema = zod_1.z.object({
@@ -20,6 +20,27 @@ exports.agentTraceRuntimeSchema = zod_1.z.object({
     affinity: zod_1.z.number(),
     fatigue: zod_1.z.number(),
     current_status: zod_1.z.string(),
+});
+exports.directorModeSchema = zod_1.z.enum([
+    'reply_player',
+    'reply_then_exchange',
+]);
+exports.directorFallbackReasonSchema = zod_1.z.enum([
+    'parse_error',
+    'invalid_cast',
+    'llm_error',
+    'skipped_whisper',
+]);
+/** false = 决策成功；字符串 = fallback 原因码 */
+exports.directorFallbackSchema = zod_1.z.union([
+    zod_1.z.literal(false),
+    exports.directorFallbackReasonSchema,
+]);
+exports.agentTraceDirectorSchema = zod_1.z.object({
+    mode: exports.directorModeSchema.optional(),
+    speakers: zod_1.z.array(zod_1.z.string()).optional(),
+    reason: zod_1.z.string().optional(),
+    fallback: exports.directorFallbackSchema,
 });
 /** 单轮 Agent 决策 Trace（可回放） */
 exports.agentTraceRecordSchema = zod_1.z.object({
@@ -55,6 +76,8 @@ exports.agentTraceRecordSchema = zod_1.z.object({
         })),
     })
         .optional(),
+    /** 导演调度决策（焦点回复前的 mode / speakers） */
+    director: exports.agentTraceDirectorSchema.optional(),
 });
 exports.agentTraceListResponseSchema = zod_1.z.object({
     traces: zod_1.z.array(exports.agentTraceRecordSchema),

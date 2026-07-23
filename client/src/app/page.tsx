@@ -252,8 +252,7 @@ function GamePageInner({
     [nearbyNpcs, visibleNpcs, npcStates],
   );
 
-  const chapterCueActive = chapterCue != null;
-  const uiBlocking = chatOpen || menuOpen || chapterCueActive;
+  const uiBlocking = chatOpen || menuOpen;
   const movementEnabled = !uiBlocking;
   const lookEnabled = !uiBlocking;
 

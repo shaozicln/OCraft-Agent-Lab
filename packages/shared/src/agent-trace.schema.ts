@@ -24,6 +24,37 @@ export const agentTraceRuntimeSchema = z.object({
   current_status: z.string(),
 });
 
+export const directorModeSchema = z.enum([
+  'reply_player',
+  'reply_then_exchange',
+]);
+export type DirectorMode = z.infer<typeof directorModeSchema>;
+
+export const directorFallbackReasonSchema = z.enum([
+  'parse_error',
+  'invalid_cast',
+  'llm_error',
+  'skipped_whisper',
+]);
+export type DirectorFallbackReason = z.infer<
+  typeof directorFallbackReasonSchema
+>;
+
+/** false = 决策成功；字符串 = fallback 原因码 */
+export const directorFallbackSchema = z.union([
+  z.literal(false),
+  directorFallbackReasonSchema,
+]);
+export type DirectorFallback = z.infer<typeof directorFallbackSchema>;
+
+export const agentTraceDirectorSchema = z.object({
+  mode: directorModeSchema.optional(),
+  speakers: z.array(z.string()).optional(),
+  reason: z.string().optional(),
+  fallback: directorFallbackSchema,
+});
+export type AgentTraceDirector = z.infer<typeof agentTraceDirectorSchema>;
+
 /** 单轮 Agent 决策 Trace（可回放） */
 export const agentTraceRecordSchema = z.object({
   id: z.string(),
@@ -62,6 +93,8 @@ export const agentTraceRecordSchema = z.object({
       ),
     })
     .optional(),
+  /** 导演调度决策（焦点回复前的 mode / speakers） */
+  director: agentTraceDirectorSchema.optional(),
 });
 
 export type AgentTraceRecord = z.infer<typeof agentTraceRecordSchema>;

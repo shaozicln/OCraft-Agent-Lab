@@ -11,9 +11,14 @@ export type ChapterCue = {
   title: string;
 };
 
+/** 下滑入场 / 悬停 / 上撤（ms） */
+const MS_IN = 640;
+const MS_HOLD = 3000;
+const MS_OUT = 520;
+
 /**
- * 升章全屏过场：黑场 + 电影黑边 + 章节标题。
- * 由父组件在章节 id 变化时传入 cue；播完回调 onDone。
+ * 升章提示：顶部卡片缓慢下弹 → 悬停 3s → 向上撤走。
+ * 不挡操作（pointer-events: none）。
  */
 export function ChapterTransition({
   cue,
@@ -33,15 +38,14 @@ export function ChapterTransition({
     }
     setActive(cue);
     setPhase('in');
-    document.exitPointerLock?.();
 
-    const tHold = window.setTimeout(() => setPhase('hold'), 480);
-    const tOut = window.setTimeout(() => setPhase('out'), 480 + 1600);
+    const tHold = window.setTimeout(() => setPhase('hold'), MS_IN);
+    const tOut = window.setTimeout(() => setPhase('out'), MS_IN + MS_HOLD);
     const tDone = window.setTimeout(() => {
       setPhase(null);
       setActive(null);
       onDone();
-    }, 480 + 1600 + 640);
+    }, MS_IN + MS_HOLD + MS_OUT);
 
     return () => {
       window.clearTimeout(tHold);
@@ -59,16 +63,12 @@ export function ChapterTransition({
     <div
       className="chapter-cue"
       data-phase={phase}
-      role="dialog"
+      role="status"
       aria-live="polite"
       aria-label={`${kicker} ${active.title}`}
     >
-      <div className="chapter-cue__veil" aria-hidden />
-      <div className="chapter-cue__bar chapter-cue__bar--top" aria-hidden />
-      <div className="chapter-cue__bar chapter-cue__bar--bottom" aria-hidden />
-      <div className="chapter-cue__copy">
+      <div className="chapter-cue__card">
         <p className="chapter-cue__kicker">{kicker}</p>
-        <div className="chapter-cue__rule" aria-hidden />
         <h2 className="chapter-cue__title">{active.title}</h2>
       </div>
     </div>

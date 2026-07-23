@@ -26,6 +26,7 @@ import { AuthService } from '../auth/auth.service';
 import { AgentHarnessService } from '../agent/agent-harness.service';
 import { NpcExchangeService } from '../agent/npc-exchange.service';
 import { NpcAsideService } from '../agent/npc-aside.service';
+import { DirectorService } from '../agent/director.service';
 import { PackService } from '../story/pack.service';
 import { ConversationService } from './conversation.service';
 import { NpcService } from '../npc/npc.service';
@@ -51,6 +52,7 @@ export class GameGateway implements OnGatewayConnection {
     private readonly agentHarness: AgentHarnessService,
     private readonly npcExchange: NpcExchangeService,
     private readonly npcAside: NpcAsideService,
+    private readonly director: DirectorService,
     private readonly conversationService: ConversationService,
     private readonly npcService: NpcService,
     private readonly packService: PackService,
@@ -202,7 +204,27 @@ export class GameGateway implements OnGatewayConnection {
       );
 
       try {
-        const result = await this.agentHarness.run(playerId, npcId, message);
+        // 导演：whisper 跳过 LLM；否则真决策。fallback ≠ false → 等同现网仍尝试互聊路径
+        const directorDecision = isWhisper
+          ? this.director.skippedWhisperDecision(npcId)
+          : await this.director.decide(
+              await this.director.buildInput(
+                playerId,
+                npcId,
+                message,
+                nearbyNpcIds ?? [],
+              ),
+            );
+        const shouldTryExchange =
+          directorDecision.fallback !== false ||
+          directorDecision.mode === 'reply_then_exchange';
+        this.logger.log(
+          `director mode=${directorDecision.mode} fallback=${String(directorDecision.fallback)} speakers=[${directorDecision.speakers.join(',')}] reason="${directorDecision.reason}"`,
+        );
+
+        const result = await this.agentHarness.run(playerId, npcId, message, {
+          director: directorDecision,
+        });
 
         let fullReply = '';
         for await (const chunk of result.stream) {
@@ -235,8 +257,8 @@ export class GameGateway implements OnGatewayConnection {
           );
         }
 
-        // 悄悄话：同场其他人听不见 → 不跑互聊 / 旁听
-        if (!isWhisper) {
+        // 悄悄话 / reply_player 成功：不跑互聊 / 旁听；fallback 或开放模式：与现网一致
+        if (!isWhisper && shouldTryExchange) {
           const exchange = await this.npcExchange.tryRunAfterChat({
             playerId,
             chatNpcId: npcId,

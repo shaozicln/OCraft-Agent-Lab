@@ -1724,6 +1724,30 @@ function SettingsInner({
                   <p className="mt-2">
                     玩家：「{t.player_message}」
                   </p>
+                  {t.director && (
+                    <p
+                      className="settings-trace__tech mt-2"
+                      style={
+                        t.director.fallback !== false
+                          ? { color: 'var(--ui-danger, #dc2626)' }
+                          : undefined
+                      }
+                    >
+                      director:{' '}
+                      {t.director.mode ?? '—'}
+                      {t.director.speakers && t.director.speakers.length > 0
+                        ? ` · speakers [${t.director.speakers.join(', ')}]`
+                        : ''}
+                      {t.director.reason
+                        ? ` · ${t.director.reason}`
+                        : ''}
+                      {' · '}
+                      fallback=
+                      {t.director.fallback === false
+                        ? 'false'
+                        : String(t.director.fallback)}
+                    </p>
+                  )}
                   <p className="mt-2" style={{ color: 'var(--ui-fg-muted)' }}>
                     数值 {t.runtime_before.affinity}/{t.runtime_before.fatigue} →{' '}
                     {t.runtime_after.affinity}/{t.runtime_after.fatigue}

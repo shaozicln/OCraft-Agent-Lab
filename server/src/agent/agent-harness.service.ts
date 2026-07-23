@@ -22,6 +22,7 @@ import {
   evaluateNpcReplyFlags,
 } from './chapter-transition';
 import { buildNpcToolDefinitions } from './npc-tool-defs';
+import type { DirectorDecision } from './director.types';
 
 export interface AgentRunResult {
   toolCalls: ToolCallResult[];
@@ -49,6 +50,7 @@ export class AgentHarnessService {
     playerId: string,
     npcId: string,
     playerMessage: string,
+    opts?: { director?: DirectorDecision },
   ): Promise<AgentRunResult> {
     const pack = this.packService.getPack();
     const toolCalls: ToolCallResult[] = [];
@@ -204,6 +206,16 @@ export class AgentHarnessService {
         score: h.score,
       })),
       animation,
+      ...(opts?.director
+        ? {
+            director: {
+              mode: opts.director.mode,
+              speakers: opts.director.speakers,
+              reason: opts.director.reason,
+              fallback: opts.director.fallback,
+            },
+          }
+        : {}),
     });
 
     this.logger.log(

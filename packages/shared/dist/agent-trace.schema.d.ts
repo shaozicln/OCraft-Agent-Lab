@@ -17,6 +17,41 @@ export declare const agentTraceRuntimeSchema: z.ZodObject<{
     fatigue: z.ZodNumber;
     current_status: z.ZodString;
 }, z.core.$strip>;
+export declare const directorModeSchema: z.ZodEnum<{
+    reply_player: "reply_player";
+    reply_then_exchange: "reply_then_exchange";
+}>;
+export type DirectorMode = z.infer<typeof directorModeSchema>;
+export declare const directorFallbackReasonSchema: z.ZodEnum<{
+    parse_error: "parse_error";
+    invalid_cast: "invalid_cast";
+    llm_error: "llm_error";
+    skipped_whisper: "skipped_whisper";
+}>;
+export type DirectorFallbackReason = z.infer<typeof directorFallbackReasonSchema>;
+/** false = 决策成功；字符串 = fallback 原因码 */
+export declare const directorFallbackSchema: z.ZodUnion<readonly [z.ZodLiteral<false>, z.ZodEnum<{
+    parse_error: "parse_error";
+    invalid_cast: "invalid_cast";
+    llm_error: "llm_error";
+    skipped_whisper: "skipped_whisper";
+}>]>;
+export type DirectorFallback = z.infer<typeof directorFallbackSchema>;
+export declare const agentTraceDirectorSchema: z.ZodObject<{
+    mode: z.ZodOptional<z.ZodEnum<{
+        reply_player: "reply_player";
+        reply_then_exchange: "reply_then_exchange";
+    }>>;
+    speakers: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    reason: z.ZodOptional<z.ZodString>;
+    fallback: z.ZodUnion<readonly [z.ZodLiteral<false>, z.ZodEnum<{
+        parse_error: "parse_error";
+        invalid_cast: "invalid_cast";
+        llm_error: "llm_error";
+        skipped_whisper: "skipped_whisper";
+    }>]>;
+}, z.core.$strip>;
+export type AgentTraceDirector = z.infer<typeof agentTraceDirectorSchema>;
 /** 单轮 Agent 决策 Trace（可回放） */
 export declare const agentTraceRecordSchema: z.ZodObject<{
     id: z.ZodString;
@@ -67,6 +102,20 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
             name: z.ZodString;
             text: z.ZodString;
         }, z.core.$strip>>;
+    }, z.core.$strip>>;
+    director: z.ZodOptional<z.ZodObject<{
+        mode: z.ZodOptional<z.ZodEnum<{
+            reply_player: "reply_player";
+            reply_then_exchange: "reply_then_exchange";
+        }>>;
+        speakers: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        reason: z.ZodOptional<z.ZodString>;
+        fallback: z.ZodUnion<readonly [z.ZodLiteral<false>, z.ZodEnum<{
+            parse_error: "parse_error";
+            invalid_cast: "invalid_cast";
+            llm_error: "llm_error";
+            skipped_whisper: "skipped_whisper";
+        }>]>;
     }, z.core.$strip>>;
 }, z.core.$strip>;
 export type AgentTraceRecord = z.infer<typeof agentTraceRecordSchema>;
@@ -121,6 +170,20 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
                 name: z.ZodString;
                 text: z.ZodString;
             }, z.core.$strip>>;
+        }, z.core.$strip>>;
+        director: z.ZodOptional<z.ZodObject<{
+            mode: z.ZodOptional<z.ZodEnum<{
+                reply_player: "reply_player";
+                reply_then_exchange: "reply_then_exchange";
+            }>>;
+            speakers: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            reason: z.ZodOptional<z.ZodString>;
+            fallback: z.ZodUnion<readonly [z.ZodLiteral<false>, z.ZodEnum<{
+                parse_error: "parse_error";
+                invalid_cast: "invalid_cast";
+                llm_error: "llm_error";
+                skipped_whisper: "skipped_whisper";
+            }>]>;
         }, z.core.$strip>>;
     }, z.core.$strip>>;
 }, z.core.$strip>;
