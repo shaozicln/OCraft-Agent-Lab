@@ -7,4 +7,6 @@ export type ChatMessage = {
   speakerId?: string;
   /** 悄悄话：仅目标 NPC 与玩家这一轮 */
   whisper?: boolean;
+  /** 自动演代发 */
+  autoPlay?: boolean;
 };

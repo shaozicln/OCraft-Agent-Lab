@@ -19,6 +19,8 @@ export const playerChatPayloadSchema = z.object({
   nearbyNpcIds: z.array(z.string().min(1).max(64)).max(16).optional(),
   /** 悄悄话：仅目标 NPC 听见；跳过 aside/exchange；scene_log 标 meta.whisper */
   whisper: z.boolean().optional(),
+  /** 自动演代发：scene_log / Trace 标 meta.auto_play */
+  autoPlay: z.boolean().optional(),
 });
 
 export const requestNpcStatePayloadSchema = z.object({
@@ -35,6 +37,28 @@ export const chatSuggestionsEventSchema = z.object({
   suggestions: z.array(z.string().trim().min(1).max(200)).max(6),
   error: z.string().optional(),
 });
+
+/** MA-A-B：请求导演侧生成下一句假玩家话 */
+export const requestAutoplayNextPayloadSchema = z.object({
+  npcId: z.string().min(1).max(64),
+  turnIndex: z.number().int().min(0).max(32),
+  maxTurns: z.number().int().min(1).max(16).optional(),
+  priorSays: z.array(z.string().trim().min(1).max(500)).max(16).optional(),
+  /** 本局是否已见目标互聊（客户端会话态） */
+  sawTargetExchange: z.boolean().optional(),
+  targetChapter: z.string().min(1).max(64).optional(),
+  targetExchange: z.string().min(1).max(64).optional(),
+});
+
+export const autoplayNextEventSchema = z.object({
+  npcId: z.string(),
+  say: z.string().trim().min(1).max(500).optional(),
+  done: z.boolean(),
+  reason: z.string().max(200).default(''),
+  source: z.enum(['agent', 'mock']).default('agent'),
+  error: z.string().optional(),
+});
+export type AutoplayNextEvent = z.infer<typeof autoplayNextEventSchema>;
 
 export const npcStreamEventSchema = z.object({
   npcId: z.string(),

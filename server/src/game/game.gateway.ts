@@ -15,6 +15,7 @@ import {
   loadConversationArchivePayloadSchema,
   playerChatPayloadSchema,
   renameArchivePayloadSchema,
+  requestAutoplayNextPayloadSchema,
   requestChatSuggestionsPayloadSchema,
   requestNpcStatePayloadSchema,
   requestStoryMapPayloadSchema,
@@ -27,6 +28,7 @@ import { AgentHarnessService } from '../agent/agent-harness.service';
 import { NpcExchangeService } from '../agent/npc-exchange.service';
 import { NpcAsideService } from '../agent/npc-aside.service';
 import { DirectorService } from '../agent/director.service';
+import { AutoPlayAgentService } from '../agent/autoplay-agent.service';
 import { detectWhisperIntent } from '../agent/whisper-detect';
 import {
   pickSafetyFallback,
@@ -60,6 +62,7 @@ export class GameGateway implements OnGatewayConnection {
     private readonly npcExchange: NpcExchangeService,
     private readonly npcAside: NpcAsideService,
     private readonly director: DirectorService,
+    private readonly autoPlayAgent: AutoPlayAgentService,
     private readonly conversationService: ConversationService,
     private readonly npcService: NpcService,
     private readonly packService: PackService,
@@ -192,6 +195,60 @@ export class GameGateway implements OnGatewayConnection {
     });
   }
 
+  @SubscribeMessage('request_autoplay_next')
+  async handleRequestAutoplayNext(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: unknown,
+  ) {
+    const parsed = requestAutoplayNextPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new WsException(parsed.error.message);
+    }
+
+    const playerId = this.requirePlayerId(client);
+    const {
+      npcId,
+      turnIndex,
+      maxTurns,
+      priorSays,
+      sawTargetExchange,
+      targetChapter,
+      targetExchange,
+    } = parsed.data;
+
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      await this.conversationService.ensureSession(playerId, npcId);
+      try {
+        const next = await this.autoPlayAgent.proposeNext({
+          playerId,
+          npcId,
+          turnIndex,
+          maxTurns,
+          priorSays,
+          sawTargetExchange,
+          targetChapter,
+          targetExchange,
+        });
+        client.emit('autoplay_next', {
+          npcId,
+          say: next.say,
+          done: next.done,
+          reason: next.reason,
+          source: next.source,
+        });
+      } catch (err) {
+        this.logger.error(err);
+        client.emit('autoplay_next', {
+          npcId,
+          done: true,
+          reason: '',
+          source: 'mock',
+          error: err instanceof Error ? err.message : '自动演下一拍失败',
+        });
+      }
+    });
+  }
+
   @SubscribeMessage('player_chat')
   async handlePlayerChat(
     @ConnectedSocket() client: AuthedSocket,
@@ -203,7 +260,7 @@ export class GameGateway implements OnGatewayConnection {
     }
 
     const playerId = this.requirePlayerId(client);
-    const { npcId, message, nearbyNpcIds, whisper } = parsed.data;
+    const { npcId, message, nearbyNpcIds, whisper, autoPlay } = parsed.data;
     const clientWhisper = whisper === true;
     const autoWhisper = !clientWhisper && detectWhisperIntent(message);
     const isWhisper = clientWhisper || autoWhisper;
@@ -212,11 +269,12 @@ export class GameGateway implements OnGatewayConnection {
       : autoWhisper
         ? 'auto'
         : undefined;
+    const isAutoPlay = autoPlay === true;
 
     return this.packService.runWithPlayerAsync(playerId, async () => {
       await this.conversationService.ensureSession(playerId, npcId);
       this.logger.log(
-        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper}${whisperSource ? `(${whisperSource})` : ''} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
+        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper}${whisperSource ? `(${whisperSource})` : ''}${isAutoPlay ? ' autoPlay' : ''} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
       );
 
       try {
@@ -241,6 +299,7 @@ export class GameGateway implements OnGatewayConnection {
         const result = await this.agentHarness.run(playerId, npcId, message, {
           director: directorDecision,
           whisperSource,
+          autoPlay: isAutoPlay,
         });
 
         let fullReply = '';
@@ -286,7 +345,7 @@ export class GameGateway implements OnGatewayConnection {
           npcId,
           message,
           fullReply,
-          { whisper: isWhisper },
+          { whisper: isWhisper, autoPlay: isAutoPlay },
         );
 
         client.emit('npc_state_update', {

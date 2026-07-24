@@ -91,6 +91,8 @@ exports.agentTraceRecordSchema = zod_1.z.object({
     director: exports.agentTraceDirectorSchema.optional(),
     /** MA-W：悄悄话来源（按钮 / 措辞自动） */
     whisper_source: zod_1.z.enum(['client', 'auto']).optional(),
+    /** 自动演：本轮是否代发玩家句（MA-A-B 为 Agent/MOCK 生成） */
+    auto_play: zod_1.z.boolean().optional(),
     /** F：主回复安全扫描 */
     safety: zod_1.z
         .object({

@@ -59,6 +59,7 @@ export class AgentHarnessService {
     opts?: {
       director?: DirectorDecision;
       whisperSource?: 'client' | 'auto';
+      autoPlay?: boolean;
     },
   ): Promise<AgentRunResult> {
     const pack = this.packService.getPack();
@@ -243,6 +244,7 @@ export class AgentHarnessService {
       ...(opts?.whisperSource
         ? { whisper_source: opts.whisperSource }
         : {}),
+      ...(opts?.autoPlay ? { auto_play: true } : {}),
     });
 
     this.logger.log(
@@ -367,7 +369,7 @@ export class AgentHarnessService {
     npcId: string,
     userMessage: string,
     assistantReply: string,
-    opts?: { whisper?: boolean },
+    opts?: { whisper?: boolean; autoPlay?: boolean },
   ) {
     await this.conversationService.appendTurn(playerId, npcId, 'user', userMessage);
     await this.conversationService.appendTurn(
@@ -381,7 +383,7 @@ export class AgentHarnessService {
       npcId,
       userMessage,
       assistantReply,
-      { whisper: opts?.whisper },
+      { whisper: opts?.whisper, autoPlay: opts?.autoPlay },
     );
 
     const chapterState = this.worldProgress.getChapter(playerId);

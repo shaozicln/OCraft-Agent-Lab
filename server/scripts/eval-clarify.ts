@@ -92,6 +92,89 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'PC-S：system_prompt_template 提示改写入 notes，人设模板不变',
+    run: () => {
+      const npc = pack.npcs[0]!;
+      const beforePrompt = npc.system_prompt_template;
+      const beforeNotes = pack.header.notes ?? '';
+      const chapterIds = pack.world.chapters.map((c) => c.id).join(',');
+      const q = {
+        id: 'qx',
+        topic: '危险写回',
+        ask: '测试',
+        options: [
+          { key: 'A' as const, label: 'a' },
+          { key: 'B' as const, label: 'b' },
+          { key: 'C' as const, label: 'c' },
+        ],
+        allow_free_text: true,
+        allow_polish: true,
+        target_hint: `npcs[${npc.npc_id}].system_prompt_template`,
+      };
+      const { next, patch_notes } = clarify.mergeAnswers(
+        pack,
+        new Map([[q.id, q]]),
+        [
+          {
+            question_id: q.id,
+            choice: 'A',
+            free_text: '追加一句不该进模板的旁注 {{affinity}}',
+          },
+        ],
+      );
+      const afterNpc = next.npcs.find((n) => n.npc_id === npc.npc_id)!;
+      const notesGrew = (next.header.notes ?? '').length > beforeNotes.length;
+      const noMustache = !(next.header.notes ?? '').includes('{{affinity}}');
+      const chaptersSame =
+        next.world.chapters.map((c) => c.id).join(',') === chapterIds;
+      const ok =
+        patch_notes.length === 1 &&
+        afterNpc.system_prompt_template === beforePrompt &&
+        notesGrew &&
+        noMustache &&
+        chaptersSame;
+      return {
+        ok,
+        detail: ok
+          ? 'redirected+sanitized'
+          : `promptEq=${afterNpc.system_prompt_template === beforePrompt} notes=${notesGrew} mustache=${!noMustache}`,
+      };
+    },
+  },
+  {
+    name: 'PC-S：章节约束叶子可追加，不改 chapters 数组',
+    run: () => {
+      const ch = pack.world.chapters[0]!;
+      const before = pack.prompts.chapter_constraints[ch.id] ?? '';
+      const chapterIds = pack.world.chapters.map((c) => c.id).join(',');
+      const q = {
+        id: 'qy',
+        topic: '节奏',
+        ask: '测试',
+        options: [
+          { key: 'A' as const, label: 'a' },
+          { key: 'B' as const, label: 'b' },
+          { key: 'C' as const, label: 'c' },
+        ],
+        allow_free_text: true,
+        allow_polish: true,
+        target_hint: `prompts.chapter_constraints[${ch.id}]`,
+      };
+      const { next, patch_notes } = clarify.mergeAnswers(
+        pack,
+        new Map([[q.id, q]]),
+        [{ question_id: q.id, choice: 'A', free_text: '开场偏日常' }],
+      );
+      const after = next.prompts.chapter_constraints[ch.id] ?? '';
+      const ok =
+        patch_notes.length === 1 &&
+        after.includes('开场偏日常') &&
+        after.length >= before.length &&
+        next.world.chapters.map((c) => c.id).join(',') === chapterIds;
+      return { ok, detail: `len ${before.length}→${after.length}` };
+    },
+  },
+  {
     name: 'normalize：summary 字符串 + options 字符串数组可收成合法会话',
     run: () => {
       const normalized = normalizeClarifyLlmOutput({

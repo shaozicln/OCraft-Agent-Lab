@@ -26,7 +26,8 @@
     "rag:eval": "ts-node -r tsconfig-paths/register scripts/eval-rag.ts",
     "multiagent:eval": "ts-node -r tsconfig-paths/register scripts/eval-multiagent.ts",
     "clarify:eval": "ts-node -r tsconfig-paths/register scripts/eval-clarify.ts",
-    "safety:eval": "ts-node -r tsconfig-paths/register scripts/eval-safety.ts"
+    "safety:eval": "ts-node -r tsconfig-paths/register scripts/eval-safety.ts",
+    "autoplay:eval": "ts-node -r tsconfig-paths/register scripts/eval-autoplay.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

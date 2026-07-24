@@ -1,0 +1,11 @@
+{
+  "id": "feel-demo-auto-goal",
+  "title": "导演驱动自动演 · 裂痕登场",
+  "world_id": "awaken",
+  "pack_version_id": "awaken-0717feel__20260717T1450",
+  "npc_id": "npc_suolunsen",
+  "target_chapter": "ch2_unease",
+  "target_exchange": "ex_ch2_first_meet",
+  "max_turns": 6,
+  "wait_ms": 800
+}

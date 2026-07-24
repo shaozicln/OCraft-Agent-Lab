@@ -340,12 +340,15 @@ export class ConversationService {
     npcId: string,
     userMessage: string,
     assistantReply: string,
-    opts?: { whisper?: boolean },
+    opts?: { whisper?: boolean; autoPlay?: boolean },
   ) {
     await this.ensureSceneLogHydrated(playerId);
     const npcName = this.npcDisplayName(npcId);
     const t0 = new Date().toISOString();
-    const whisperMeta = opts?.whisper ? { whisper: true } : undefined;
+    const meta: Record<string, unknown> = {};
+    if (opts?.whisper) meta.whisper = true;
+    if (opts?.autoPlay) meta.auto_play = true;
+    const sceneMeta = Object.keys(meta).length > 0 ? meta : undefined;
     this.pushSceneUtterance(playerId, {
       at: t0,
       kind: 'player_to_npc',
@@ -354,7 +357,7 @@ export class ConversationService {
       addressee_id: npcId,
       addressee_name: npcName,
       text: userMessage,
-      meta: whisperMeta,
+      meta: sceneMeta,
     });
     this.pushSceneUtterance(playerId, {
       kind: 'npc_to_player',
@@ -363,7 +366,7 @@ export class ConversationService {
       addressee_id: SCENE_PLAYER_ID,
       addressee_name: SCENE_PLAYER_DISPLAY_NAME,
       text: assistantReply,
-      meta: whisperMeta,
+      meta: opts?.whisper ? { whisper: true } : undefined,
     });
   }
 

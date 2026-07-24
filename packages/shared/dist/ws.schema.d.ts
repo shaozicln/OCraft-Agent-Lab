@@ -11,6 +11,7 @@ export declare const playerChatPayloadSchema: z.ZodObject<{
     message: z.ZodString;
     nearbyNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
     whisper: z.ZodOptional<z.ZodBoolean>;
+    autoPlay: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
 export declare const requestNpcStatePayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
@@ -24,6 +25,28 @@ export declare const chatSuggestionsEventSchema: z.ZodObject<{
     suggestions: z.ZodArray<z.ZodString>;
     error: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
+/** MA-A-B：请求导演侧生成下一句假玩家话 */
+export declare const requestAutoplayNextPayloadSchema: z.ZodObject<{
+    npcId: z.ZodString;
+    turnIndex: z.ZodNumber;
+    maxTurns: z.ZodOptional<z.ZodNumber>;
+    priorSays: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    sawTargetExchange: z.ZodOptional<z.ZodBoolean>;
+    targetChapter: z.ZodOptional<z.ZodString>;
+    targetExchange: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+export declare const autoplayNextEventSchema: z.ZodObject<{
+    npcId: z.ZodString;
+    say: z.ZodOptional<z.ZodString>;
+    done: z.ZodBoolean;
+    reason: z.ZodDefault<z.ZodString>;
+    source: z.ZodDefault<z.ZodEnum<{
+        agent: "agent";
+        mock: "mock";
+    }>>;
+    error: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+export type AutoplayNextEvent = z.infer<typeof autoplayNextEventSchema>;
 export declare const npcStreamEventSchema: z.ZodObject<{
     npcId: z.ZodString;
     chunk: z.ZodString;

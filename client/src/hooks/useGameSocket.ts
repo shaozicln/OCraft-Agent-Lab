@@ -2,6 +2,7 @@
 
 import type {
   ArchiveRenamedEvent,
+  AutoplayNextEvent,
   ChatSuggestionsEvent,
   ConversationArchiveSummary,
   ConversationArchivesListEvent,
@@ -61,6 +62,9 @@ export function useGameSocket(
   const [lastNewRun, setLastNewRun] = useState<NewRunStartedEvent | null>(null);
   /** null = 全部已可出场 */
   const [selectedNpcIds, setSelectedNpcIds] = useState<string[] | null>(null);
+  const autoplayNextHandlersRef = useRef(
+    new Set<(ev: AutoplayNextEvent) => void>(),
+  );
 
   // 切 NPC 时丢掉上一任的流式缓冲，避免 ChatBox 把旧回复挂到新人头上
   useEffect(() => {
@@ -131,6 +135,12 @@ export function useGameSocket(
       setSuggestions(data.suggestions ?? []);
       setSuggestionsLoading(false);
       setSuggestionsError(data.error ?? null);
+    });
+
+    socket.on('autoplay_next', (data: AutoplayNextEvent) => {
+      for (const handler of autoplayNextHandlersRef.current) {
+        handler(data);
+      }
     });
 
     socket.on('conversation_saved', (data: ConversationSavedEvent) => {
@@ -308,7 +318,11 @@ export function useGameSocket(
   const sendChat = useCallback(
     (
       message: string,
-      chatOpts?: { nearbyNpcIds?: string[]; whisper?: boolean },
+      chatOpts?: {
+        nearbyNpcIds?: string[];
+        whisper?: boolean;
+        autoPlay?: boolean;
+      },
     ): boolean => {
       if (!socketRef.current?.connected) {
         setIsStreaming(false);
@@ -323,6 +337,7 @@ export function useGameSocket(
         message,
         nearbyNpcIds: chatOpts?.nearbyNpcIds,
         whisper: chatOpts?.whisper === true ? true : undefined,
+        autoPlay: chatOpts?.autoPlay === true ? true : undefined,
       });
       return true;
     },
@@ -339,6 +354,35 @@ export function useGameSocket(
     });
     return true;
   }, []);
+
+  const requestAutoplayNext = useCallback(
+    (payload: {
+      turnIndex: number;
+      maxTurns: number;
+      priorSays: string[];
+      sawTargetExchange: boolean;
+      targetChapter?: string;
+      targetExchange?: string;
+    }): boolean => {
+      if (!socketRef.current?.connected) return false;
+      socketRef.current.emit('request_autoplay_next', {
+        npcId: activeNpcIdRef.current,
+        ...payload,
+      });
+      return true;
+    },
+    [],
+  );
+
+  const subscribeAutoplayNext = useCallback(
+    (handler: (ev: AutoplayNextEvent) => void) => {
+      autoplayNextHandlersRef.current.add(handler);
+      return () => {
+        autoplayNextHandlersRef.current.delete(handler);
+      };
+    },
+    [],
+  );
 
   const clearSuggestions = useCallback(() => {
     setSuggestions(null);
@@ -421,6 +465,8 @@ export function useGameSocket(
     renameArchive,
     sendChat,
     requestSuggestions,
+    requestAutoplayNext,
+    subscribeAutoplayNext,
     clearSuggestions,
     suggestions,
     suggestionsLoading,

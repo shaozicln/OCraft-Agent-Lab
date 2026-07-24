@@ -110,6 +110,8 @@ export const agentTraceRecordSchema = z.object({
   director: agentTraceDirectorSchema.optional(),
   /** MA-W：悄悄话来源（按钮 / 措辞自动） */
   whisper_source: z.enum(['client', 'auto']).optional(),
+  /** 自动演：本轮是否代发玩家句（MA-A-B 为 Agent/MOCK 生成） */
+  auto_play: z.boolean().optional(),
   /** F：主回复安全扫描 */
   safety: z
     .object({

@@ -146,6 +146,7 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
         client: "client";
         auto: "auto";
     }>>;
+    auto_play: z.ZodOptional<z.ZodBoolean>;
     safety: z.ZodOptional<z.ZodObject<{
         ok: z.ZodBoolean;
         rewritten: z.ZodOptional<z.ZodBoolean>;
@@ -241,6 +242,7 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
             client: "client";
             auto: "auto";
         }>>;
+        auto_play: z.ZodOptional<z.ZodBoolean>;
         safety: z.ZodOptional<z.ZodObject<{
             ok: z.ZodBoolean;
             rewritten: z.ZodOptional<z.ZodBoolean>;

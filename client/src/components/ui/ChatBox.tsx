@@ -12,7 +12,9 @@ import type {
   NpcAsideEvent,
   NpcExchangeEvent,
   SceneUtterance,
+  AutoplayNextEvent,
 } from '@ocraft/shared';
+import { useAutoPlay } from '@/lib/autoplay/useAutoPlay';
 
 interface ChatBoxProps {
   open: boolean;
@@ -31,12 +33,28 @@ interface ChatBoxProps {
   chapterLabels?: Record<string, string>;
   /** 当前章节展示名（display_name） */
   chapterDisplayName?: string;
+  /** 当前章节 id（自动演目标核对） */
+  chapterId?: string;
   lastNewRun?: NewRunStartedEvent | null;
   suggestions: string[] | null;
   suggestionsLoading: boolean;
   suggestionsError: string | null;
   onClose: () => void;
-  onSend: (message: string, opts?: { whisper?: boolean }) => boolean;
+  onSend: (
+    message: string,
+    opts?: { whisper?: boolean; autoPlay?: boolean },
+  ) => boolean;
+  onRequestAutoplayNext: (payload: {
+    turnIndex: number;
+    maxTurns: number;
+    priorSays: string[];
+    sawTargetExchange: boolean;
+    targetChapter?: string;
+    targetExchange?: string;
+  }) => boolean;
+  onSubscribeAutoplayNext: (
+    handler: (ev: AutoplayNextEvent) => void,
+  ) => () => void;
   onRequestSuggestions: () => boolean;
   onClearSuggestions: () => void;
   onSave: () => boolean;
@@ -132,12 +150,15 @@ export function ChatBox({
   loadError,
   chapterLabels,
   chapterDisplayName,
+  chapterId,
   lastNewRun,
   suggestions,
   suggestionsLoading,
   suggestionsError,
   onClose,
   onSend,
+  onRequestAutoplayNext,
+  onSubscribeAutoplayNext,
   onRequestSuggestions,
   onClearSuggestions,
   onSave,
@@ -178,7 +199,44 @@ export function ChatBox({
   historyFullscreenRef.current = historyFullscreen;
   loadPanelOpenRef.current = loadPanelOpen;
 
-  const inputLocked = isStreaming || listening;
+  const pushSystemNote = useCallback((text: string) => {
+    setHistory((prev) => [...prev, { role: 'system', text }]);
+  }, []);
+
+  const sendAutoLine = useCallback(
+    (message: string) => {
+      if (!connected) return false;
+      setHistory((prev) => [
+        ...prev,
+        { role: 'player', text: message, autoPlay: true },
+      ]);
+      lastStreamRef.current = '';
+      const ok = onSend(message, { autoPlay: true });
+      if (!ok) {
+        setHistory((prev) => [
+          ...prev,
+          { role: 'system', text: '自动演绎发送失败' },
+        ]);
+      }
+      return ok;
+    },
+    [connected, onSend],
+  );
+
+  const autoPlay = useAutoPlay({
+    npcId,
+    isBusy: isStreaming || listening,
+    isStreaming,
+    chapterId,
+    lastExchangeId: lastExchange?.eventId ?? null,
+    connected,
+    onSendAuto: sendAutoLine,
+    onRequestNext: onRequestAutoplayNext,
+    subscribeNext: onSubscribeAutoplayNext,
+    onNote: pushSystemNote,
+  });
+
+  const inputLocked = isStreaming || listening || autoPlay.locksInput;
 
   useEffect(() => {
     if (!open) {
@@ -609,6 +667,53 @@ export function ChatBox({
             </button>
           </div>
 
+          {(autoPlay.ui.status === 'running' ||
+            autoPlay.ui.status === 'paused' ||
+            autoPlay.ui.status === 'done' ||
+            autoPlay.ui.status === 'abort') && (
+            <div className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-slate-700 bg-slate-950/60">
+              <span className="text-[11px] text-amber-200/90 truncate">
+                {autoPlay.ui.status === 'running'
+                  ? `自动演 ${autoPlay.ui.progressLabel}`
+                  : autoPlay.ui.status === 'paused'
+                    ? `已暂停 ${autoPlay.ui.progressLabel}`
+                    : autoPlay.ui.status === 'done'
+                      ? '自动演已完成'
+                      : `已中断${autoPlay.ui.failReason ? ` · ${autoPlay.ui.failReason}` : ''}`}
+              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                {autoPlay.ui.status === 'running' && (
+                  <button
+                    type="button"
+                    onClick={autoPlay.pause}
+                    className="text-[11px] px-2 py-0.5 rounded text-slate-300 hover:bg-slate-800"
+                  >
+                    暂停
+                  </button>
+                )}
+                {autoPlay.ui.status === 'paused' && (
+                  <button
+                    type="button"
+                    onClick={autoPlay.resume}
+                    className="text-[11px] px-2 py-0.5 rounded text-sky-300 hover:bg-slate-800"
+                  >
+                    继续
+                  </button>
+                )}
+                {(autoPlay.ui.status === 'running' ||
+                  autoPlay.ui.status === 'paused') && (
+                  <button
+                    type="button"
+                    onClick={autoPlay.takeover}
+                    className="text-[11px] px-2 py-0.5 rounded text-rose-300 hover:bg-slate-800"
+                  >
+                    接管
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div ref={scrollRef} className="h-40 overflow-y-auto px-4 py-3 space-y-2">
             {history.length === 0 && (
               <p className="text-slate-500 text-sm">开始对话吧</p>
@@ -632,9 +737,11 @@ export function ChatBox({
                 }`}
               >
                 {item.role === 'player'
-                  ? item.whisper
-                    ? '悄悄话·你：'
-                    : '你：'
+                  ? item.autoPlay
+                    ? '（自动）你：'
+                    : item.whisper
+                      ? '悄悄话·你：'
+                      : '你：'
                   : item.role === 'system'
                     ? ''
                     : item.role === 'exchange'
@@ -739,6 +846,17 @@ export function ChatBox({
             >
               悄悄话
             </button>
+            {!autoPlay.locksInput ? (
+              <button
+                type="button"
+                onClick={autoPlay.start}
+                disabled={!connected || isStreaming || listening}
+                title={autoPlay.goal.title}
+                className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed border border-amber-700/60 rounded-lg text-sm text-amber-200/90 transition-colors"
+              >
+                自动演
+              </button>
+            ) : null}
             <input
               ref={inputRef}
               type="text"
@@ -748,13 +866,17 @@ export function ChatBox({
               placeholder={
                 !connected
                   ? '等待连接服务器…'
-                  : listening
-                    ? '…正在旁听'
-                    : isStreaming
-                      ? '对方正在说话…'
-                      : whisperMode
-                        ? '悄悄话（仅对方听见）…'
-                        : '输入对话…'
+                  : autoPlay.ui.status === 'running'
+                    ? '自动演绎中…（可暂停/接管）'
+                    : autoPlay.ui.status === 'paused'
+                      ? '已暂停 · 点继续或接管'
+                      : listening
+                        ? '…正在旁听'
+                        : isStreaming
+                          ? '对方正在说话…'
+                          : whisperMode
+                            ? '悄悄话（仅对方听见）…'
+                            : '输入对话…'
               }
               autoComplete="off"
               className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 disabled:opacity-60 disabled:cursor-not-allowed"

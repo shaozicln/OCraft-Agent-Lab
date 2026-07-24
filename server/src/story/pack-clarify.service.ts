@@ -18,6 +18,10 @@ import {
   formatGlossaryForPrompt,
   humanizeClarifySession,
 } from './pack-clarify-humanize';
+import {
+  applyClarifyWriteLine,
+  describeClarifyWriteback,
+} from './pack-clarify-writeback';
 
 const CLARIFY_JSON_EXAMPLE = `{
   "summary": {
@@ -81,6 +85,7 @@ export class PackClarifyService {
               '2) 严禁公式腔，例如禁止：jia=ending_jia+path_trust、yi=ending_yi+path_dismiss。',
               '3) 若必须提到 flag/章/结局 id，只能写成「id（中文含义）」，含义优先用词表。',
               '4) 不要输出 flags[xxx].trigger_condition 这类技术写回路径；不要 target_hint 技术字符串。',
+              '5) 写回只允许 header.notes 或 prompts.chapter_constraints[章id]；禁止 system_prompt_template / 改章节数组。',
               '5) 最多 5 题；C = 暂不确定，保持现状。',
               '示例：',
               CLARIFY_JSON_EXAMPLE,
@@ -179,7 +184,7 @@ export class PackClarifyService {
           {
             role: 'system',
             content:
-              '你润色玩家补充的短设定。只输出 JSON：{"type":"polish","question_id":"...","polished_text":"...","target_hint":"..."}。勿编造整包。',
+              '你润色玩家补充的短设定。只输出 JSON：{"type":"polish","question_id":"...","polished_text":"...","target_hint":"..."}。勿编造整包。target_hint 仅允许 header.notes 或 prompts.chapter_constraints[章id]。',
           },
           {
             role: 'user',
@@ -230,9 +235,8 @@ export class PackClarifyService {
         ],
         allow_free_text: true,
         allow_polish: true,
-        target_hint: npc
-          ? `npcs[${npc.npc_id}].system_prompt_template`
-          : 'header.notes',
+        // PC-S：人设模板禁止直写，统一落包头备注
+        target_hint: 'header.notes',
       },
     ];
     if (ch) {
@@ -286,52 +290,12 @@ export class PackClarifyService {
       const optLabel =
         q.options.find((o) => o.key === choice)?.label ?? '';
       const line = `[澄清·${q.topic}] ${[optLabel, free].filter(Boolean).join('；')}`;
-      const where = this.describeWriteback(q.target_hint);
+      const where = describeClarifyWriteback(q.target_hint);
       patch_notes.push(`${line} → 已写入「${where}」`);
-      this.applyLine(next, q.target_hint, line);
+      applyClarifyWriteLine(next, q.target_hint, line);
     }
 
     return { next, patch_notes };
-  }
-
-  private describeWriteback(targetHint: string | undefined): string {
-    const hint = targetHint?.trim() || 'header.notes';
-    const npcMatch = /^npcs\[([^\]]+)\]\.system_prompt_template$/.exec(hint);
-    if (npcMatch) return `角色 ${npcMatch[1]} 的人设旁注`;
-    const chMatch = /^prompts\.chapter_constraints\[([^\]]+)\]$/.exec(hint);
-    if (chMatch) return `章节「${chMatch[1]}」的扮演旁注`;
-    return '本包备注（可在编辑器「包头备注」里看到）';
-  }
-
-  private applyLine(
-    pack: StoryPack,
-    targetHint: string | undefined,
-    line: string,
-  ) {
-    const hint = targetHint?.trim() || 'header.notes';
-
-    const npcMatch = /^npcs\[([^\]]+)\]\.system_prompt_template$/.exec(hint);
-    if (npcMatch) {
-      const npc = pack.npcs.find((n) => n.npc_id === npcMatch[1]);
-      if (npc) {
-        npc.system_prompt_template = `${npc.system_prompt_template.trim()}\n${line}`;
-        return;
-      }
-    }
-
-    const chMatch = /^prompts\.chapter_constraints\[([^\]]+)\]$/.exec(hint);
-    if (chMatch) {
-      const id = chMatch[1]!;
-      const prev = pack.prompts.chapter_constraints[id] ?? '';
-      pack.prompts.chapter_constraints[id] = prev
-        ? `${prev.trim()}\n${line}`
-        : line;
-      return;
-    }
-
-    pack.header.notes = pack.header.notes
-      ? `${pack.header.notes.trim()}\n${line}`
-      : line;
   }
 
   private briefPack(pack: StoryPack): string {

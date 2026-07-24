@@ -130,6 +130,8 @@ function GamePageInner({
     requestNpcState,
     sendChat,
     requestSuggestions,
+    requestAutoplayNext,
+    subscribeAutoplayNext,
     clearSuggestions,
     suggestions,
     suggestionsLoading,
@@ -269,11 +271,14 @@ function GamePageInner({
   }, []);
 
   const handleSendChat = useCallback(
-    (message: string, opts?: { whisper?: boolean }) => {
+    (message: string, opts?: { whisper?: boolean; autoPlay?: boolean }) => {
       // 同场短接话：交互圈内 + 当前场景已出场的其他人（spawn 相距常 > 交互距离）
       // 悄悄话不传 nearby（服务端也会跳过 aside/exchange）
       if (opts?.whisper) {
-        return sendChat(message, { whisper: true });
+        return sendChat(message, {
+          whisper: true,
+          autoPlay: opts.autoPlay,
+        });
       }
       const ids = [
         ...new Set([
@@ -281,7 +286,10 @@ function GamePageInner({
           ...visibleNpcs.map((n) => n.npc_id),
         ]),
       ];
-      return sendChat(message, { nearbyNpcIds: ids });
+      return sendChat(message, {
+        nearbyNpcIds: ids,
+        autoPlay: opts?.autoPlay,
+      });
     },
     [sendChat, nearbyNpcs, visibleNpcs],
   );
@@ -551,12 +559,15 @@ function GamePageInner({
         loadError={loadError}
         chapterLabels={chapterLabels}
         chapterDisplayName={chapterDisplayName}
+        chapterId={worldChapter}
         lastNewRun={lastNewRun}
         suggestions={suggestions}
         suggestionsLoading={suggestionsLoading}
         suggestionsError={suggestionsError}
         onClose={closeChat}
         onSend={handleSendChat}
+        onRequestAutoplayNext={requestAutoplayNext}
+        onSubscribeAutoplayNext={subscribeAutoplayNext}
         onRequestSuggestions={requestSuggestions}
         onClearSuggestions={clearSuggestions}
         onSave={saveConversation}
