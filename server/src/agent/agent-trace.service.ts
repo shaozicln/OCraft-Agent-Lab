@@ -37,6 +37,34 @@ export class AgentTraceService {
     }
   }
 
+  /** 补记 F 安全扫描结果 */
+  appendSafety(
+    playerId: string,
+    npcId: string,
+    safety: {
+      ok: boolean;
+      rewritten?: boolean;
+      reasons: Array<{ code: string; detail: string }>;
+      traceId?: string;
+    },
+  ): void {
+    const { traceId, ...payload } = safety;
+    if (traceId) {
+      const hit = this.buffer.find((t) => t.id === traceId);
+      if (hit) {
+        hit.safety = payload;
+        return;
+      }
+    }
+    for (let i = this.buffer.length - 1; i >= 0; i--) {
+      const t = this.buffer[i];
+      if (t.player_id === playerId && t.npc_id === npcId) {
+        t.safety = payload;
+        return;
+      }
+    }
+  }
+
   /** 补记关系事件互聊（优先挂到指定 traceId，否则最近一条） */
   appendExchange(
     playerId: string,

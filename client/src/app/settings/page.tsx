@@ -13,6 +13,8 @@ import {
 import type {
   AgentTraceRecord,
   AuthSession,
+  PackClarifyAnswer,
+  PackClarifySession,
   PackGenerateSectionKey,
   PackGenerateSections,
   PackGenerateStreamEvent,
@@ -35,7 +37,12 @@ import {
 } from '@ocraft/shared';
 import { AuthGate } from '@/components/ui/AuthGate';
 import { PackEditor } from '@/components/pack-editor/PackEditor';
+import { PackClarifyModal } from '@/components/pack-editor/PackClarifyModal';
 import { apiFetch, apiFetchSse } from '@/lib/api';
+import {
+  getLabPeerAgentsEnabled,
+  setLabPeerAgentsEnabled,
+} from '@/lib/lab-settings';
 import { useTheme } from '@/theme/ThemeProvider';
 import './settings.css';
 
@@ -47,7 +54,7 @@ const settingsDisplay = Literata({
   display: 'swap',
 });
 
-type Tab = 'appearance' | 'account' | 'packs' | 'editor' | 'traces';
+type Tab = 'appearance' | 'account' | 'packs' | 'editor' | 'traces' | 'lab';
 
 const SECTION_TO_TOC: Partial<Record<PackGenerateSectionKey, string>> = {
   chapters: 'pack-sec-chapters',
@@ -135,8 +142,19 @@ function SettingsInner({
   const [pendingAutoload, setPendingAutoload] = useState(false);
   const [traces, setTraces] = useState<AgentTraceRecord[]>([]);
   const [tracesBusy, setTracesBusy] = useState(false);
+  const [labPeerAgents, setLabPeerAgents] = useState(false);
+  const [labRiskAck, setLabRiskAck] = useState(false);
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const [headerExpandClick, setHeaderExpandClick] = useState(false);
+  const [clarifyOpen, setClarifyOpen] = useState(false);
+  const [clarifyBusy, setClarifyBusy] = useState(false);
+  const [clarifySession, setClarifySession] =
+    useState<PackClarifySession | null>(null);
+  const [clarifyError, setClarifyError] = useState<string | null>(null);
+  const [clarifyPendingAction, setClarifyPendingAction] = useState<
+    'save' | 'review' | null
+  >(null);
+  const [clarifySatisfied, setClarifySatisfied] = useState(false);
   /** 点击展开时的 scrollY；只有再往下滚超过阈值才收起，避免展开动画触发的 scroll 立刻清掉状态 */
   const headerPinYRef = useRef(0);
 
@@ -222,6 +240,11 @@ function SettingsInner({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    setLabPeerAgents(getLabPeerAgentsEnabled());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     const q = new URLSearchParams(window.location.search);
     const t = q.get('tab');
     if (
@@ -229,7 +252,8 @@ function SettingsInner({
       t === 'account' ||
       t === 'packs' ||
       t === 'editor' ||
-      t === 'traces'
+      t === 'traces' ||
+      t === 'lab'
     ) {
       setTab(t);
     }
@@ -273,6 +297,7 @@ function SettingsInner({
       ]);
       setPackDraft(res.pack);
       applyPackProfile(profile);
+      setClarifySatisfied(false);
       setMessage(`已加载 ${res.pack.version_dir}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载包失败');
@@ -287,35 +312,140 @@ function SettingsInner({
     void loadPackForEdit();
   }, [pendingAutoload, editWorldId, editVersionDir, loadPackForEdit]);
 
-  const savePackEdit = async () => {
-    if (!editWorldId || !editVersionDir || !packDraft) return;
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const pack: StoryPack = {
-        ...packDraft,
-        version_dir: editVersionDir,
-        header: {
-          ...packDraft.header,
-          world_id: editWorldId,
-        },
-      };
-      const res = await apiFetch<{
-        display_name: string;
-        pack: StoryPack;
-      }>(
-        `/packs/worlds/${encodeURIComponent(editWorldId)}/versions/${encodeURIComponent(editVersionDir)}`,
-        { token, method: 'PUT', body: { pack } },
-      );
-      setPackDraft(res.pack);
-      setMessage(`已保存：${res.pack.version_dir}`);
-      await refreshPacks();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败');
-    } finally {
-      setBusy(false);
+  const performSavePack = useCallback(
+    async (draft: StoryPack) => {
+      if (!editWorldId || !editVersionDir) return;
+      setBusy(true);
+      setError(null);
+      setMessage(null);
+      try {
+        const pack: StoryPack = {
+          ...draft,
+          version_dir: editVersionDir,
+          header: {
+            ...draft.header,
+            world_id: editWorldId,
+          },
+        };
+        const res = await apiFetch<{
+          display_name: string;
+          pack: StoryPack;
+        }>(
+          `/packs/worlds/${encodeURIComponent(editWorldId)}/versions/${encodeURIComponent(editVersionDir)}`,
+          { token, method: 'PUT', body: { pack } },
+        );
+        setPackDraft(res.pack);
+        setMessage(`已保存：${res.pack.version_dir}`);
+        await refreshPacks();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '保存失败');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [editWorldId, editVersionDir, token, refreshPacks],
+  );
+
+  const openClarify = useCallback(
+    async (pack: StoryPack, pending: 'save' | 'review') => {
+      setClarifyOpen(true);
+      setClarifyBusy(true);
+      setClarifyError(null);
+      setClarifySession(null);
+      setClarifyPendingAction(pending);
+      try {
+        const session = await apiFetch<PackClarifySession>(
+          '/packs/clarify/start',
+          {
+            token,
+            method: 'POST',
+            body: {
+              pack,
+              prompt: genPrompt.trim() || undefined,
+              outline: genOutline.trim() || undefined,
+            },
+          },
+        );
+        setClarifySession(session);
+      } catch (err) {
+        setClarifyError(
+          err instanceof Error ? err.message : '澄清问题生成失败',
+        );
+      } finally {
+        setClarifyBusy(false);
+      }
+    },
+    [token, genPrompt, genOutline],
+  );
+
+  const requestSavePack = async () => {
+    if (!packDraft) return;
+    if (clarifySatisfied) {
+      await performSavePack(packDraft);
+      return;
     }
+    await openClarify(packDraft, 'save');
+  };
+
+  const applyClarifyAnswers = async (
+    answers: PackClarifyAnswer[],
+    skipRemaining: boolean,
+  ) => {
+    if (!packDraft || !clarifySession) return;
+    setClarifyBusy(true);
+    setClarifyError(null);
+    try {
+      const res = await apiFetch<{
+        pack: StoryPack;
+        patch_notes: string[];
+        applied?: boolean;
+        applied_summary?: string;
+      }>('/packs/clarify/apply', {
+        token,
+        method: 'POST',
+        body: {
+          pack: packDraft,
+          questions: clarifySession.questions,
+          answers,
+          skip_remaining: skipRemaining,
+        },
+      });
+      const parsed = storyPackSchema.safeParse(res.pack);
+      if (!parsed.success) {
+        throw new Error('澄清写回后 Pack 校验失败');
+      }
+      setPackDraft(parsed.data);
+      setClarifySatisfied(true);
+      setClarifyOpen(false);
+
+      const summary =
+        res.applied_summary ??
+        (res.patch_notes.length > 0
+          ? `已写入草稿 ${res.patch_notes.length} 处`
+          : '没有写入改动');
+      pushGenToast({
+        kind: 'ok',
+        title:
+          res.patch_notes.length > 0
+            ? '澄清已写入草稿'
+            : '澄清未改动草稿',
+        detail: summary,
+      });
+      setMessage(summary);
+
+      if (clarifyPendingAction === 'save') {
+        await performSavePack(parsed.data);
+      }
+      setClarifyPendingAction(null);
+    } catch (err) {
+      setClarifyError(err instanceof Error ? err.message : '澄清应用失败');
+    } finally {
+      setClarifyBusy(false);
+    }
+  };
+
+  const savePackEdit = async () => {
+    await requestSavePack();
   };
 
   const pushGenToast = useCallback((toast: Omit<GenToast, 'id'>) => {
@@ -471,7 +601,10 @@ function SettingsInner({
           if (ev.type === 'done') {
             finished = true;
             const parsed = storyPackSchema.safeParse(ev.pack);
-            if (parsed.success) setPackDraft(parsed.data);
+            if (parsed.success) {
+              setPackDraft(parsed.data);
+              setClarifySatisfied(false);
+            }
             if (ev.profileFields) setProfileFields(ev.profileFields);
             setGenActiveSection(null);
             if (ev.failedSections?.length) {
@@ -503,6 +636,9 @@ function SettingsInner({
                 title: '生成全部完成',
                 detail: summary,
               });
+              if (parsed.success) {
+                void openClarify(parsed.data, 'review');
+              }
             }
           }
         },
@@ -741,6 +877,7 @@ function SettingsInner({
       { id: 'editor', label: '编辑 Pack' },
       { id: 'traces', label: 'Agent Trace' },
     ],
+    [{ id: 'lab', label: '实验室' }],
   ];
 
   const panelStyle: CSSProperties = {
@@ -1741,11 +1878,38 @@ function SettingsInner({
                       {t.director.reason
                         ? ` · ${t.director.reason}`
                         : ''}
+                      {t.director.available_events &&
+                      t.director.available_events.length > 0
+                        ? ` · events [${t.director.available_events.join(', ')}]`
+                        : ''}
                       {' · '}
                       fallback=
                       {t.director.fallback === false
                         ? 'false'
                         : String(t.director.fallback)}
+                    </p>
+                  )}
+                  {t.whisper_source && (
+                    <p className="settings-trace__tech">
+                      whisper: {t.whisper_source}
+                    </p>
+                  )}
+                  {t.safety && (
+                    <p
+                      className="settings-trace__tech"
+                      style={
+                        t.safety.ok
+                          ? undefined
+                          : { color: 'var(--ui-danger, #dc2626)' }
+                      }
+                    >
+                      safety:{' '}
+                      {t.safety.ok
+                        ? 'ok'
+                        : `block${t.safety.rewritten ? '+rewrite' : ''}`}
+                      {t.safety.reasons.length > 0
+                        ? ` [${t.safety.reasons.map((r) => r.code).join(', ')}]`
+                        : ''}
                     </p>
                   )}
                   <p className="mt-2" style={{ color: 'var(--ui-fg-muted)' }}>
@@ -1787,13 +1951,38 @@ function SettingsInner({
                           .join(' | ')}
                   </p>
                   <p className="settings-trace__tech">
-                    rag:{' '}
+                    rag
+                    {t.rag_path ? ` [${t.rag_path}` : ''}
+                    {t.rag_embed_backend
+                      ? `/${t.rag_embed_backend}`
+                      : t.rag_path
+                        ? ''
+                        : ''}
+                    {t.rag_path ? ']' : ''}
+                    {t.rag_error ? ` !${t.rag_error}` : ''}
+                    :{' '}
                     {t.rag_hits.length === 0
                       ? '（无）'
                       : t.rag_hits
-                          .map((h) => `${h.memory_id}(${h.score.toFixed(2)})`)
+                          .map(
+                            (h) =>
+                              `${h.memory_id}(${h.score.toFixed(2)}${h.source ? `/${h.source}` : ''})`,
+                          )
                           .join(', ')}
                   </p>
+                  {t.working_memory_lines &&
+                    t.working_memory_lines.length > 0 && (
+                      <p className="settings-trace__tech">
+                        scene:{' '}
+                        {t.working_memory_lines
+                          .map((line) =>
+                            line.length > 48
+                              ? `${line.slice(0, 48)}…`
+                              : line,
+                          )
+                          .join(' | ')}
+                      </p>
+                    )}
                   {t.exchange && (
                     <p className="settings-trace__tech">
                       exchange [{t.exchange.event_id}]:{' '}
@@ -1804,6 +1993,120 @@ function SettingsInner({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {tab === 'lab' && (
+            <div className="space-y-4">
+              <div className="settings-panel" style={panelStyle}>
+                <h2 className="settings-panel__title">实验室</h2>
+                <p className="settings-panel__lead">
+                  实验性能力默认关闭，不进入主演示路径。开启仅写入本机浏览器；
+                  <strong>当前尚未接入游戏运行时</strong>
+                  （开关先落地 UI，后续再接平级 Agent 调度）。
+                </p>
+              </div>
+
+              <div className="settings-panel" style={panelStyle}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-medium">平级多 Agent</h3>
+                    <p
+                      className="mt-1 text-sm"
+                      style={{ color: 'var(--ui-fg-muted)' }}
+                    >
+                      关闭导演统筹，由多名 NPC 在限额内更自主地互聊（对照实验）。
+
+                    </p>
+                  </div>
+                  <span
+                    className="rounded-md border px-2 py-1 text-xs"
+                    style={{
+                      borderColor: 'var(--ui-border)',
+                      color: labPeerAgents
+                        ? 'var(--ui-danger, #dc2626)'
+                        : 'var(--ui-fg-muted)',
+                    }}
+                  >
+                    {labPeerAgents ? '已开启（实验）' : '已关闭（默认）'}
+                  </span>
+                </div>
+
+                <div
+                  className="mt-4 rounded-lg border p-3 text-sm"
+                  style={{
+                    borderColor: 'color-mix(in srgb, var(--ui-danger, #dc2626) 35%, var(--ui-border))',
+                    background:
+                      'color-mix(in srgb, var(--ui-danger, #dc2626) 8%, transparent)',
+                  }}
+                >
+                  <p className="font-medium" style={{ color: 'var(--ui-danger, #dc2626)' }}>
+                    开启前请确认风险
+                  </p>
+                  <ul
+                    className="mt-2 list-disc space-y-1 pl-5"
+                    style={{ color: 'var(--ui-fg)' }}
+                  >
+                    <li>对话更不可控，易偏题 / 剧透 / 互相抢话</li>
+                    <li>Token 与耗时更高；仍禁止改写章节（接运行时后生效）</li>
+                    <li>本开关目前只存本机，刷新页面保留，清站点数据会丢失</li>
+                  </ul>
+                </div>
+
+                {!labPeerAgents ? (
+                  <div className="mt-4 space-y-3">
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={labRiskAck}
+                        onChange={(e) => setLabRiskAck(e.target.checked)}
+                      />
+                      <span>我已阅读上述风险，仍要开启实验室平级多 Agent。</span>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!labRiskAck}
+                      className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-40"
+                      style={{
+                        borderColor: 'var(--ui-danger, #dc2626)',
+                        color: 'var(--ui-danger, #dc2626)',
+                      }}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            '确认开启「平级多 Agent」实验室开关？\n主路径仍建议保持导演制；此开关暂不改变游玩逻辑。',
+                          )
+                        ) {
+                          return;
+                        }
+                        setLabPeerAgentsEnabled(true);
+                        setLabPeerAgents(true);
+                        setLabRiskAck(false);
+                        setMessage('实验室：平级多 Agent 已开启（仅本机标记）');
+                      }}
+                    >
+                      开启实验开关
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      className="rounded-lg border px-3 py-1.5 text-sm"
+                      style={{ borderColor: 'var(--ui-border)' }}
+                      onClick={() => {
+                        setLabPeerAgentsEnabled(false);
+                        setLabPeerAgents(false);
+                        setLabRiskAck(false);
+                        setMessage('实验室：平级多 Agent 已关闭，回到默认导演制标记');
+                      }}
+                    >
+                      关闭并回到默认
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           </section>
@@ -1847,6 +2150,50 @@ function SettingsInner({
             ))}
           </div>
         )}
+
+        <PackClarifyModal
+          open={clarifyOpen}
+          busy={clarifyBusy || busy}
+          session={clarifySession}
+          error={clarifyError}
+          onClose={() => {
+            if (clarifyBusy) return;
+            setClarifyOpen(false);
+            setClarifyPendingAction(null);
+          }}
+          onForceSave={() => {
+            if (!packDraft) return;
+            setClarifySatisfied(true);
+            setClarifyOpen(false);
+            const pending = clarifyPendingAction;
+            setClarifyPendingAction(null);
+            if (pending === 'save') {
+              void performSavePack(packDraft);
+            } else {
+              setMessage('已不接受澄清建议，可直接保存到磁盘。');
+            }
+          }}
+          onSubmit={(answers) => {
+            void applyClarifyAnswers(answers, true);
+          }}
+          onPolish={async (opts) => {
+            try {
+              const res = await apiFetch<{
+                polished_text: string;
+              }>('/packs/clarify/polish', {
+                token,
+                method: 'POST',
+                body: opts,
+              });
+              return res.polished_text;
+            } catch (err) {
+              setClarifyError(
+                err instanceof Error ? err.message : '润色失败',
+              );
+              return null;
+            }
+          }}
+        />
       </div>
     </main>
   );

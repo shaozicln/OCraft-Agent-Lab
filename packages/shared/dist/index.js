@@ -26,3 +26,4 @@ __exportStar(require("./tools.schema"), exports);
 __exportStar(require("./llm.schema"), exports);
 __exportStar(require("./mock-reply"), exports);
 __exportStar(require("./agent-trace.schema"), exports);
+__exportStar(require("./pack-clarify.schema"), exports);

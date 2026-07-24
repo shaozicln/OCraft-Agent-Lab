@@ -20,7 +20,13 @@
     "pack:seed": "ts-node -r tsconfig-paths/register scripts/seed-pack.ts",
     "pack:save": "ts-node -r tsconfig-paths/register scripts/save-pack.ts",
     "pack:eval": "ts-node -r tsconfig-paths/register scripts/eval-pack.ts",
-    "pack:eval:all": "ts-node -r tsconfig-paths/register scripts/eval-pack.ts -- --all"
+    "pack:eval:all": "ts-node -r tsconfig-paths/register scripts/eval-pack.ts -- --all",
+    "tools:eval": "ts-node -r tsconfig-paths/register scripts/eval-strong-tools.ts",
+    "director:eval": "ts-node -r tsconfig-paths/register scripts/eval-director-hint.ts",
+    "rag:eval": "ts-node -r tsconfig-paths/register scripts/eval-rag.ts",
+    "multiagent:eval": "ts-node -r tsconfig-paths/register scripts/eval-multiagent.ts",
+    "clarify:eval": "ts-node -r tsconfig-paths/register scripts/eval-clarify.ts",
+    "safety:eval": "ts-node -r tsconfig-paths/register scripts/eval-safety.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -4,7 +4,6 @@ import {
   isNpcPresent,
   type LlmMessage,
   type PackNpc,
-  type SceneUtterance,
 } from '@ocraft/shared';
 import { LlmService } from './llm.service';
 import { PackService } from '../story/pack.service';
@@ -15,8 +14,12 @@ import type {
   DirectorDecision,
   DirectorInput,
 } from './director.types';
+import {
+  PUBLIC_SCENE_LINE_LIMIT,
+  formatSceneUtteranceLines,
+} from './scene-working-memory';
+import { listAvailableExchangeEventIds } from './npc-exchange';
 
-const RECENT_LINE_LIMIT = 5;
 const BLURB_MAX_LEN = 40;
 const REASON_MAX_LEN = 60;
 
@@ -87,10 +90,16 @@ export class DirectorService {
     const chapterLabel =
       chapterMeta?.hud_label || chapterMeta?.display_name || chapterId;
     const flagNames = Object.keys(this.worldProgress.getFlags(playerId));
-    const recentLines = this.formatRecentLines(
+    await this.conversationService.ensureSceneLogReady(playerId);
+    const recentLines = formatSceneUtteranceLines(
       this.conversationService
         .getPublicSceneLog(playerId)
-        .slice(-RECENT_LINE_LIMIT),
+        .slice(-PUBLIC_SCENE_LINE_LIMIT),
+    );
+    const availableEvents = listAvailableExchangeEventIds(
+      chapterId,
+      this.worldProgress.getFlags(playerId),
+      pack.triggers,
     );
 
     return {
@@ -102,6 +111,7 @@ export class DirectorService {
       chapterLabel,
       flagNames,
       recentLines,
+      availableEvents,
     };
   }
 
@@ -117,14 +127,19 @@ export class DirectorService {
       input.flagNames.length > 0
         ? input.flagNames.join(', ')
         : '（无）';
+    const eventsBlock =
+      input.availableEvents.length > 0
+        ? input.availableEvents.join(', ')
+        : '（无）';
 
     return [
       {
         role: 'system',
         content: [
           '你是场景调度导演，不是编剧。',
-          '职责：根据场上 cast 与近期对白，决定焦点 NPC 回完玩家后是否开放「其他 NPC 接话/互聊」路径。',
-          '你只能输出 JSON，不能改章节、不能发明 Pack 未定义的事件。',
+          '职责：根据场上 cast、近期对白与可尝试戏码 id，决定焦点 NPC 回完玩家后是否开放「其他 NPC 接话/互聊」路径。',
+          '你只能输出 JSON，不能改章节、不能发明 Pack 未列出的事件。',
+          '【可尝试戏码】仅给 id 作参考：有戏码时可倾向 reply_then_exchange；无戏码时不必为互聊硬开。真正是否触发由 Pack 判定，你勿编台词或触发条件。',
           'mode 仅两档：reply_player（专注一对一）| reply_then_exchange（允许尝试群戏）。',
           'speakers 必须是 cast 中的 npc_id；reply_player 时建议 [focus]。',
           '输出格式：{"mode":"...","speakers":["..."],"reason":"..."}',
@@ -135,6 +150,7 @@ export class DirectorService {
         content: [
           `【当前章节】${input.chapterLabel}（${input.chapterId}）`,
           `【已置 flag 名】${flagBlock}`,
+          `【可尝试戏码 id】${eventsBlock}`,
           `【焦点 NPC】${input.chatNpcId}`,
           `【玩家本句】${input.playerMessage}`,
           `【上场 cast】\n${castBlock || '（空）'}`,
@@ -223,7 +239,7 @@ export class DirectorService {
 
   async decide(input: DirectorInput): Promise<DirectorDecision> {
     if (this.llmService.isMockMode()) {
-      return this.mockDecide(input);
+      return this.withAvailableEvents(this.mockDecide(input), input);
     }
 
     try {
@@ -239,15 +255,19 @@ export class DirectorService {
         input.cast,
         input.chatNpcId,
       );
+      const out = this.withAvailableEvents(decision, input);
       this.logger.log(
-        `director decide player=${input.playerId} mode=${decision.mode} fallback=${String(decision.fallback)} speakers=[${decision.speakers.join(',')}]`,
+        `director decide player=${input.playerId} mode=${out.mode} fallback=${String(out.fallback)} speakers=[${out.speakers.join(',')}] events=[${input.availableEvents.join(',')}]`,
       );
-      return decision;
+      return out;
     } catch (err) {
       this.logger.warn(
         `director llm_error player=${input.playerId}: ${err instanceof Error ? err.message : err}`,
       );
-      return this.fallbackDecision('llm_error', input.cast, input.chatNpcId);
+      return this.withAvailableEvents(
+        this.fallbackDecision('llm_error', input.cast, input.chatNpcId),
+        input,
+      );
     }
   }
 
@@ -257,6 +277,7 @@ export class DirectorService {
       speakers: [chatNpcId],
       reason: '悄悄话，跳过导演',
       fallback: 'skipped_whisper',
+      available_events: [],
     };
   }
 
@@ -267,6 +288,15 @@ export class DirectorService {
         mode: 'reply_player',
         speakers: [input.chatNpcId],
         reason: 'MOCK：仅一人在场',
+        fallback: false,
+      };
+    }
+
+    if (input.availableEvents.length > 0) {
+      return {
+        mode: 'reply_then_exchange',
+        speakers: castIds,
+        reason: 'MOCK：有可尝试戏码',
         fallback: false,
       };
     }
@@ -294,6 +324,16 @@ export class DirectorService {
     };
   }
 
+  private withAvailableEvents(
+    decision: DirectorDecision,
+    input: DirectorInput,
+  ): DirectorDecision {
+    return {
+      ...decision,
+      available_events: [...input.availableEvents],
+    };
+  }
+
   private fallbackDecision(
     fallback: Exclude<DirectorDecision['fallback'], false>,
     cast: CastMember[],
@@ -318,17 +358,4 @@ export class DirectorService {
     return `${firstLine.slice(0, BLURB_MAX_LEN - 1)}…`;
   }
 
-  private formatRecentLines(utterances: SceneUtterance[]): string[] {
-    return utterances.map((u) => {
-      if (u.kind === 'player_to_npc') return `玩家：${u.text}`;
-      if (u.kind === 'npc_to_player') {
-        return `${u.speaker_name}：${u.text}`;
-      }
-      if (u.kind === 'npc_to_npc') {
-        const target = u.addressee_name ?? '?';
-        return `${u.speaker_name}→${target}：${u.text}`;
-      }
-      return `${u.speaker_name}：${u.text}`;
-    });
-  }
 }

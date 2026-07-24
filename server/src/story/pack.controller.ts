@@ -25,12 +25,14 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { PackService } from './pack.service';
 import { PackGenerateService } from './pack-generate.service';
+import { PackClarifyService } from './pack-clarify.service';
 
 @Controller('packs')
 export class PackController {
   constructor(
     private readonly packService: PackService,
     private readonly packGenerateService: PackGenerateService,
+    private readonly packClarifyService: PackClarifyService,
     private readonly authService: AuthService,
   ) {}
 
@@ -243,6 +245,33 @@ export class PackController {
       });
     }
     res.end();
+  }
+
+  @Post('clarify/start')
+  async clarifyStart(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    this.requirePlayerId(authorization);
+    return this.packClarifyService.start(body);
+  }
+
+  @Post('clarify/apply')
+  async clarifyApply(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    this.requirePlayerId(authorization);
+    return this.packClarifyService.apply(body);
+  }
+
+  @Post('clarify/polish')
+  async clarifyPolish(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    this.requirePlayerId(authorization);
+    return this.packClarifyService.polish(body);
   }
 
   @Get('selection')

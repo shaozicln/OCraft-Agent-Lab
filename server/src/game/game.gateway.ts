@@ -27,9 +27,16 @@ import { AgentHarnessService } from '../agent/agent-harness.service';
 import { NpcExchangeService } from '../agent/npc-exchange.service';
 import { NpcAsideService } from '../agent/npc-aside.service';
 import { DirectorService } from '../agent/director.service';
+import { detectWhisperIntent } from '../agent/whisper-detect';
+import {
+  pickSafetyFallback,
+  scanNpcReplySafety,
+} from '../agent/reply-safety';
+import { AgentTraceService } from '../agent/agent-trace.service';
 import { PackService } from '../story/pack.service';
 import { ConversationService } from './conversation.service';
 import { NpcService } from '../npc/npc.service';
+import { WorldProgressService } from '../story/world-progress.service';
 
 interface AuthedSocket extends Socket {
   data: {
@@ -56,6 +63,8 @@ export class GameGateway implements OnGatewayConnection {
     private readonly conversationService: ConversationService,
     private readonly npcService: NpcService,
     private readonly packService: PackService,
+    private readonly worldProgress: WorldProgressService,
+    private readonly agentTrace: AgentTraceService,
   ) {}
 
   handleConnection(client: AuthedSocket) {
@@ -195,12 +204,19 @@ export class GameGateway implements OnGatewayConnection {
 
     const playerId = this.requirePlayerId(client);
     const { npcId, message, nearbyNpcIds, whisper } = parsed.data;
-    const isWhisper = whisper === true;
+    const clientWhisper = whisper === true;
+    const autoWhisper = !clientWhisper && detectWhisperIntent(message);
+    const isWhisper = clientWhisper || autoWhisper;
+    const whisperSource = clientWhisper
+      ? 'client'
+      : autoWhisper
+        ? 'auto'
+        : undefined;
 
     return this.packService.runWithPlayerAsync(playerId, async () => {
       await this.conversationService.ensureSession(playerId, npcId);
       this.logger.log(
-        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
+        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper}${whisperSource ? `(${whisperSource})` : ''} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
       );
 
       try {
@@ -224,6 +240,7 @@ export class GameGateway implements OnGatewayConnection {
 
         const result = await this.agentHarness.run(playerId, npcId, message, {
           director: directorDecision,
+          whisperSource,
         });
 
         let fullReply = '';
@@ -234,6 +251,35 @@ export class GameGateway implements OnGatewayConnection {
           }
         }
         client.emit('npc_stream', { npcId, chunk: '', done: true });
+
+        // F：主回复厚扫描；不过则替换落档文案并通知客户端 replace
+        const chapterState = this.worldProgress.getChapter(playerId);
+        const safety = scanNpcReplySafety(fullReply, {
+          pack: this.packService.getPack(),
+          chapterState,
+          npcId,
+        });
+        let safetyRewritten = false;
+        if (!safety.ok) {
+          const safeText = pickSafetyFallback();
+          this.logger.warn(
+            `safety rewrite player=${playerId} npc=${npcId} reasons=${safety.reasons.map((r) => r.code).join(',')}`,
+          );
+          fullReply = safeText;
+          safetyRewritten = true;
+          client.emit('npc_stream', {
+            npcId,
+            chunk: safeText,
+            replace: true,
+          });
+          client.emit('npc_stream', { npcId, chunk: '', done: true });
+        }
+        this.agentTrace.appendSafety(playerId, npcId, {
+          ok: safety.ok,
+          rewritten: safetyRewritten,
+          reasons: safety.reasons,
+          traceId: result.traceId,
+        });
 
         await this.agentHarness.recordAssistantReply(
           playerId,
@@ -289,6 +335,10 @@ export class GameGateway implements OnGatewayConnection {
               nearbyNpcIds: nearbyNpcIds ?? [],
               playerMessage: message,
               assistantReply: fullReply,
+              preferredSpeakerIds:
+                directorDecision.mode === 'reply_then_exchange'
+                  ? directorDecision.speakers
+                  : undefined,
             });
             if (aside) {
               await this.conversationService.appendAsideToSceneLog(

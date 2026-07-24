@@ -10,3 +10,4 @@ export * from './tools.schema';
 export * from './llm.schema';
 export * from './mock-reply';
 export * from './agent-trace.schema';
+export * from './pack-clarify.schema';

@@ -1,7 +1,7 @@
 import type OpenAI from 'openai';
 import type { StoryPack } from '@ocraft/shared';
 
-/** OpenAI 兼容的受控工具定义（好感 / 疲惫） */
+/** OpenAI 兼容的受控工具定义：软数值 + 强只读指令 */
 export function buildNpcToolDefinitions(
   pack: StoryPack,
 ): OpenAI.Chat.ChatCompletionTool[] {
@@ -55,6 +55,52 @@ export function buildNpcToolDefinitions(
             },
           },
           required: ['delta'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'query_runtime',
+        description: [
+          '【强指令·只读】查询当前章节、好感、疲惫、状态与已置故事旗标摘要。',
+          '在需要核对数值/进度、或玩家追问「你现在累不累/好感怎样」时调用。',
+          '不能改章节、不能发明事件；闲聊不必调用。',
+        ].join(''),
+        parameters: {
+          type: 'object',
+          properties: {
+            reason: {
+              type: 'string',
+              description: '为何查询（短）',
+            },
+          },
+          required: [],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'request_hint',
+        description: [
+          '【强指令·只读】获取一条受当前章节约束的扮演提示（不含未解锁章剧透）。',
+          '仅当推进卡住、需要把握分寸时调用；不要用来改数值或升章。',
+          '可选 topic 收窄主题。',
+        ].join(''),
+        parameters: {
+          type: 'object',
+          properties: {
+            topic: {
+              type: 'string',
+              description: '可选：提示主题关键词',
+            },
+            reason: {
+              type: 'string',
+              description: '为何需要提示',
+            },
+          },
+          required: [],
         },
       },
     },

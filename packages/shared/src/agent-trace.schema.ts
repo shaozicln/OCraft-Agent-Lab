@@ -4,7 +4,12 @@ import { toolCallResultSchema } from './ws.schema';
 export const agentTraceRagHitSchema = z.object({
   memory_id: z.string(),
   score: z.number(),
+  /** Mem-V：命中来自向量或关键词回退 */
+  source: z.enum(['vector', 'keyword']).optional(),
 });
+
+export const agentTraceRagPathSchema = z.enum(['vector', 'keyword_fallback']);
+export type AgentTraceRagPath = z.infer<typeof agentTraceRagPathSchema>;
 
 export const agentTraceTransitionSchema = z.object({
   chapter_before: z.string(),
@@ -52,6 +57,8 @@ export const agentTraceDirectorSchema = z.object({
   speakers: z.array(z.string()).optional(),
   reason: z.string().optional(),
   fallback: directorFallbackSchema,
+  /** MA-H：导演 prompt 可见的戏码 id（无触发/台词） */
+  available_events: z.array(z.string()).optional(),
 });
 export type AgentTraceDirector = z.infer<typeof agentTraceDirectorSchema>;
 
@@ -70,6 +77,12 @@ export const agentTraceRecordSchema = z.object({
   tools: z.array(toolCallResultSchema),
   transition: agentTraceTransitionSchema,
   rag_hits: z.array(agentTraceRagHitSchema),
+  /** Mem-V：本轮检索路径 */
+  rag_path: agentTraceRagPathSchema.optional(),
+  rag_embed_backend: z.enum(['api', 'local']).optional(),
+  rag_error: z.string().optional(),
+  /** Mem-W：本轮注入的公开场近期句（不含悄悄话） */
+  working_memory_lines: z.array(z.string()).optional(),
   animation: z.string().optional(),
   /** NPC 回复后置 flag（异步补记） */
   reply_flags_set: z
@@ -95,6 +108,23 @@ export const agentTraceRecordSchema = z.object({
     .optional(),
   /** 导演调度决策（焦点回复前的 mode / speakers） */
   director: agentTraceDirectorSchema.optional(),
+  /** MA-W：悄悄话来源（按钮 / 措辞自动） */
+  whisper_source: z.enum(['client', 'auto']).optional(),
+  /** F：主回复安全扫描 */
+  safety: z
+    .object({
+      ok: z.boolean(),
+      rewritten: z.boolean().optional(),
+      reasons: z
+        .array(
+          z.object({
+            code: z.string(),
+            detail: z.string(),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
 });
 
 export type AgentTraceRecord = z.infer<typeof agentTraceRecordSchema>;

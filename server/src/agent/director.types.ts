@@ -20,6 +20,8 @@ export interface DirectorInput {
   chapterLabel: string;
   flagNames: string[];
   recentLines: string[];
+  /** MA-H：当前可尝试的 exchange 戏码 id（无触发细节） */
+  availableEvents: string[];
 }
 
 export interface DirectorDecision {
@@ -27,4 +29,6 @@ export interface DirectorDecision {
   speakers: string[];
   reason: string;
   fallback: DirectorFallback;
+  /** 回显本轮 hint（非 LLM 输出） */
+  available_events?: string[];
 }

@@ -92,13 +92,22 @@ export function useGameSocket(
       setNpcStates((prev) => ({ ...prev, [data.npcId]: data }));
     });
 
-    socket.on('npc_stream', (data: { npcId: string; chunk: string; done?: boolean }) => {
+    socket.on('npc_stream', (data: {
+      npcId: string;
+      chunk: string;
+      done?: boolean;
+      replace?: boolean;
+    }) => {
       if (data.npcId !== activeNpcIdRef.current) return;
       if (data.done) {
         setIsStreaming(false);
         return;
       }
       setIsStreaming(true);
+      if (data.replace) {
+        setStreamText(data.chunk);
+        return;
+      }
       setStreamText((prev) => prev + data.chunk);
     });
 

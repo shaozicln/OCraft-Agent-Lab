@@ -23,6 +23,12 @@ import {
 } from './chapter-transition';
 import { buildNpcToolDefinitions } from './npc-tool-defs';
 import type { DirectorDecision } from './director.types';
+import {
+  isAllowedNpcTool,
+  rejectUnknownTool,
+  tryExecuteStrongTool,
+} from './npc-strong-tools';
+import { buildPublicSceneWorkingMemoryBlock } from './scene-working-memory';
 
 export interface AgentRunResult {
   toolCalls: ToolCallResult[];
@@ -50,7 +56,10 @@ export class AgentHarnessService {
     playerId: string,
     npcId: string,
     playerMessage: string,
-    opts?: { director?: DirectorDecision },
+    opts?: {
+      director?: DirectorDecision;
+      whisperSource?: 'client' | 'auto';
+    },
   ): Promise<AgentRunResult> {
     const pack = this.packService.getPack();
     const toolCalls: ToolCallResult[] = [];
@@ -60,12 +69,19 @@ export class AgentHarnessService {
 
     const preState = this.npcService.getRuntimeState(playerId, npcId);
     const storyFlagsBefore = this.worldProgress.getFlags(playerId);
-    const ragHits = this.ragService.retrieve(
+    const ragResult = await this.ragService.retrieve(
       npcId,
       playerMessage,
       chapterState,
     );
+    const ragHits = ragResult.hits;
     const memoryContext = this.ragService.formatMemoriesForPrompt(ragHits);
+
+    await this.conversationService.ensureSceneLogReady(playerId);
+    const { lines: workingMemoryLines, block: workingMemoryBlock } =
+      buildPublicSceneWorkingMemoryBlock(
+        this.conversationService.getPublicSceneLog(playerId),
+      );
 
     const systemPrompt = this.npcService.buildSystemPrompt(npcId, {
       chapterState,
@@ -75,11 +91,13 @@ export class AgentHarnessService {
       storyFlags: storyFlagsBefore,
     });
     const toolPolicy = [
-      '【工具】你可以通过 function calling 调用 updateFatigue / updateAffinity 改变数值。',
-      '不要在回复正文里伪造工具 JSON；需要改数值时请发起 tool call。',
-      '无关闲聊可不调用工具。',
+      '【工具分层】',
+      '软数值：updateFatigue / updateAffinity（仅关系/精力确有变化时）。',
+      '强指令（只读）：query_runtime（查章/好感/疲惫/flags）；request_hint（本章扮演提示，勿剧透）。',
+      '不要在回复正文里伪造工具 JSON；需要时请发起 tool call。',
+      '禁止用工具改章节或发明事件；无关闲聊可不调用。',
     ].join('');
-    const systemContent = `${systemPrompt}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}\n\n${toolPolicy}`;
+    const systemContent = `${systemPrompt}\n\n${workingMemoryBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}\n\n${toolPolicy}`;
 
     const dialogMessages = this.conversationService.buildDialogMessages(
       playerId,
@@ -151,7 +169,7 @@ export class AgentHarnessService {
       toolCalls.length > 0
         ? `\n\n【本轮已执行工具】\n${toolCalls.map((t) => `- ${t.tool}: ${t.observation}`).join('\n')}`
         : '';
-    const replySystem = `${systemAfter}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}${toolObs}\n\n请用角色口吻直接回复玩家，不要再输出工具调用。\n禁止自称 AI/助手/语言模型；不要总结剧情或宣布升章。`;
+    const replySystem = `${systemAfter}\n\n${workingMemoryBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}${toolObs}\n\n请用角色口吻直接回复玩家，不要再输出工具调用。\n禁止自称 AI/助手/语言模型；不要总结剧情或宣布升章。`;
 
     const replyMessages = this.conversationService.buildDialogMessages(
       playerId,
@@ -204,7 +222,12 @@ export class AgentHarnessService {
       rag_hits: ragHits.map((h) => ({
         memory_id: h.memory.id,
         score: h.score,
+        source: h.source,
       })),
+      rag_path: ragResult.path,
+      rag_embed_backend: ragResult.embed_backend,
+      rag_error: ragResult.error,
+      working_memory_lines: workingMemoryLines,
       animation,
       ...(opts?.director
         ? {
@@ -213,13 +236,17 @@ export class AgentHarnessService {
               speakers: opts.director.speakers,
               reason: opts.director.reason,
               fallback: opts.director.fallback,
+              available_events: opts.director.available_events,
             },
           }
+        : {}),
+      ...(opts?.whisperSource
+        ? { whisper_source: opts.whisperSource }
         : {}),
     });
 
     this.logger.log(
-      `Agent run player=${playerId} npc=${npcId} pack=${pack.header.world_id}/${pack.version_dir} chapter=${chapterState} flags=${Object.keys(storyFlags).join(',') || '-'} ragHits=${ragHits.length} tools=${toolCalls.map((t) => t.tool).join(',') || '-'} mock=${this.llmService.isMockMode()} trace=${traceId}`,
+      `Agent run player=${playerId} npc=${npcId} pack=${pack.header.world_id}/${pack.version_dir} chapter=${chapterState} flags=${Object.keys(storyFlags).join(',') || '-'} sceneCtx=${workingMemoryLines.length} rag=${ragResult.path}/${ragResult.embed_backend ?? '-'} hits=${ragHits.length} tools=${toolCalls.map((t) => t.tool).join(',') || '-'} mock=${this.llmService.isMockMode()} trace=${traceId}`,
     );
 
     return { toolCalls, finalState, animation, stream, traceId };
@@ -394,7 +421,26 @@ export class AgentHarnessService {
       throw new Error('参数不是合法 JSON');
     }
 
+    if (!isAllowedNpcTool(name)) {
+      toolCalls.push(rejectUnknownTool(name, parsed));
+      return;
+    }
+
+    const pack = this.packService.getPack();
+    const chapterState = this.worldProgress.getChapter(playerId);
+    const flags = this.worldProgress.getFlags(playerId);
     let state = this.npcService.getRuntimeState(playerId, npcId);
+
+    const strong = tryExecuteStrongTool(name, parsed, {
+      pack,
+      chapterState,
+      flags,
+      runtime: state,
+    });
+    if (strong) {
+      toolCalls.push(strong);
+      return;
+    }
 
     if (name === 'updateFatigue') {
       const args = updateFatigueSchema.parse(parsed);
@@ -422,7 +468,7 @@ export class AgentHarnessService {
       return;
     }
 
-    throw new Error(`未知或不允许的工具: ${name}`);
+    toolCalls.push(rejectUnknownTool(name, parsed));
   }
 
   private resolveAnimation(

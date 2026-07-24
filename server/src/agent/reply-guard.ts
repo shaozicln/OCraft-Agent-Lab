@@ -11,8 +11,10 @@ const LECTURE =
   /^(首先|其次|总之|综上所述|需要注意的是|从剧情角度|按照设定|根据人设)|（旁白）|【旁白】|玩家你应该|沈檐你作为玩家/;
 
 /** 未解锁前不宜主动点破的元叙事（互聊场景更严） */
-const META_SPOIL =
+export const META_SPOIL_SOURCE =
   /世界是假的|这是模拟|存档点|读档|改结局|元宇宙|我是NPC|你是玩家/;
+
+const META_SPOIL = META_SPOIL_SOURCE;
 
 export function looksLikeAiSlop(text: string): boolean {
   const t = text.trim();

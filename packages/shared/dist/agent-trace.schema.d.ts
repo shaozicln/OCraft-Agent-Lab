@@ -2,7 +2,16 @@ import { z } from 'zod';
 export declare const agentTraceRagHitSchema: z.ZodObject<{
     memory_id: z.ZodString;
     score: z.ZodNumber;
+    source: z.ZodOptional<z.ZodEnum<{
+        vector: "vector";
+        keyword: "keyword";
+    }>>;
 }, z.core.$strip>;
+export declare const agentTraceRagPathSchema: z.ZodEnum<{
+    vector: "vector";
+    keyword_fallback: "keyword_fallback";
+}>;
+export type AgentTraceRagPath = z.infer<typeof agentTraceRagPathSchema>;
 export declare const agentTraceTransitionSchema: z.ZodObject<{
     chapter_before: z.ZodString;
     chapter_after: z.ZodString;
@@ -50,6 +59,7 @@ export declare const agentTraceDirectorSchema: z.ZodObject<{
         llm_error: "llm_error";
         skipped_whisper: "skipped_whisper";
     }>]>;
+    available_events: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 export type AgentTraceDirector = z.infer<typeof agentTraceDirectorSchema>;
 /** 单轮 Agent 决策 Trace（可回放） */
@@ -89,7 +99,21 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
     rag_hits: z.ZodArray<z.ZodObject<{
         memory_id: z.ZodString;
         score: z.ZodNumber;
+        source: z.ZodOptional<z.ZodEnum<{
+            vector: "vector";
+            keyword: "keyword";
+        }>>;
     }, z.core.$strip>>;
+    rag_path: z.ZodOptional<z.ZodEnum<{
+        vector: "vector";
+        keyword_fallback: "keyword_fallback";
+    }>>;
+    rag_embed_backend: z.ZodOptional<z.ZodEnum<{
+        api: "api";
+        local: "local";
+    }>>;
+    rag_error: z.ZodOptional<z.ZodString>;
+    working_memory_lines: z.ZodOptional<z.ZodArray<z.ZodString>>;
     animation: z.ZodOptional<z.ZodString>;
     reply_flags_set: z.ZodOptional<z.ZodArray<z.ZodObject<{
         name: z.ZodString;
@@ -116,6 +140,19 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
             llm_error: "llm_error";
             skipped_whisper: "skipped_whisper";
         }>]>;
+        available_events: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    }, z.core.$strip>>;
+    whisper_source: z.ZodOptional<z.ZodEnum<{
+        client: "client";
+        auto: "auto";
+    }>>;
+    safety: z.ZodOptional<z.ZodObject<{
+        ok: z.ZodBoolean;
+        rewritten: z.ZodOptional<z.ZodBoolean>;
+        reasons: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            code: z.ZodString;
+            detail: z.ZodString;
+        }, z.core.$strip>>>;
     }, z.core.$strip>>;
 }, z.core.$strip>;
 export type AgentTraceRecord = z.infer<typeof agentTraceRecordSchema>;
@@ -157,7 +194,21 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
         rag_hits: z.ZodArray<z.ZodObject<{
             memory_id: z.ZodString;
             score: z.ZodNumber;
+            source: z.ZodOptional<z.ZodEnum<{
+                vector: "vector";
+                keyword: "keyword";
+            }>>;
         }, z.core.$strip>>;
+        rag_path: z.ZodOptional<z.ZodEnum<{
+            vector: "vector";
+            keyword_fallback: "keyword_fallback";
+        }>>;
+        rag_embed_backend: z.ZodOptional<z.ZodEnum<{
+            api: "api";
+            local: "local";
+        }>>;
+        rag_error: z.ZodOptional<z.ZodString>;
+        working_memory_lines: z.ZodOptional<z.ZodArray<z.ZodString>>;
         animation: z.ZodOptional<z.ZodString>;
         reply_flags_set: z.ZodOptional<z.ZodArray<z.ZodObject<{
             name: z.ZodString;
@@ -184,6 +235,19 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
                 llm_error: "llm_error";
                 skipped_whisper: "skipped_whisper";
             }>]>;
+            available_events: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        }, z.core.$strip>>;
+        whisper_source: z.ZodOptional<z.ZodEnum<{
+            client: "client";
+            auto: "auto";
+        }>>;
+        safety: z.ZodOptional<z.ZodObject<{
+            ok: z.ZodBoolean;
+            rewritten: z.ZodOptional<z.ZodBoolean>;
+            reasons: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                code: z.ZodString;
+                detail: z.ZodString;
+            }, z.core.$strip>>>;
         }, z.core.$strip>>;
     }, z.core.$strip>>;
 }, z.core.$strip>;

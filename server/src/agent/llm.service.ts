@@ -114,6 +114,30 @@ export class LlmService {
     };
   }
 
+  /**
+   * Mem-V：批量 embedding。无 client / 失败时返回 null（调用方回退本地或关键词）。
+   */
+  async embed(texts: string[]): Promise<number[][] | null> {
+    if (!this.client || texts.length === 0) return null;
+    try {
+      const model =
+        process.env.LLM_EMBED_MODEL ??
+        process.env.EMBEDDING_MODEL ??
+        'text-embedding-v3';
+      const res = await this.client.embeddings.create({
+        model,
+        input: texts,
+      });
+      const sorted = [...res.data].sort((a, b) => a.index - b.index);
+      return sorted.map((d) => d.embedding as number[]);
+    } catch (err) {
+      this.logger.warn(
+        `embed failed: ${err instanceof Error ? err.message : err}`,
+      );
+      return null;
+    }
+  }
+
   async *streamChat(
     messages: LlmMessage[],
     options: StreamChatOptions = {},
@@ -169,7 +193,22 @@ export class LlmService {
 
     const toolCalls: LlmToolCallRequest[] = [];
     // 仅 MOCK 演示用的轻量启发式，正式路径走真实 FC
-    if (/累|疲|加班|压力|焦虑|困/.test(text)) {
+    if (/好感|累不累|疲[惫劳]|现在什么章|当前状态|查(一下|下)进度/.test(text)) {
+      toolCalls.push({
+        id: 'mock_query_runtime',
+        name: 'query_runtime',
+        arguments: JSON.stringify({ reason: 'MOCK：核对运行时' }),
+      });
+    } else if (/给(我|点)?提示|我该怎么办|下一步怎么|卡关/.test(text)) {
+      toolCalls.push({
+        id: 'mock_request_hint',
+        name: 'request_hint',
+        arguments: JSON.stringify({
+          topic: '推进',
+          reason: 'MOCK：需要本章提示',
+        }),
+      });
+    } else if (/累|疲|加班|压力|焦虑|困/.test(text)) {
       toolCalls.push({
         id: 'mock_fatigue',
         name: 'updateFatigue',

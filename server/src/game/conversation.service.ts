@@ -133,6 +133,11 @@ export class ConversationService {
     return this.getSceneLog(playerId).filter((u) => !u.meta?.whisper);
   }
 
+  /** Mem-W / 导演：读公开场前先灌档，避免进程重启后空 log */
+  async ensureSceneLogReady(playerId: string): Promise<void> {
+    await this.ensureSceneLogHydrated(playerId);
+  }
+
   /** 同步读取（调用方须先 ensureNpcSelectionHydrated） */
   getNpcSelection(playerId: string): string[] | null {
     const rk = this.runKey(playerId);

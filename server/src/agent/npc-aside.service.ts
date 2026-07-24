@@ -7,11 +7,14 @@ import {
 } from '@ocraft/shared';
 import { LlmService } from './llm.service';
 import { looksLikeAiSlop } from './reply-guard';
+import { pickAsideSpeaker } from './aside-pick';
 import { NpcService } from '../npc/npc.service';
 import { PackService } from '../story/pack.service';
 import { WorldProgressService } from '../story/world-progress.service';
 
 const ASIDE_PROBABILITY = 0.42;
+/** 有导演 preferred speakers 命中候选时略提高插话率 */
+const ASIDE_PROBABILITY_PREFERRED = 0.62;
 /** 两次短接话之间至少隔几轮主对话 */
 const ASIDE_MIN_CHATS_GAP = 2;
 const ASIDE_FALLBACKS = [
@@ -43,6 +46,8 @@ export class NpcAsideService {
     nearbyNpcIds: string[];
     playerMessage: string;
     assistantReply: string;
+    /** MA-S：导演 speakers，优先非焦点且在场者 */
+    preferredSpeakerIds?: string[];
   }): Promise<NpcAsideEvent | null> {
     const { playerId, chatNpcId, playerMessage, assistantReply } = opts;
 
@@ -82,13 +87,27 @@ export class NpcAsideService {
         return null;
       }
 
-      if (Math.random() > ASIDE_PROBABILITY) {
+      const preferredInField = (opts.preferredSpeakerIds ?? []).filter(
+        (id) => id !== chatNpcId && candidates.includes(id),
+      );
+      const prob =
+        preferredInField.length > 0
+          ? ASIDE_PROBABILITY_PREFERRED
+          : ASIDE_PROBABILITY;
+      if (Math.random() > prob) {
         this.chatsSinceAside.set(playerId, since + 1);
         return null;
       }
 
-      const speakerId =
-        candidates[Math.floor(Math.random() * candidates.length)]!;
+      const speakerId = pickAsideSpeaker(
+        candidates,
+        chatNpcId,
+        opts.preferredSpeakerIds,
+      );
+      if (!speakerId) {
+        this.chatsSinceAside.set(playerId, since + 1);
+        return null;
+      }
       const speakerName =
         pack.npcs.find((n) => n.npc_id === speakerId)?.name ?? speakerId;
       const chatName =
@@ -125,7 +144,7 @@ export class NpcAsideService {
 
       this.chatsSinceAside.set(playerId, 0);
       this.logger.log(
-        `Aside player=${playerId} speaker=${speakerId} chat=${chatNpcId} mock=${this.llmService.isMockMode()}`,
+        `Aside player=${playerId} speaker=${speakerId} chat=${chatNpcId} preferred=${preferredInField.join(',') || '-'} mock=${this.llmService.isMockMode()}`,
       );
 
       return {

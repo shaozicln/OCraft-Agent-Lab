@@ -4,6 +4,7 @@ import { AgentModule } from '../agent/agent.module';
 import { PackController } from './pack.controller';
 import { PackService } from './pack.service';
 import { PackGenerateService } from './pack-generate.service';
+import { PackClarifyService } from './pack-clarify.service';
 import { StoryFlagService } from './story-flag.service';
 import { WorldProgressService } from './world-progress.service';
 
@@ -15,6 +16,7 @@ import { WorldProgressService } from './world-progress.service';
     WorldProgressService,
     PackService,
     PackGenerateService,
+    PackClarifyService,
   ],
   exports: [StoryFlagService, WorldProgressService, PackService],
 })
