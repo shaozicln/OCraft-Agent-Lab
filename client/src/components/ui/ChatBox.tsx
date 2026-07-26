@@ -11,6 +11,7 @@ import type {
   NewRunStartedEvent,
   NpcAsideEvent,
   NpcExchangeEvent,
+  EndingReachedEvent,
   SceneUtterance,
   AutoplayNextEvent,
 } from '@ocraft/shared';
@@ -26,6 +27,7 @@ interface ChatBoxProps {
   lastSaved: ConversationSavedEvent | null;
   lastExchange?: NpcExchangeEvent | null;
   lastAside?: NpcAsideEvent | null;
+  lastEnding?: EndingReachedEvent | null;
   archivesList: ConversationArchiveSummary[] | null;
   loadedConversation: ConversationLoadedEvent | null;
   saveError: string | null;
@@ -67,6 +69,7 @@ interface ChatBoxProps {
   onClearLastNewRun?: () => void;
   onClearLastExchange?: () => void;
   onClearLastAside?: () => void;
+  onClearLastEnding?: () => void;
   /** 旁听逐句时：当前开口的 NPC；结束传 null（驱动 3D talk） */
   onExchangeSpeak?: (npcId: string | null) => void;
 }
@@ -144,6 +147,7 @@ export function ChatBox({
   lastSaved,
   lastExchange,
   lastAside,
+  lastEnding,
   archivesList,
   loadedConversation,
   saveError,
@@ -171,6 +175,7 @@ export function ChatBox({
   onClearLastNewRun,
   onClearLastExchange,
   onClearLastAside,
+  onClearLastEnding,
   onExchangeSpeak,
 }: ChatBoxProps) {
   const [input, setInput] = useState('');
@@ -404,6 +409,16 @@ export function ChatBox({
     const t = window.setTimeout(() => onExchangeSpeak?.(null), 900);
     return () => window.clearTimeout(t);
   }, [lastAside, onClearLastAside, onExchangeSpeak]);
+
+  useEffect(() => {
+    if (!lastEnding) return;
+    const ending = lastEnding;
+    onClearLastEnding?.();
+    const note = ending.notes?.trim()
+      ? `结局达成：${ending.displayName} — ${ending.notes}`
+      : `结局达成：${ending.displayName}`;
+    setHistory((prev) => [...prev, { role: 'system', text: note }]);
+  }, [lastEnding, onClearLastEnding]);
 
   useEffect(() => {
     return () => {

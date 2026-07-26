@@ -8,6 +8,7 @@ import type {
   ConversationArchivesListEvent,
   ConversationLoadedEvent,
   ConversationSavedEvent,
+  EndingReachedEvent,
   NewRunStartedEvent,
   NpcAsideEvent,
   NpcExchangeEvent,
@@ -48,6 +49,7 @@ export function useGameSocket(
     null,
   );
   const [lastAside, setLastAside] = useState<NpcAsideEvent | null>(null);
+  const [lastEnding, setLastEnding] = useState<EndingReachedEvent | null>(null);
   const [archivesList, setArchivesList] = useState<
     ConversationArchiveSummary[] | null
   >(null);
@@ -123,6 +125,10 @@ export function useGameSocket(
     socket.on('npc_aside', (data: NpcAsideEvent) => {
       if (data.chatNpcId !== activeNpcIdRef.current) return;
       setLastAside(data);
+    });
+
+    socket.on('ending_reached', (data: EndingReachedEvent) => {
+      setLastEnding(data);
     });
 
     socket.on('npc_error', (data: { npcId?: string }) => {
@@ -440,6 +446,7 @@ export function useGameSocket(
   const clearLastNewRun = useCallback(() => setLastNewRun(null), []);
   const clearLastExchange = useCallback(() => setLastExchange(null), []);
   const clearLastAside = useCallback(() => setLastAside(null), []);
+  const clearLastEnding = useCallback(() => setLastEnding(null), []);
 
   return {
     connected,
@@ -452,6 +459,7 @@ export function useGameSocket(
     lastSaved,
     lastExchange,
     lastAside,
+    lastEnding,
     archivesList,
     loadedConversation,
     saveError,
@@ -480,5 +488,6 @@ export function useGameSocket(
     clearLastNewRun,
     clearLastExchange,
     clearLastAside,
+    clearLastEnding,
   };
 }

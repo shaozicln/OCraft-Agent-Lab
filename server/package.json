@@ -27,7 +27,8 @@
     "multiagent:eval": "ts-node -r tsconfig-paths/register scripts/eval-multiagent.ts",
     "clarify:eval": "ts-node -r tsconfig-paths/register scripts/eval-clarify.ts",
     "safety:eval": "ts-node -r tsconfig-paths/register scripts/eval-safety.ts",
-    "autoplay:eval": "ts-node -r tsconfig-paths/register scripts/eval-autoplay.ts"
+    "autoplay:eval": "ts-node -r tsconfig-paths/register scripts/eval-autoplay.ts",
+    "ending:eval": "ts-node -r tsconfig-paths/register scripts/eval-ending.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALLOWED_NPC_TOOLS = exports.STRONG_NPC_TOOLS = exports.SOFT_NPC_TOOLS = exports.requestHintSchema = exports.queryRuntimeSchema = exports.updateFatigueSchema = exports.updateAffinitySchema = void 0;
+exports.ALLOWED_NPC_TOOLS = exports.STRONG_NPC_TOOLS = exports.SOFT_NPC_TOOLS = exports.recallMemorySchema = exports.requestHintSchema = exports.queryRuntimeSchema = exports.updateFatigueSchema = exports.updateAffinitySchema = void 0;
 exports.isAllowedNpcTool = isAllowedNpcTool;
 const zod_1 = require("zod");
 exports.updateAffinitySchema = zod_1.z.object({
@@ -20,10 +20,20 @@ exports.requestHintSchema = zod_1.z.object({
     topic: zod_1.z.string().max(80).optional(),
     reason: zod_1.z.string().max(120).optional(),
 });
+/** Mem-T：只读按 query 再取一层 Pack 长期记忆（章门控由检索侧保证） */
+exports.recallMemorySchema = zod_1.z.object({
+    query: zod_1.z.string().trim().min(1).max(120),
+    top_k: zod_1.z.number().int().min(1).max(5).optional(),
+    reason: zod_1.z.string().max(120).optional(),
+});
 /** 软数值 tool（可方差） */
 exports.SOFT_NPC_TOOLS = ['updateFatigue', 'updateAffinity'];
 /** 强业务 tool（严 schema、只读优先） */
-exports.STRONG_NPC_TOOLS = ['query_runtime', 'request_hint'];
+exports.STRONG_NPC_TOOLS = [
+    'query_runtime',
+    'request_hint',
+    'recall_memory',
+];
 exports.ALLOWED_NPC_TOOLS = [
     ...exports.SOFT_NPC_TOOLS,
     ...exports.STRONG_NPC_TOOLS,

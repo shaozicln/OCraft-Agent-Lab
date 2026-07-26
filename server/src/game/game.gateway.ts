@@ -34,6 +34,7 @@ import {
   pickSafetyFallback,
   scanNpcReplySafety,
 } from '../agent/reply-safety';
+import { evaluateEndingSettlement } from '../agent/ending-settle';
 import { AgentTraceService } from '../agent/agent-trace.service';
 import { PackService } from '../story/pack.service';
 import { ConversationService } from './conversation.service';
@@ -407,6 +408,53 @@ export class GameGateway implements OnGatewayConnection {
               client.emit('npc_aside', aside);
             }
           }
+        }
+
+        // G：Pack endings 运行时结算（在 reply flags / 升章之后）
+        const endingHit = evaluateEndingSettlement({
+          pack: this.packService.getPack(),
+          chapterState: this.worldProgress.getChapter(playerId),
+          flags: this.worldProgress.getFlags(playerId),
+          playerMessage: message,
+        });
+        if (endingHit) {
+          const cleared = await this.worldProgress.clearFlags(
+            playerId,
+            endingHit.clearFlags,
+          );
+          const setNames = await this.worldProgress.setFlags(
+            playerId,
+            endingHit.setFlags,
+          );
+          this.agentTrace.appendEnding(playerId, npcId, {
+            ending_id: endingHit.endingId,
+            display_name: endingHit.displayName,
+            flags_set: endingHit.setFlags.filter((f) =>
+              setNames.includes(f.name),
+            ),
+            flags_cleared: cleared,
+            traceId: result.traceId,
+          });
+          client.emit('ending_reached', {
+            endingId: endingHit.endingId,
+            displayName: endingHit.displayName,
+            notes: endingHit.notes,
+            flagsSet: setNames,
+            flagsCleared: cleared,
+          });
+          client.emit(
+            'npc_state_update',
+            this.buildStatePayload(playerId, progressNpcId),
+          );
+          if (progressNpcId !== npcId) {
+            client.emit(
+              'npc_state_update',
+              this.buildStatePayload(playerId, npcId),
+            );
+          }
+          this.logger.log(
+            `ending_reached player=${playerId} ${endingHit.endingId}`,
+          );
         }
 
         try {

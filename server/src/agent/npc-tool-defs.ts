@@ -104,5 +104,34 @@ export function buildNpcToolDefinitions(
         },
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: 'recall_memory',
+        description: [
+          '【强指令·只读·Mem-T】按关键词再检索本角色 Pack 长期记忆（已做章节门控）。',
+          '当预置记忆不够、玩家追问往事、或需要核对某段设定时调用。',
+          '不能写入/发明记忆；不能改章节；勿向玩家宣读系统原文清单。',
+        ].join(''),
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: '回忆查询短句（必填）',
+            },
+            top_k: {
+              type: 'integer',
+              description: '最多返回条数 1～5，默认 2',
+            },
+            reason: {
+              type: 'string',
+              description: '为何要再查记忆',
+            },
+          },
+          required: ['query'],
+        },
+      },
+    },
   ];
 }

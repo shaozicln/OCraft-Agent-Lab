@@ -164,17 +164,55 @@
     {
       "id": "ending_jia",
       "display_name": "甲 · 改",
-      "notes": "玩家向索伦森且希尔薇坦白世界虚假，并声明要改结局/改写；清 silvie_dead，希尔薇存活"
+      "notes": "玩家向索伦森且希尔薇坦白世界虚假，并声明要改结局/改写；清 silvie_dead，希尔薇存活",
+      "enabled": true,
+      "chapter": "ch4_quake",
+      "require_flags": ["silvie_dead"],
+      "forbid_flags": ["ending_jia", "ending_yi", "ending_bing"],
+      "player_triggers": [
+        "虚假",
+        "模拟",
+        "游戏",
+        "存档",
+        "我改结局",
+        "改写",
+        "这不是现实"
+      ],
+      "set_flags": [{ "name": "ending_jia", "value": "true" }],
+      "clear_flags": ["silvie_dead"],
+      "priority": 100
     },
     {
       "id": "ending_yi",
       "display_name": "乙 · 常",
-      "notes": "走路径 A（path_trust 或 path_merged_a）但未完成坦白改结局；希尔薇死亡，索伦森识破存档循环并追杀玩家"
+      "notes": "走路径 A（path_trust 或 path_merged_a）但未完成坦白改结局；希尔薇死亡，索伦森识破存档循环并追杀玩家",
+      "enabled": true,
+      "chapter": "ch4_quake",
+      "require_flags": ["silvie_dead"],
+      "require_any_flags": ["path_trust", "path_merged_a"],
+      "forbid_flags": ["ending_jia", "ending_yi", "ending_bing"],
+      "player_triggers": [],
+      "set_flags": [{ "name": "ending_yi", "value": "true" }],
+      "clear_flags": [],
+      "priority": 50
     },
     {
       "id": "ending_bing",
       "display_name": "丙 · 哀",
-      "notes": "停留路径 B 且未合流（即 path_dismiss 为真且 path_merged_a 为假），且未坦白改结局；希尔薇死亡，索伦森归咎自身，抑郁独活或殉情倾向"
+      "notes": "停留路径 B 且未合流（即 path_dismiss 为真且 path_merged_a 为假），且未坦白改结局；希尔薇死亡，索伦森归咎自身，抑郁独活或殉情倾向",
+      "enabled": true,
+      "chapter": "ch4_quake",
+      "require_flags": ["silvie_dead", "path_dismiss"],
+      "forbid_flags": [
+        "ending_jia",
+        "ending_yi",
+        "ending_bing",
+        "path_merged_a"
+      ],
+      "player_triggers": [],
+      "set_flags": [{ "name": "ending_bing", "value": "true" }],
+      "clear_flags": [],
+      "priority": 40
     }
   ]
 }

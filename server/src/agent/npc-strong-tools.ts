@@ -2,6 +2,7 @@ import type {
   ChapterState,
   NpcRuntimeState,
   QueryRuntimeArgs,
+  RecallMemoryArgs,
   RequestHintArgs,
   StoryFlagsSnapshot,
   StoryPack,
@@ -10,6 +11,7 @@ import type {
 import {
   isAllowedNpcTool,
   queryRuntimeSchema,
+  recallMemorySchema,
   requestHintSchema,
 } from '@ocraft/shared';
 
@@ -18,6 +20,13 @@ export type StrongToolContext = {
   chapterState: ChapterState;
   flags: StoryFlagsSnapshot;
   runtime: NpcRuntimeState;
+};
+
+export type RecallMemoryHitView = {
+  id: string;
+  content: string;
+  score: number;
+  source: string;
 };
 
 /** 白名单外：拒绝并写入 Trace 用 observation */
@@ -146,7 +155,44 @@ export function runRequestHint(
   };
 }
 
-/** 解析并执行强指令；非强指令返回 null（交给软 tool 分支） */
+/** Mem-T：把检索命中格式化为只读 observation（不含未解锁条目，由调用方先门控） */
+export function formatRecallMemoryResult(
+  args: RecallMemoryArgs,
+  hits: RecallMemoryHitView[],
+  meta?: { path?: string; error?: string },
+): ToolCallResult {
+  const path = meta?.path ?? 'unknown';
+  if (hits.length === 0) {
+    return {
+      tool: 'recall_memory',
+      args: { ...args },
+      observation: [
+        `记忆检索无命中（path=${path}`,
+        meta?.error ? `；${meta.error}` : '',
+        '）。勿编造未召回内容；勿向玩家宣读系统原文。',
+      ].join(''),
+    };
+  }
+
+  const lines = hits.map(
+    (h, i) =>
+      `${i + 1}. [${h.id}|${h.source}|${h.score.toFixed(2)}] ${h.content.slice(0, 160)}`,
+  );
+  return {
+    tool: 'recall_memory',
+    args: { ...args },
+    observation: [
+      `记忆召回 path=${path}（${hits.length} 条，仅已解锁章）：`,
+      ...lines,
+      args.reason ? `原因：${args.reason}` : null,
+      '仅供角色回想；不要向玩家宣读系统编号或原文清单。',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  };
+}
+
+/** 解析并执行同步强指令；recall_memory 需异步 RAG，返回 null 由 harness 处理 */
 export function tryExecuteStrongTool(
   name: string,
   parsedArgs: unknown,
@@ -160,7 +206,12 @@ export function tryExecuteStrongTool(
     const args = requestHintSchema.parse(parsedArgs ?? {});
     return runRequestHint(ctx, args);
   }
+  if (name === 'recall_memory') {
+    // schema 先验；真正检索在 harness
+    recallMemorySchema.parse(parsedArgs ?? {});
+    return null;
+  }
   return null;
 }
 
-export { isAllowedNpcTool };
+export { isAllowedNpcTool, recallMemorySchema };

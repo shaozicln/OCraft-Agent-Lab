@@ -113,6 +113,16 @@ export const npcAsideEventSchema = z.object({
   text: z.string(),
 });
 
+/** G：结局结算推送 */
+export const endingReachedEventSchema = z.object({
+  endingId: z.string(),
+  displayName: z.string(),
+  notes: z.string().optional(),
+  flagsSet: z.array(z.string()).default([]),
+  flagsCleared: z.array(z.string()).default([]),
+});
+export type EndingReachedEvent = z.infer<typeof endingReachedEventSchema>;
+
 export const saveConversationPayloadSchema = z.object({
   npcId: z.string().min(1).max(64),
 });

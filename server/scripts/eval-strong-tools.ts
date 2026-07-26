@@ -1,17 +1,28 @@
 /**
- * 强业务指令（N）离线 Eval：白名单 / query_runtime / request_hint。
+ * 强业务指令（N）+ Mem-T 离线 Eval：白名单 / query_runtime / request_hint / recall_memory。
  *
  * 用法：npm run tools:eval
  */
 import { loadStoryPackFromDir } from '../src/story/pack-loader';
 import { resolveVersionPath } from '../src/story/pack-ops';
 import {
+  getChapterRankMap,
+  getDefaultChapterId,
+  recallMemorySchema,
+  type NpcMemory,
+} from '@ocraft/shared';
+import {
+  formatRecallMemoryResult,
   isAllowedNpcTool,
   rejectUnknownTool,
   runQueryRuntime,
   runRequestHint,
   tryExecuteStrongTool,
 } from '../src/agent/npc-strong-tools';
+import {
+  filterUnlockedMemories,
+  retrieveByKeyword,
+} from '../src/agent/rag-retrieve';
 
 type Case = {
   name: string;
@@ -23,6 +34,10 @@ const packPath = resolveVersionPath(
   'awaken-0717feel__20260717T1450',
 );
 const pack = loadStoryPackFromDir(packPath);
+const rankMap = getChapterRankMap(pack);
+const defaultChapter = getDefaultChapterId(pack);
+const memories = pack.npcs.find((n) => n.npc_id === 'npc_suolunsen')!
+  .memories as NpcMemory[];
 
 const baseCtx = {
   pack,
@@ -37,13 +52,15 @@ const baseCtx = {
 
 const cases: Case[] = [
   {
-    name: '白名单含 query_runtime / request_hint',
+    name: '白名单含 query_runtime / request_hint / recall_memory',
     run: () => {
       const ok =
         isAllowedNpcTool('query_runtime') &&
         isAllowedNpcTool('request_hint') &&
+        isAllowedNpcTool('recall_memory') &&
         isAllowedNpcTool('updateAffinity') &&
-        !isAllowedNpcTool('open_inventory');
+        !isAllowedNpcTool('open_inventory') &&
+        !isAllowedNpcTool('write_memory');
       return { ok, detail: 'whitelist check' };
     },
   },
@@ -131,6 +148,85 @@ const cases: Case[] = [
       } catch {
         return { ok: true, detail: 'zod reject' };
       }
+    },
+  },
+  {
+    name: 'Mem-T：recall_memory schema 拒空 query',
+    run: () => {
+      try {
+        recallMemorySchema.parse({ query: '  ' });
+        return { ok: false, detail: 'should reject blank' };
+      } catch {
+        return { ok: true, detail: 'zod reject blank' };
+      }
+    },
+  },
+  {
+    name: 'Mem-T：ch1 门控不得召回 ch2 记忆',
+    run: () => {
+      const unlocked = filterUnlockedMemories(
+        memories,
+        'ch1_daily',
+        defaultChapter,
+        rankMap,
+      );
+      const hits = retrieveByKeyword(unlocked, '钟表 走廊尽头 重影', 3);
+      const leaked = hits.some(
+        (h) => h.memory.id === 'mem_suolunsen_suspicion_start',
+      );
+      const r = formatRecallMemoryResult(
+        { query: '钟表 走廊尽头 重影' },
+        hits.map((h) => ({
+          id: h.memory.id,
+          content: h.memory.content,
+          score: h.score,
+          source: h.source,
+        })),
+        { path: 'keyword_fallback' },
+      );
+      return {
+        ok: !leaked && r.tool === 'recall_memory',
+        detail: `${r.observation.slice(0, 120)} | ids=${hits.map((h) => h.memory.id).join(',')}`,
+      };
+    },
+  },
+  {
+    name: 'Mem-T：ch2 可召回并格式化 observation',
+    run: () => {
+      const unlocked = filterUnlockedMemories(
+        memories,
+        'ch2_unease',
+        defaultChapter,
+        rankMap,
+      );
+      const hits = retrieveByKeyword(unlocked, '钟表 走廊尽头 重影', 2);
+      const r = formatRecallMemoryResult(
+        { query: '钟表 走廊尽头 重影', reason: '核对' },
+        hits.map((h) => ({
+          id: h.memory.id,
+          content: h.memory.content,
+          score: h.score,
+          source: h.source,
+        })),
+        { path: 'keyword_fallback' },
+      );
+      const ok =
+        hits.some((h) => h.memory.id === 'mem_suolunsen_suspicion_start') &&
+        r.observation.includes('记忆召回') &&
+        r.observation.includes('path=keyword_fallback') &&
+        !r.observation.includes('写回');
+      return { ok, detail: r.observation.slice(0, 180) };
+    },
+  },
+  {
+    name: 'Mem-T：tryExecuteStrongTool(recall) 仅先验 schema',
+    run: () => {
+      const r = tryExecuteStrongTool(
+        'recall_memory',
+        { query: '球场' },
+        baseCtx,
+      );
+      return { ok: r === null, detail: 'harness 异步检索' };
     },
   },
 ];

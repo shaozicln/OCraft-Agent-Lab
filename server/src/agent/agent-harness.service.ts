@@ -6,6 +6,7 @@ import {
   ToolCallResult,
   UpdateAffinityArgs,
   UpdateFatigueArgs,
+  recallMemorySchema,
   updateAffinitySchema,
   updateFatigueSchema,
 } from '@ocraft/shared';
@@ -24,6 +25,7 @@ import {
 import { buildNpcToolDefinitions } from './npc-tool-defs';
 import type { DirectorDecision } from './director.types';
 import {
+  formatRecallMemoryResult,
   isAllowedNpcTool,
   rejectUnknownTool,
   tryExecuteStrongTool,
@@ -94,9 +96,10 @@ export class AgentHarnessService {
     const toolPolicy = [
       '【工具分层】',
       '软数值：updateFatigue / updateAffinity（仅关系/精力确有变化时）。',
-      '强指令（只读）：query_runtime（查章/好感/疲惫/flags）；request_hint（本章扮演提示，勿剧透）。',
+      '强指令（只读）：query_runtime（查章/好感/疲惫/flags）；request_hint（本章扮演提示，勿剧透）；',
+      'recall_memory（按 query 再取长期记忆，章门控，只读）。',
       '不要在回复正文里伪造工具 JSON；需要时请发起 tool call。',
-      '禁止用工具改章节或发明事件；无关闲聊可不调用。',
+      '禁止用工具改章节、写记忆或发明事件；无关闲聊可不调用。',
     ].join('');
     const systemContent = `${systemPrompt}\n\n${workingMemoryBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}\n\n${toolPolicy}`;
 
@@ -119,7 +122,13 @@ export class AgentHarnessService {
 
     for (const tc of fc.toolCalls) {
       try {
-        this.executeToolCall(playerId, npcId, tc.name, tc.arguments, toolCalls);
+        await this.executeToolCall(
+          playerId,
+          npcId,
+          tc.name,
+          tc.arguments,
+          toolCalls,
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.warn(`tool ${tc.name} rejected: ${msg}`);
@@ -409,7 +418,7 @@ export class AgentHarnessService {
     }));
   }
 
-  private executeToolCall(
+  private async executeToolCall(
     playerId: string,
     npcId: string,
     name: string,
@@ -432,6 +441,30 @@ export class AgentHarnessService {
     const chapterState = this.worldProgress.getChapter(playerId);
     const flags = this.worldProgress.getFlags(playerId);
     let state = this.npcService.getRuntimeState(playerId, npcId);
+
+    if (name === 'recall_memory') {
+      const args = recallMemorySchema.parse(parsed ?? {});
+      const topK = args.top_k ?? 2;
+      const rag = await this.ragService.retrieve(
+        npcId,
+        args.query,
+        chapterState,
+        topK,
+      );
+      toolCalls.push(
+        formatRecallMemoryResult(
+          args,
+          rag.hits.map((h) => ({
+            id: h.memory.id,
+            content: h.memory.content,
+            score: h.score,
+            source: h.source,
+          })),
+          { path: rag.path, error: rag.error },
+        ),
+      );
+      return;
+    }
 
     const strong = tryExecuteStrongTool(name, parsed, {
       pack,

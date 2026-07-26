@@ -21,16 +21,28 @@ export const requestHintSchema = z.object({
   reason: z.string().max(120).optional(),
 });
 
+/** Mem-T：只读按 query 再取一层 Pack 长期记忆（章门控由检索侧保证） */
+export const recallMemorySchema = z.object({
+  query: z.string().trim().min(1).max(120),
+  top_k: z.number().int().min(1).max(5).optional(),
+  reason: z.string().max(120).optional(),
+});
+
 export type UpdateAffinityArgs = z.infer<typeof updateAffinitySchema>;
 export type UpdateFatigueArgs = z.infer<typeof updateFatigueSchema>;
 export type QueryRuntimeArgs = z.infer<typeof queryRuntimeSchema>;
 export type RequestHintArgs = z.infer<typeof requestHintSchema>;
+export type RecallMemoryArgs = z.infer<typeof recallMemorySchema>;
 
 /** 软数值 tool（可方差） */
 export const SOFT_NPC_TOOLS = ['updateFatigue', 'updateAffinity'] as const;
 
 /** 强业务 tool（严 schema、只读优先） */
-export const STRONG_NPC_TOOLS = ['query_runtime', 'request_hint'] as const;
+export const STRONG_NPC_TOOLS = [
+  'query_runtime',
+  'request_hint',
+  'recall_memory',
+] as const;
 
 export const ALLOWED_NPC_TOOLS = [
   ...SOFT_NPC_TOOLS,

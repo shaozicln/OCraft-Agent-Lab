@@ -101,6 +101,41 @@ export class AgentTraceService {
     );
   }
 
+  /** G：补记结局结算 */
+  appendEnding(
+    playerId: string,
+    npcId: string,
+    ending: {
+      ending_id: string;
+      display_name: string;
+      flags_set: Array<{ name: string; value: string }>;
+      flags_cleared: string[];
+      traceId?: string;
+    },
+  ): void {
+    const { traceId, ...payload } = ending;
+    if (traceId) {
+      const hit = this.buffer.find((t) => t.id === traceId);
+      if (hit) {
+        hit.ending = payload;
+        this.logger.log(
+          `[agent-trace] ending id=${hit.id} ${payload.ending_id}`,
+        );
+        return;
+      }
+    }
+    for (let i = this.buffer.length - 1; i >= 0; i--) {
+      const t = this.buffer[i];
+      if (t.player_id === playerId && t.npc_id === npcId) {
+        t.ending = payload;
+        this.logger.log(
+          `[agent-trace] ending id=${t.id} ${payload.ending_id}`,
+        );
+        return;
+      }
+    }
+  }
+
   list(opts: {
     playerId?: string;
     npcId?: string;

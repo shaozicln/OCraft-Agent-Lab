@@ -220,9 +220,29 @@ export const packAnimationRuleSchema = z.object({
 export const packEndingSchema = z.object({
   id: packIdSchema,
   display_name: z.string(),
-  /** 第一期仅占位；P3 再解释条件 */
   notes: z.string().optional(),
   performance_hint: z.string().optional(),
+  /** false 时跳过结算 */
+  enabled: z.boolean().default(true),
+  /** 须处于该章才可结算；省略则不限章 */
+  chapter: packIdSchema.optional(),
+  /** 全部须已置 */
+  require_flags: z.array(packIdSchema).default([]),
+  /** 至少一个已置（可与 require_flags 并用） */
+  require_any_flags: z.array(packIdSchema).default([]),
+  /** 全部须未置 */
+  forbid_flags: z.array(packIdSchema).default([]),
+  /**
+   * 玩家句命中关键词；空数组 = 仅靠 flag/章条件（适合乙/丙自动结算）。
+   * 非空时须本轮玩家句命中至少一词。
+   */
+  player_triggers: z.array(z.string()).default([]),
+  /** 结算时写入（通常含 ending_*） */
+  set_flags: z.array(packFlagSetEntrySchema).default([]),
+  /** 结算时清除（如结局甲清 silvie_dead） */
+  clear_flags: z.array(packIdSchema).default([]),
+  /** 越大越先匹配；同优先级按 Pack 声明顺序 */
+  priority: z.number().int().default(0),
 });
 
 export const packWorldFileSchema = z.object({
@@ -366,6 +386,27 @@ export function assertPackReferences(pack: StoryPack): void {
     }
     if (fc.when.chapter_not) {
       needChapter(fc.when.chapter_not, `flag_constraints.${fc.id}`);
+    }
+  }
+
+  for (const ending of pack.world.endings ?? []) {
+    if (ending.chapter) {
+      needChapter(ending.chapter, `endings.${ending.id}`);
+    }
+    for (const f of ending.require_flags ?? []) {
+      needFlag(f, `endings.${ending.id}.require`);
+    }
+    for (const f of ending.require_any_flags ?? []) {
+      needFlag(f, `endings.${ending.id}.require_any`);
+    }
+    for (const f of ending.forbid_flags ?? []) {
+      needFlag(f, `endings.${ending.id}.forbid`);
+    }
+    for (const f of ending.set_flags ?? []) {
+      needFlag(f.name, `endings.${ending.id}.set`);
+    }
+    for (const f of ending.clear_flags ?? []) {
+      needFlag(f, `endings.${ending.id}.clear`);
     }
   }
 

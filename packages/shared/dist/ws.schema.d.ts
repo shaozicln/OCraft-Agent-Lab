@@ -99,6 +99,15 @@ export declare const npcAsideEventSchema: z.ZodObject<{
     name: z.ZodString;
     text: z.ZodString;
 }, z.core.$strip>;
+/** G：结局结算推送 */
+export declare const endingReachedEventSchema: z.ZodObject<{
+    endingId: z.ZodString;
+    displayName: z.ZodString;
+    notes: z.ZodOptional<z.ZodString>;
+    flagsSet: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    flagsCleared: z.ZodDefault<z.ZodArray<z.ZodString>>;
+}, z.core.$strip>;
+export type EndingReachedEvent = z.infer<typeof endingReachedEventSchema>;
 export declare const saveConversationPayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
 }, z.core.$strip>;

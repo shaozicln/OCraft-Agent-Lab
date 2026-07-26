@@ -147,6 +147,15 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
         auto: "auto";
     }>>;
     auto_play: z.ZodOptional<z.ZodBoolean>;
+    ending: z.ZodOptional<z.ZodObject<{
+        ending_id: z.ZodString;
+        display_name: z.ZodString;
+        flags_set: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            value: z.ZodString;
+        }, z.core.$strip>>;
+        flags_cleared: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    }, z.core.$strip>>;
     safety: z.ZodOptional<z.ZodObject<{
         ok: z.ZodBoolean;
         rewritten: z.ZodOptional<z.ZodBoolean>;
@@ -243,6 +252,15 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
             auto: "auto";
         }>>;
         auto_play: z.ZodOptional<z.ZodBoolean>;
+        ending: z.ZodOptional<z.ZodObject<{
+            ending_id: z.ZodString;
+            display_name: z.ZodString;
+            flags_set: z.ZodArray<z.ZodObject<{
+                name: z.ZodString;
+                value: z.ZodString;
+            }, z.core.$strip>>;
+            flags_cleared: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        }, z.core.$strip>>;
         safety: z.ZodOptional<z.ZodObject<{
             ok: z.ZodBoolean;
             rewritten: z.ZodOptional<z.ZodBoolean>;

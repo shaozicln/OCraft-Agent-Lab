@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.runNpcSelectionEventSchema = exports.setRunNpcSelectionPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV3Schema = exports.conversationSnapshotV2Schema = exports.SCENE_PLAYER_DISPLAY_NAME = exports.SCENE_PLAYER_ID = exports.sceneUtteranceSchema = exports.sceneUtteranceKindSchema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.npcAsideEventSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.autoplayNextEventSchema = exports.requestAutoplayNextPayloadSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
+exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.runNpcSelectionEventSchema = exports.setRunNpcSelectionPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV3Schema = exports.conversationSnapshotV2Schema = exports.SCENE_PLAYER_DISPLAY_NAME = exports.SCENE_PLAYER_ID = exports.sceneUtteranceSchema = exports.sceneUtteranceKindSchema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.endingReachedEventSchema = exports.npcAsideEventSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.autoplayNextEventSchema = exports.requestAutoplayNextPayloadSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
 const zod_1 = require("zod");
 const story_schema_1 = require("./story.schema");
 /**
@@ -97,6 +97,14 @@ exports.npcAsideEventSchema = zod_1.z.object({
     npcId: zod_1.z.string(),
     name: zod_1.z.string(),
     text: zod_1.z.string(),
+});
+/** G：结局结算推送 */
+exports.endingReachedEventSchema = zod_1.z.object({
+    endingId: zod_1.z.string(),
+    displayName: zod_1.z.string(),
+    notes: zod_1.z.string().optional(),
+    flagsSet: zod_1.z.array(zod_1.z.string()).default([]),
+    flagsCleared: zod_1.z.array(zod_1.z.string()).default([]),
 });
 exports.saveConversationPayloadSchema = zod_1.z.object({
     npcId: zod_1.z.string().min(1).max(64),

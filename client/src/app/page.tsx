@@ -121,6 +121,7 @@ function GamePageInner({
     lastSaved,
     lastExchange,
     lastAside,
+    lastEnding,
     archivesList,
     loadedConversation,
     lastNewRun,
@@ -149,6 +150,7 @@ function GamePageInner({
     clearLastNewRun,
     clearLastExchange,
     clearLastAside,
+    clearLastEnding,
   } = useGameSocket(token, activeNpcId || defaultNpcId, {
     progressNpcId: defaultNpcId,
     trackNpcIds: allNpcIds.length ? allNpcIds : [defaultNpcId],
@@ -553,6 +555,7 @@ function GamePageInner({
         lastSaved={lastSaved}
         lastExchange={lastExchange}
         lastAside={lastAside}
+        lastEnding={lastEnding}
         archivesList={archivesList}
         loadedConversation={loadedConversation}
         saveError={saveError}
@@ -580,6 +583,7 @@ function GamePageInner({
         onClearLastNewRun={clearLastNewRun}
         onClearLastExchange={clearLastExchange}
         onClearLastAside={clearLastAside}
+        onClearLastEnding={clearLastEnding}
         onExchangeSpeak={handleExchangeSpeak}
       />
 

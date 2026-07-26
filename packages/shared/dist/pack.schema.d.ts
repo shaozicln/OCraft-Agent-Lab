@@ -250,6 +250,18 @@ export declare const packEndingSchema: z.ZodObject<{
     display_name: z.ZodString;
     notes: z.ZodOptional<z.ZodString>;
     performance_hint: z.ZodOptional<z.ZodString>;
+    enabled: z.ZodDefault<z.ZodBoolean>;
+    chapter: z.ZodOptional<z.ZodString>;
+    require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    require_any_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    forbid_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    player_triggers: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        value: z.ZodDefault<z.ZodString>;
+    }, z.core.$strip>>>;
+    clear_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    priority: z.ZodDefault<z.ZodNumber>;
 }, z.core.$strip>;
 export declare const packWorldFileSchema: z.ZodObject<{
     chapters: z.ZodArray<z.ZodObject<{
@@ -305,6 +317,18 @@ export declare const packWorldFileSchema: z.ZodObject<{
         display_name: z.ZodString;
         notes: z.ZodOptional<z.ZodString>;
         performance_hint: z.ZodOptional<z.ZodString>;
+        enabled: z.ZodDefault<z.ZodBoolean>;
+        chapter: z.ZodOptional<z.ZodString>;
+        require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        require_any_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        forbid_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        player_triggers: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            value: z.ZodDefault<z.ZodString>;
+        }, z.core.$strip>>>;
+        clear_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        priority: z.ZodDefault<z.ZodNumber>;
     }, z.core.$strip>>>;
 }, z.core.$strip>;
 export declare const packHeaderSchema: z.ZodObject<{
@@ -382,6 +406,18 @@ export declare const storyPackSchema: z.ZodObject<{
             display_name: z.ZodString;
             notes: z.ZodOptional<z.ZodString>;
             performance_hint: z.ZodOptional<z.ZodString>;
+            enabled: z.ZodDefault<z.ZodBoolean>;
+            chapter: z.ZodOptional<z.ZodString>;
+            require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            require_any_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            forbid_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            player_triggers: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                name: z.ZodString;
+                value: z.ZodDefault<z.ZodString>;
+            }, z.core.$strip>>>;
+            clear_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            priority: z.ZodDefault<z.ZodNumber>;
         }, z.core.$strip>>>;
     }, z.core.$strip>;
     triggers: z.ZodObject<{

@@ -260,6 +260,46 @@ export class WorldProgressService {
     }
   }
 
+  /** 清除世界 flags（结局甲清 silvie_dead 等） */
+  async clearFlags(playerId: string, names: string[]): Promise<string[]> {
+    if (names.length === 0) return [];
+    await this.ensureHydrated(playerId);
+    const k = this.packKey(playerId);
+    const current = { ...(this.flagsCache.get(k) ?? {}) };
+    const cleared: string[] = [];
+    for (const name of names) {
+      if (name in current) {
+        delete current[name];
+        cleared.push(name);
+      }
+    }
+    if (cleared.length === 0) return [];
+
+    this.flagsCache.set(k, current);
+    this.markDirty(playerId);
+
+    if (this.playerStateRepo.ready) {
+      const { worldId, packVersionId } = this.packService.getProgressKey();
+      for (const flagName of cleared) {
+        await this.db()
+          .delete(worldFlags)
+          .where(
+            and(
+              eq(worldFlags.playerId, playerId),
+              eq(worldFlags.worldId, worldId),
+              eq(worldFlags.packVersionId, packVersionId),
+              eq(worldFlags.flagName, flagName),
+            ),
+          );
+      }
+    }
+
+    this.logger.log(
+      `World flags cleared player=${playerId} [${cleared.join(',')}]`,
+    );
+    return cleared;
+  }
+
   /**
    * 读档 / 新开局：章 + flags 一次对齐。
    * 可传入 tx，与会话表/快照同事务提交。

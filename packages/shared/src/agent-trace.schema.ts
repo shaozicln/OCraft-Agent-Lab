@@ -112,6 +112,17 @@ export const agentTraceRecordSchema = z.object({
   whisper_source: z.enum(['client', 'auto']).optional(),
   /** 自动演：本轮是否代发玩家句（MA-A-B 为 Agent/MOCK 生成） */
   auto_play: z.boolean().optional(),
+  /** G：本轮命中的结局结算 */
+  ending: z
+    .object({
+      ending_id: z.string(),
+      display_name: z.string(),
+      flags_set: z.array(
+        z.object({ name: z.string(), value: z.string() }),
+      ),
+      flags_cleared: z.array(z.string()).default([]),
+    })
+    .optional(),
   /** F：主回复安全扫描 */
   safety: z
     .object({

@@ -93,6 +93,15 @@ exports.agentTraceRecordSchema = zod_1.z.object({
     whisper_source: zod_1.z.enum(['client', 'auto']).optional(),
     /** 自动演：本轮是否代发玩家句（MA-A-B 为 Agent/MOCK 生成） */
     auto_play: zod_1.z.boolean().optional(),
+    /** G：本轮命中的结局结算 */
+    ending: zod_1.z
+        .object({
+        ending_id: zod_1.z.string(),
+        display_name: zod_1.z.string(),
+        flags_set: zod_1.z.array(zod_1.z.object({ name: zod_1.z.string(), value: zod_1.z.string() })),
+        flags_cleared: zod_1.z.array(zod_1.z.string()).default([]),
+    })
+        .optional(),
     /** F：主回复安全扫描 */
     safety: zod_1.z
         .object({

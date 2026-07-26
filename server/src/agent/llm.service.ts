@@ -193,7 +193,16 @@ export class LlmService {
 
     const toolCalls: LlmToolCallRequest[] = [];
     // 仅 MOCK 演示用的轻量启发式，正式路径走真实 FC
-    if (/好感|累不累|疲[惫劳]|现在什么章|当前状态|查(一下|下)进度/.test(text)) {
+    if (/记得|回忆|想起|那件事|球场|转校生|希尔薇来/.test(text)) {
+      toolCalls.push({
+        id: 'mock_recall_memory',
+        name: 'recall_memory',
+        arguments: JSON.stringify({
+          query: text.slice(0, 40),
+          reason: 'MOCK：追问往事',
+        }),
+      });
+    } else if (/好感|累不累|疲[惫劳]|现在什么章|当前状态|查(一下|下)进度/.test(text)) {
       toolCalls.push({
         id: 'mock_query_runtime',
         name: 'query_runtime',
