@@ -9,6 +9,8 @@ import type {
   ConversationLoadedEvent,
   ConversationSavedEvent,
   EndingReachedEvent,
+  LabPeerLineEvent,
+  LabProgressEvent,
   NewRunStartedEvent,
   NpcAsideEvent,
   NpcExchangeEvent,
@@ -19,6 +21,7 @@ import type {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { GAME_SERVER_URL } from '@/config/game';
+import { getLabPeerAgentsEnabled } from '@/lib/lab-settings';
 
 export function useGameSocket(
   token: string,
@@ -50,6 +53,11 @@ export function useGameSocket(
   );
   const [lastAside, setLastAside] = useState<NpcAsideEvent | null>(null);
   const [lastEnding, setLastEnding] = useState<EndingReachedEvent | null>(null);
+  const [lastLabPeerLine, setLastLabPeerLine] =
+    useState<LabPeerLineEvent | null>(null);
+  const [labProgress, setLabProgress] = useState<
+    LabProgressEvent['progress'] | null
+  >(null);
   const [archivesList, setArchivesList] = useState<
     ConversationArchiveSummary[] | null
   >(null);
@@ -125,6 +133,16 @@ export function useGameSocket(
     socket.on('npc_aside', (data: NpcAsideEvent) => {
       if (data.chatNpcId !== activeNpcIdRef.current) return;
       setLastAside(data);
+    });
+
+    socket.on('lab_peer_line', (data: LabPeerLineEvent) => {
+      if (data.chatNpcId !== activeNpcIdRef.current) return;
+      setLastLabPeerLine(data);
+    });
+
+    socket.on('lab_progress', (data: LabProgressEvent) => {
+      if (data.chatNpcId !== activeNpcIdRef.current) return;
+      setLabProgress(data.progress);
     });
 
     socket.on('ending_reached', (data: EndingReachedEvent) => {
@@ -209,6 +227,8 @@ export function useGameSocket(
       setIsStreaming(false);
       setLoadedConversation(null);
       setSuggestions(null);
+      setLabProgress(null);
+      setLastLabPeerLine(null);
       setSelectedNpcIds(
         data.selected_npc_ids === undefined ? null : data.selected_npc_ids,
       );
@@ -344,6 +364,7 @@ export function useGameSocket(
         nearbyNpcIds: chatOpts?.nearbyNpcIds,
         whisper: chatOpts?.whisper === true ? true : undefined,
         autoPlay: chatOpts?.autoPlay === true ? true : undefined,
+        labPeerAgents: getLabPeerAgentsEnabled() ? true : undefined,
       });
       return true;
     },
@@ -447,6 +468,8 @@ export function useGameSocket(
   const clearLastExchange = useCallback(() => setLastExchange(null), []);
   const clearLastAside = useCallback(() => setLastAside(null), []);
   const clearLastEnding = useCallback(() => setLastEnding(null), []);
+  const clearLastLabPeerLine = useCallback(() => setLastLabPeerLine(null), []);
+  const clearLabProgress = useCallback(() => setLabProgress(null), []);
 
   return {
     connected,
@@ -460,6 +483,8 @@ export function useGameSocket(
     lastExchange,
     lastAside,
     lastEnding,
+    lastLabPeerLine,
+    labProgress,
     archivesList,
     loadedConversation,
     saveError,
@@ -489,5 +514,7 @@ export function useGameSocket(
     clearLastExchange,
     clearLastAside,
     clearLastEnding,
+    clearLastLabPeerLine,
+    clearLabProgress,
   };
 }

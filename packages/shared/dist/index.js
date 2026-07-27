@@ -30,3 +30,4 @@ __exportStar(require("./pack-clarify.schema"), exports);
 __exportStar(require("./autoplay.schema"), exports);
 __exportStar(require("./autoplay-propose"), exports);
 __exportStar(require("./autoplay-session"), exports);
+__exportStar(require("./lab-progress"), exports);

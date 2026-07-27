@@ -2002,8 +2002,7 @@ function SettingsInner({
                 <h2 className="settings-panel__title">实验室</h2>
                 <p className="settings-panel__lead">
                   实验性能力默认关闭，不进入主演示路径。开启仅写入本机浏览器；
-                  <strong>当前尚未接入游戏运行时</strong>
-                  （开关先落地 UI，后续再接平级 Agent 调度）。
+                  开启后下一句聊天会跳过导演，走受限平级 tick（有进度条与额度）。
                 </p>
               </div>
 
@@ -2048,8 +2047,8 @@ function SettingsInner({
                     style={{ color: 'var(--ui-fg)' }}
                   >
                     <li>对话更不可控，易偏题 / 剧透 / 互相抢话</li>
-                    <li>Token 与耗时更高；仍禁止改写章节（接运行时后生效）</li>
-                    <li>本开关目前只存本机，刷新页面保留，清站点数据会丢失</li>
+                    <li>Token 与耗时更高；运行时禁止改写章节（本轮 / 本局有额度）</li>
+                    <li>本开关只存本机，刷新保留；清站点数据会丢失</li>
                   </ul>
                 </div>
 

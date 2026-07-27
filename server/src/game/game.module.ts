@@ -9,6 +9,7 @@ import { NpcExchangeService } from '../agent/npc-exchange.service';
 import { NpcAsideService } from '../agent/npc-aside.service';
 import { DirectorService } from '../agent/director.service';
 import { AutoPlayAgentService } from '../agent/autoplay-agent.service';
+import { LabPeerService } from '../agent/lab-peer.service';
 import { AgentModule } from '../agent/agent.module';
 import { RagService } from '../agent/rag.service';
 import { NpcModule } from '../npc/npc.module';
@@ -26,6 +27,7 @@ import { StoryModule } from '../story/story.module';
     NpcAsideService,
     DirectorService,
     AutoPlayAgentService,
+    LabPeerService,
   ],
 })
 export class GameModule {}

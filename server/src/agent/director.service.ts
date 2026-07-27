@@ -281,6 +281,17 @@ export class DirectorService {
     };
   }
 
+  /** MA-Lab：跳过导演 LLM，仅焦点 NPC 表演；平级 tick 另走 LabPeerService */
+  labPeerDecision(chatNpcId: string): DirectorDecision {
+    return {
+      mode: 'reply_player',
+      speakers: [chatNpcId],
+      reason: '实验室平级，跳过导演',
+      fallback: 'lab_peer',
+      available_events: [],
+    };
+  }
+
   mockDecide(input: DirectorInput): DirectorDecision {
     const castIds = input.cast.map((c) => c.npc_id);
     if (castIds.length <= 1) {

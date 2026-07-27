@@ -21,6 +21,8 @@ export const playerChatPayloadSchema = z.object({
   whisper: z.boolean().optional(),
   /** 自动演代发：scene_log / Trace 标 meta.auto_play */
   autoPlay: z.boolean().optional(),
+  /** MA-Lab：平级多 Agent（跳过导演 LLM；受限 peer tick；禁写章） */
+  labPeerAgents: z.boolean().optional(),
 });
 
 export const requestNpcStatePayloadSchema = z.object({
@@ -122,6 +124,43 @@ export const endingReachedEventSchema = z.object({
   flagsCleared: z.array(z.string()).default([]),
 });
 export type EndingReachedEvent = z.infer<typeof endingReachedEventSchema>;
+
+/** MA-Lab：平级一句 */
+export const labPeerLineEventSchema = z.object({
+  chatNpcId: z.string(),
+  npcId: z.string(),
+  name: z.string(),
+  text: z.string(),
+  roundIndex: z.number().int().min(0),
+});
+export type LabPeerLineEvent = z.infer<typeof labPeerLineEventSchema>;
+
+/** MA-Lab：任务进度监控快照 */
+export const labProgressEventSchema = z.object({
+  chatNpcId: z.string(),
+  progress: z.object({
+    enabled: z.boolean(),
+    status: z.enum(['idle', 'running', 'done', 'abort']),
+    sessionPeerLines: z.number().int().min(0),
+    sessionPeerLineCap: z.number().int().min(1),
+    roundIndex: z.number().int().min(0),
+    roundPeerLines: z.number().int().min(0),
+    roundPeerLineCap: z.number().int().min(1),
+    candidateCount: z.number().int().min(0),
+    spokenNpcIds: z.array(z.string()).default([]),
+    stopReason: z
+      .enum([
+        'complete',
+        'budget_round',
+        'budget_session',
+        'no_candidates',
+        'whisper',
+        'disabled',
+      ])
+      .optional(),
+  }),
+});
+export type LabProgressEvent = z.infer<typeof labProgressEventSchema>;
 
 export const saveConversationPayloadSchema = z.object({
   npcId: z.string().min(1).max(64),

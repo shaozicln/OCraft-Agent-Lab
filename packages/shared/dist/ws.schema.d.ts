@@ -12,6 +12,7 @@ export declare const playerChatPayloadSchema: z.ZodObject<{
     nearbyNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
     whisper: z.ZodOptional<z.ZodBoolean>;
     autoPlay: z.ZodOptional<z.ZodBoolean>;
+    labPeerAgents: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
 export declare const requestNpcStatePayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
@@ -108,6 +109,44 @@ export declare const endingReachedEventSchema: z.ZodObject<{
     flagsCleared: z.ZodDefault<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 export type EndingReachedEvent = z.infer<typeof endingReachedEventSchema>;
+/** MA-Lab：平级一句 */
+export declare const labPeerLineEventSchema: z.ZodObject<{
+    chatNpcId: z.ZodString;
+    npcId: z.ZodString;
+    name: z.ZodString;
+    text: z.ZodString;
+    roundIndex: z.ZodNumber;
+}, z.core.$strip>;
+export type LabPeerLineEvent = z.infer<typeof labPeerLineEventSchema>;
+/** MA-Lab：任务进度监控快照 */
+export declare const labProgressEventSchema: z.ZodObject<{
+    chatNpcId: z.ZodString;
+    progress: z.ZodObject<{
+        enabled: z.ZodBoolean;
+        status: z.ZodEnum<{
+            abort: "abort";
+            done: "done";
+            idle: "idle";
+            running: "running";
+        }>;
+        sessionPeerLines: z.ZodNumber;
+        sessionPeerLineCap: z.ZodNumber;
+        roundIndex: z.ZodNumber;
+        roundPeerLines: z.ZodNumber;
+        roundPeerLineCap: z.ZodNumber;
+        candidateCount: z.ZodNumber;
+        spokenNpcIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        stopReason: z.ZodOptional<z.ZodEnum<{
+            whisper: "whisper";
+            complete: "complete";
+            budget_round: "budget_round";
+            budget_session: "budget_session";
+            no_candidates: "no_candidates";
+            disabled: "disabled";
+        }>>;
+    }, z.core.$strip>;
+}, z.core.$strip>;
+export type LabProgressEvent = z.infer<typeof labProgressEventSchema>;
 export declare const saveConversationPayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
 }, z.core.$strip>;

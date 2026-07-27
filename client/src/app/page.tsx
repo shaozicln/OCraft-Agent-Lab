@@ -122,6 +122,8 @@ function GamePageInner({
     lastExchange,
     lastAside,
     lastEnding,
+    lastLabPeerLine,
+    labProgress,
     archivesList,
     loadedConversation,
     lastNewRun,
@@ -151,6 +153,8 @@ function GamePageInner({
     clearLastExchange,
     clearLastAside,
     clearLastEnding,
+    clearLastLabPeerLine,
+    clearLabProgress,
   } = useGameSocket(token, activeNpcId || defaultNpcId, {
     progressNpcId: defaultNpcId,
     trackNpcIds: allNpcIds.length ? allNpcIds : [defaultNpcId],
@@ -556,6 +560,8 @@ function GamePageInner({
         lastExchange={lastExchange}
         lastAside={lastAside}
         lastEnding={lastEnding}
+        lastLabPeerLine={lastLabPeerLine}
+        labProgress={labProgress}
         archivesList={archivesList}
         loadedConversation={loadedConversation}
         saveError={saveError}
@@ -584,6 +590,8 @@ function GamePageInner({
         onClearLastExchange={clearLastExchange}
         onClearLastAside={clearLastAside}
         onClearLastEnding={clearLastEnding}
+        onClearLastLabPeerLine={clearLastLabPeerLine}
+        onClearLabProgress={clearLabProgress}
         onExchangeSpeak={handleExchangeSpeak}
       />
 

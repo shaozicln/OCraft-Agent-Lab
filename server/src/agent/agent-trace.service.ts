@@ -136,6 +136,35 @@ export class AgentTraceService {
     }
   }
 
+  /** MA-Lab：补记平级进度 */
+  appendLab(
+    playerId: string,
+    npcId: string,
+    lab: {
+      peer_agents: true;
+      stop_reason?: string;
+      session_peer_lines?: number;
+      round_peer_lines?: number;
+      traceId?: string;
+    },
+  ): void {
+    const { traceId, ...payload } = lab;
+    if (traceId) {
+      const hit = this.buffer.find((t) => t.id === traceId);
+      if (hit) {
+        hit.lab = payload;
+        return;
+      }
+    }
+    for (let i = this.buffer.length - 1; i >= 0; i--) {
+      const t = this.buffer[i];
+      if (t.player_id === playerId && t.npc_id === npcId) {
+        t.lab = payload;
+        return;
+      }
+    }
+  }
+
   list(opts: {
     playerId?: string;
     npcId?: string;

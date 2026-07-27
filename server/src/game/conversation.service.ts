@@ -414,6 +414,32 @@ export class ConversationService {
     });
   }
 
+  /** MA-Lab：平级句写入整场流（复用 aside 展示形态） */
+  async appendLabPeerToSceneLog(
+    playerId: string,
+    line: {
+      chatNpcId: string;
+      npcId: string;
+      name: string;
+      text: string;
+    },
+  ) {
+    await this.ensureSceneLogHydrated(playerId);
+    this.pushSceneUtterance(playerId, {
+      kind: 'npc_to_player',
+      speaker_id: line.npcId,
+      speaker_name: line.name,
+      addressee_id: SCENE_PLAYER_ID,
+      addressee_name: SCENE_PLAYER_DISPLAY_NAME,
+      text: line.text,
+      meta: {
+        aside: true,
+        lab_peer: true,
+        chat_npc_id: line.chatNpcId,
+      },
+    });
+  }
+
   /** 进度里的章节必须属于当前 Pack；旧版遗留 id（如 uneasy）纠正为默认章 */
   private resolveValidChapter(raw: ChapterState): ChapterState {
     const pack = this.packService.getPack();

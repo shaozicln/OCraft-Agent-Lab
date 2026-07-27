@@ -14,3 +14,4 @@ export * from './pack-clarify.schema';
 export * from './autoplay.schema';
 export * from './autoplay-propose';
 export * from './autoplay-session';
+export * from './lab-progress';

@@ -36,6 +36,7 @@ export declare const directorFallbackReasonSchema: z.ZodEnum<{
     invalid_cast: "invalid_cast";
     llm_error: "llm_error";
     skipped_whisper: "skipped_whisper";
+    lab_peer: "lab_peer";
 }>;
 export type DirectorFallbackReason = z.infer<typeof directorFallbackReasonSchema>;
 /** false = 决策成功；字符串 = fallback 原因码 */
@@ -44,6 +45,7 @@ export declare const directorFallbackSchema: z.ZodUnion<readonly [z.ZodLiteral<f
     invalid_cast: "invalid_cast";
     llm_error: "llm_error";
     skipped_whisper: "skipped_whisper";
+    lab_peer: "lab_peer";
 }>]>;
 export type DirectorFallback = z.infer<typeof directorFallbackSchema>;
 export declare const agentTraceDirectorSchema: z.ZodObject<{
@@ -58,6 +60,7 @@ export declare const agentTraceDirectorSchema: z.ZodObject<{
         invalid_cast: "invalid_cast";
         llm_error: "llm_error";
         skipped_whisper: "skipped_whisper";
+        lab_peer: "lab_peer";
     }>]>;
     available_events: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
@@ -139,6 +142,7 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
             invalid_cast: "invalid_cast";
             llm_error: "llm_error";
             skipped_whisper: "skipped_whisper";
+            lab_peer: "lab_peer";
         }>]>;
         available_events: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strip>>;
@@ -147,6 +151,12 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
         auto: "auto";
     }>>;
     auto_play: z.ZodOptional<z.ZodBoolean>;
+    lab: z.ZodOptional<z.ZodObject<{
+        peer_agents: z.ZodLiteral<true>;
+        stop_reason: z.ZodOptional<z.ZodString>;
+        session_peer_lines: z.ZodOptional<z.ZodNumber>;
+        round_peer_lines: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strip>>;
     ending: z.ZodOptional<z.ZodObject<{
         ending_id: z.ZodString;
         display_name: z.ZodString;
@@ -244,6 +254,7 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
                 invalid_cast: "invalid_cast";
                 llm_error: "llm_error";
                 skipped_whisper: "skipped_whisper";
+                lab_peer: "lab_peer";
             }>]>;
             available_events: z.ZodOptional<z.ZodArray<z.ZodString>>;
         }, z.core.$strip>>;
@@ -252,6 +263,12 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
             auto: "auto";
         }>>;
         auto_play: z.ZodOptional<z.ZodBoolean>;
+        lab: z.ZodOptional<z.ZodObject<{
+            peer_agents: z.ZodLiteral<true>;
+            stop_reason: z.ZodOptional<z.ZodString>;
+            session_peer_lines: z.ZodOptional<z.ZodNumber>;
+            round_peer_lines: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strip>>;
         ending: z.ZodOptional<z.ZodObject<{
             ending_id: z.ZodString;
             display_name: z.ZodString;

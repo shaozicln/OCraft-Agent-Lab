@@ -1,4 +1,4 @@
-/** 实验室开关（仅本机；默关）。运行时接线后由 gateway/导演读取。 */
+/** 实验室开关（仅本机；默关）。发聊时经 player_chat.labPeerAgents 接入运行时。 */
 
 export const LAB_PEER_AGENTS_KEY = 'ocraft.lab.peer_agents';
 

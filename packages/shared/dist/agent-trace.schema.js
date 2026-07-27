@@ -33,6 +33,7 @@ exports.directorFallbackReasonSchema = zod_1.z.enum([
     'invalid_cast',
     'llm_error',
     'skipped_whisper',
+    'lab_peer',
 ]);
 /** false = 决策成功；字符串 = fallback 原因码 */
 exports.directorFallbackSchema = zod_1.z.union([
@@ -93,6 +94,15 @@ exports.agentTraceRecordSchema = zod_1.z.object({
     whisper_source: zod_1.z.enum(['client', 'auto']).optional(),
     /** 自动演：本轮是否代发玩家句（MA-A-B 为 Agent/MOCK 生成） */
     auto_play: zod_1.z.boolean().optional(),
+    /** MA-Lab：平级多 Agent 标记与本轮进度 */
+    lab: zod_1.z
+        .object({
+        peer_agents: zod_1.z.literal(true),
+        stop_reason: zod_1.z.string().optional(),
+        session_peer_lines: zod_1.z.number().int().optional(),
+        round_peer_lines: zod_1.z.number().int().optional(),
+    })
+        .optional(),
     /** G：本轮命中的结局结算 */
     ending: zod_1.z
         .object({

@@ -62,6 +62,8 @@ export class AgentHarnessService {
       director?: DirectorDecision;
       whisperSource?: 'client' | 'auto';
       autoPlay?: boolean;
+      /** MA-Lab：禁写章（跳过 Pack chapter transition） */
+      labPeer?: boolean;
     },
   ): Promise<AgentRunResult> {
     const pack = this.packService.getPack();
@@ -143,13 +145,20 @@ export class AgentHarnessService {
     let postToolState = this.npcService.getRuntimeState(playerId, npcId);
 
     const flags = this.worldProgress.getFlags(playerId);
-    const transition = evaluateChapterTransition({
-      chapterState,
-      playerMessage,
-      runtimeState: postToolState,
-      flags,
-      triggers: pack.triggers,
-    });
+    // MA-Lab：平级模式禁止 Pack 升章 / 规则写 flag（仍允许软数值 tool）
+    const transition = opts?.labPeer
+      ? {
+          chapterState,
+          flagsToSet: [] as Array<{ name: string; value: string }>,
+          matchedRuleIds: [] as string[],
+        }
+      : evaluateChapterTransition({
+          chapterState,
+          playerMessage,
+          runtimeState: postToolState,
+          flags,
+          triggers: pack.triggers,
+        });
 
     if (transition.flagsToSet.length > 0) {
       await this.worldProgress.setFlags(playerId, transition.flagsToSet);
@@ -254,6 +263,13 @@ export class AgentHarnessService {
         ? { whisper_source: opts.whisperSource }
         : {}),
       ...(opts?.autoPlay ? { auto_play: true } : {}),
+      ...(opts?.labPeer
+        ? {
+            lab: {
+              peer_agents: true as const,
+            },
+          }
+        : {}),
     });
 
     this.logger.log(

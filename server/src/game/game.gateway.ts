@@ -29,6 +29,7 @@ import { NpcExchangeService } from '../agent/npc-exchange.service';
 import { NpcAsideService } from '../agent/npc-aside.service';
 import { DirectorService } from '../agent/director.service';
 import { AutoPlayAgentService } from '../agent/autoplay-agent.service';
+import { LabPeerService } from '../agent/lab-peer.service';
 import { detectWhisperIntent } from '../agent/whisper-detect';
 import {
   pickSafetyFallback,
@@ -64,6 +65,7 @@ export class GameGateway implements OnGatewayConnection {
     private readonly npcAside: NpcAsideService,
     private readonly director: DirectorService,
     private readonly autoPlayAgent: AutoPlayAgentService,
+    private readonly labPeer: LabPeerService,
     private readonly conversationService: ConversationService,
     private readonly npcService: NpcService,
     private readonly packService: PackService,
@@ -261,7 +263,8 @@ export class GameGateway implements OnGatewayConnection {
     }
 
     const playerId = this.requirePlayerId(client);
-    const { npcId, message, nearbyNpcIds, whisper, autoPlay } = parsed.data;
+    const { npcId, message, nearbyNpcIds, whisper, autoPlay, labPeerAgents } =
+      parsed.data;
     const clientWhisper = whisper === true;
     const autoWhisper = !clientWhisper && detectWhisperIntent(message);
     const isWhisper = clientWhisper || autoWhisper;
@@ -271,28 +274,32 @@ export class GameGateway implements OnGatewayConnection {
         ? 'auto'
         : undefined;
     const isAutoPlay = autoPlay === true;
+    const isLabPeer = labPeerAgents === true && !isWhisper;
 
     return this.packService.runWithPlayerAsync(playerId, async () => {
       await this.conversationService.ensureSession(playerId, npcId);
       this.logger.log(
-        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper}${whisperSource ? `(${whisperSource})` : ''}${isAutoPlay ? ' autoPlay' : ''} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
+        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper}${whisperSource ? `(${whisperSource})` : ''}${isAutoPlay ? ' autoPlay' : ''}${isLabPeer ? ' labPeer' : ''} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
       );
 
       try {
-        // 导演：whisper 跳过 LLM；否则真决策。fallback ≠ false → 等同现网仍尝试互聊路径
+        // 导演：whisper / MA-Lab 跳过 LLM；否则真决策
         const directorDecision = isWhisper
           ? this.director.skippedWhisperDecision(npcId)
-          : await this.director.decide(
-              await this.director.buildInput(
-                playerId,
-                npcId,
-                message,
-                nearbyNpcIds ?? [],
-              ),
-            );
+          : isLabPeer
+            ? this.director.labPeerDecision(npcId)
+            : await this.director.decide(
+                await this.director.buildInput(
+                  playerId,
+                  npcId,
+                  message,
+                  nearbyNpcIds ?? [],
+                ),
+              );
         const shouldTryExchange =
-          directorDecision.fallback !== false ||
-          directorDecision.mode === 'reply_then_exchange';
+          !isLabPeer &&
+          (directorDecision.fallback !== false ||
+            directorDecision.mode === 'reply_then_exchange');
         this.logger.log(
           `director mode=${directorDecision.mode} fallback=${String(directorDecision.fallback)} speakers=[${directorDecision.speakers.join(',')}] reason="${directorDecision.reason}"`,
         );
@@ -301,6 +308,7 @@ export class GameGateway implements OnGatewayConnection {
           director: directorDecision,
           whisperSource,
           autoPlay: isAutoPlay,
+          labPeer: isLabPeer,
         });
 
         let fullReply = '';
@@ -364,7 +372,44 @@ export class GameGateway implements OnGatewayConnection {
         }
 
         // 悄悄话 / reply_player 成功：不跑互聊 / 旁听；fallback 或开放模式：与现网一致
-        if (!isWhisper && shouldTryExchange) {
+        // MA-Lab：跳过 Pack exchange/aside，改走受限平级 tick + 进度推送
+        if (isLabPeer) {
+          const peer = await this.labPeer.runPeerTick({
+            playerId,
+            chatNpcId: npcId,
+            nearbyNpcIds: nearbyNpcIds ?? [],
+            playerMessage: message,
+            assistantReply: fullReply,
+            onProgress: (progress) => {
+              client.emit('lab_progress', {
+                chatNpcId: npcId,
+                progress,
+              });
+            },
+            onLine: async (line) => {
+              await this.conversationService.appendLabPeerToSceneLog(
+                playerId,
+                line,
+              );
+              client.emit('lab_peer_line', line);
+            },
+          });
+          this.agentTrace.appendLab(playerId, npcId, {
+            peer_agents: true,
+            stop_reason: peer.progress.stopReason,
+            session_peer_lines: peer.progress.sessionPeerLines,
+            round_peer_lines: peer.progress.roundPeerLines,
+            traceId: result.traceId,
+          });
+        } else if (labPeerAgents === true && isWhisper) {
+          const progress = this.labPeer
+            .getMonitor(playerId)
+            .abort('whisper');
+          client.emit('lab_progress', {
+            chatNpcId: npcId,
+            progress,
+          });
+        } else if (!isWhisper && shouldTryExchange) {
           const exchange = await this.npcExchange.tryRunAfterChat({
             playerId,
             chatNpcId: npcId,
@@ -635,6 +680,7 @@ export class GameGateway implements OnGatewayConnection {
           npcId,
           opts,
         );
+        this.labPeer.resetSession(playerId);
         client.emit('new_run_started', {
           npcId,
           filename: result.filename,

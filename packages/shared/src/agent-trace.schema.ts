@@ -40,6 +40,7 @@ export const directorFallbackReasonSchema = z.enum([
   'invalid_cast',
   'llm_error',
   'skipped_whisper',
+  'lab_peer',
 ]);
 export type DirectorFallbackReason = z.infer<
   typeof directorFallbackReasonSchema
@@ -112,6 +113,15 @@ export const agentTraceRecordSchema = z.object({
   whisper_source: z.enum(['client', 'auto']).optional(),
   /** 自动演：本轮是否代发玩家句（MA-A-B 为 Agent/MOCK 生成） */
   auto_play: z.boolean().optional(),
+  /** MA-Lab：平级多 Agent 标记与本轮进度 */
+  lab: z
+    .object({
+      peer_agents: z.literal(true),
+      stop_reason: z.string().optional(),
+      session_peer_lines: z.number().int().optional(),
+      round_peer_lines: z.number().int().optional(),
+    })
+    .optional(),
   /** G：本轮命中的结局结算 */
   ending: z
     .object({

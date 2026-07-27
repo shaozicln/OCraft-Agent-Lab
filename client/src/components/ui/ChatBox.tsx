@@ -12,10 +12,13 @@ import type {
   NpcAsideEvent,
   NpcExchangeEvent,
   EndingReachedEvent,
+  LabPeerLineEvent,
+  LabProgressEvent,
   SceneUtterance,
   AutoplayNextEvent,
 } from '@ocraft/shared';
 import { useAutoPlay } from '@/lib/autoplay/useAutoPlay';
+import { getLabPeerAgentsEnabled } from '@/lib/lab-settings';
 
 interface ChatBoxProps {
   open: boolean;
@@ -28,6 +31,8 @@ interface ChatBoxProps {
   lastExchange?: NpcExchangeEvent | null;
   lastAside?: NpcAsideEvent | null;
   lastEnding?: EndingReachedEvent | null;
+  lastLabPeerLine?: LabPeerLineEvent | null;
+  labProgress?: LabProgressEvent['progress'] | null;
   archivesList: ConversationArchiveSummary[] | null;
   loadedConversation: ConversationLoadedEvent | null;
   saveError: string | null;
@@ -70,8 +75,29 @@ interface ChatBoxProps {
   onClearLastExchange?: () => void;
   onClearLastAside?: () => void;
   onClearLastEnding?: () => void;
+  onClearLastLabPeerLine?: () => void;
+  onClearLabProgress?: () => void;
   /** 旁听逐句时：当前开口的 NPC；结束传 null（驱动 3D talk） */
   onExchangeSpeak?: (npcId: string | null) => void;
+}
+
+function labStopReasonLabel(reason?: string): string {
+  switch (reason) {
+    case 'complete':
+      return '本轮完成';
+    case 'budget_round':
+      return '本轮额度用尽';
+    case 'budget_session':
+      return '本局额度用尽';
+    case 'no_candidates':
+      return '无旁听候选';
+    case 'whisper':
+      return '悄悄话跳过';
+    case 'disabled':
+      return '已关闭';
+    default:
+      return reason ?? '';
+  }
 }
 
 function sceneLogToChatMessages(log: SceneUtterance[]): ChatMessage[] {
@@ -148,6 +174,8 @@ export function ChatBox({
   lastExchange,
   lastAside,
   lastEnding,
+  lastLabPeerLine,
+  labProgress,
   archivesList,
   loadedConversation,
   saveError,
@@ -176,6 +204,8 @@ export function ChatBox({
   onClearLastExchange,
   onClearLastAside,
   onClearLastEnding,
+  onClearLastLabPeerLine,
+  onClearLabProgress,
   onExchangeSpeak,
 }: ChatBoxProps) {
   const [input, setInput] = useState('');
@@ -186,6 +216,7 @@ export function ChatBox({
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   /** 旁听逐句播放中：禁输入 */
   const [listening, setListening] = useState(false);
+  const [labEnabled, setLabEnabled] = useState(false);
   /** 悄悄话开关（默认关；导演自动辨明为后续） */
   const [whisperMode, setWhisperMode] = useState(false);
   /** 当前活跃存档槽（高亮 / 顶栏） */
@@ -411,6 +442,24 @@ export function ChatBox({
   }, [lastAside, onClearLastAside, onExchangeSpeak]);
 
   useEffect(() => {
+    if (!lastLabPeerLine) return;
+    const line = lastLabPeerLine;
+    onClearLastLabPeerLine?.();
+    onExchangeSpeak?.(line.npcId);
+    setHistory((prev) => [
+      ...prev,
+      {
+        role: 'aside' as const,
+        text: line.text,
+        speakerName: line.name,
+        speakerId: line.npcId,
+      },
+    ]);
+    const t = window.setTimeout(() => onExchangeSpeak?.(null), 900);
+    return () => window.clearTimeout(t);
+  }, [lastLabPeerLine, onClearLastLabPeerLine, onExchangeSpeak]);
+
+  useEffect(() => {
     if (!lastEnding) return;
     const ending = lastEnding;
     onClearLastEnding?.();
@@ -419,6 +468,30 @@ export function ChatBox({
       : `结局达成：${ending.displayName}`;
     setHistory((prev) => [...prev, { role: 'system', text: note }]);
   }, [lastEnding, onClearLastEnding]);
+
+  useEffect(() => {
+    if (!open) return;
+    setLabEnabled(getLabPeerAgentsEnabled());
+  }, [open]);
+
+  useEffect(() => {
+    if (!labProgress || labProgress.status !== 'done') return;
+    // 本轮额度用尽很常见，只靠进度条；系统条只提示「本局顶 / 无候选」
+    if (
+      labProgress.stopReason !== 'budget_session' &&
+      labProgress.stopReason !== 'no_candidates'
+    ) {
+      return;
+    }
+    const label = labStopReasonLabel(labProgress.stopReason);
+    if (!label) return;
+    setHistory((prev) => {
+      const note = `实验室 · ${label}（本局 ${labProgress.sessionPeerLines}/${labProgress.sessionPeerLineCap}）`;
+      const last = prev[prev.length - 1];
+      if (last?.role === 'system' && last.text === note) return prev;
+      return [...prev, { role: 'system', text: note }];
+    });
+  }, [labProgress]);
 
   useEffect(() => {
     return () => {
@@ -665,6 +738,11 @@ export function ChatBox({
               <div className="min-w-0 ml-0.5">
                 <span className="block text-sm font-medium text-white truncate">
                   场景 · 正在与 {npcName} 交谈
+                  {labEnabled && (
+                    <span className="ml-2 align-middle text-[10px] font-normal text-rose-300/90 border border-rose-400/40 rounded px-1 py-0.5">
+                      实验
+                    </span>
+                  )}
                 </span>
                 {activeSlotTitle && (
                   <span className="block text-[10px] text-slate-500 truncate">
@@ -681,6 +759,27 @@ export function ChatBox({
               ESC 关闭
             </button>
           </div>
+
+          {labEnabled && labProgress && (
+            <div className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-slate-700 bg-slate-950/50">
+              <span className="text-[11px] text-rose-200/90 truncate">
+                {labProgress.status === 'running'
+                  ? `平级 tick 第 ${labProgress.roundIndex} 轮 · ${labProgress.roundPeerLines}/${labProgress.roundPeerLineCap} · 本局 ${labProgress.sessionPeerLines}/${labProgress.sessionPeerLineCap}`
+                  : labProgress.status === 'abort'
+                    ? `实验室中断 · ${labStopReasonLabel(labProgress.stopReason)}`
+                    : `实验室 · ${labStopReasonLabel(labProgress.stopReason) || labProgress.status} · 本局 ${labProgress.sessionPeerLines}/${labProgress.sessionPeerLineCap}`}
+              </span>
+              {labProgress.status === 'done' || labProgress.status === 'abort' ? (
+                <button
+                  type="button"
+                  onClick={() => onClearLabProgress?.()}
+                  className="text-[11px] px-2 py-0.5 rounded text-slate-400 hover:bg-slate-800 shrink-0"
+                >
+                  收起
+                </button>
+              ) : null}
+            </div>
+          )}
 
           {(autoPlay.ui.status === 'running' ||
             autoPlay.ui.status === 'paused' ||
