@@ -12,25 +12,25 @@ import {
 } from '@ocraft/shared';
 import { randomUUID } from 'crypto';
 import { LlmService } from './llm.service';
-import { RagService } from './rag.service';
-import { AgentTraceService } from './agent-trace.service';
-import { NpcService } from '../npc/npc.service';
-import { ConversationService } from '../game/conversation.service';
-import { WorldProgressService } from '../story/world-progress.service';
-import { PackService } from '../story/pack.service';
+import { RagService } from '../memory/rag.service';
+import { AgentTraceService } from '../observability/agent-trace.service';
+import { NpcService } from '../../npc/npc.service';
+import { ConversationService } from '../../game/conversation.service';
+import { WorldProgressService } from '../../story/world-progress.service';
+import { PackService } from '../../story/pack.service';
 import {
   evaluateChapterTransition,
   evaluateNpcReplyFlags,
-} from './chapter-transition';
-import { buildNpcToolDefinitions } from './npc-tool-defs';
+} from '../rules/chapter-transition';
+import { buildNpcToolDefinitions } from '../tools/npc-tool-defs';
 import type { DirectorDecision } from './director.types';
 import {
   formatRecallMemoryResult,
   isAllowedNpcTool,
   rejectUnknownTool,
   tryExecuteStrongTool,
-} from './npc-strong-tools';
-import { buildPublicSceneWorkingMemoryBlock } from './scene-working-memory';
+} from '../tools/npc-strong-tools';
+import { buildPublicSceneWorkingMemoryBlock } from '../memory/scene-working-memory';
 
 export interface AgentRunResult {
   toolCalls: ToolCallResult[];

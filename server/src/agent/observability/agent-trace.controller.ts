@@ -6,7 +6,7 @@ import {
   Query,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuthService } from '../auth/auth.service';
+import { AuthService } from '../../auth/auth.service';
 import { AgentTraceService } from './agent-trace.service';
 
 @Controller('agent')

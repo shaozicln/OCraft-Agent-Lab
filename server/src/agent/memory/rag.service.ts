@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChapterState, NpcMemory } from '@ocraft/shared';
-import { NpcService } from '../npc/npc.service';
-import { PackService } from '../story/pack.service';
-import { LlmService } from './llm.service';
+import { NpcService } from '../../npc/npc.service';
+import { PackService } from '../../story/pack.service';
+import { LlmService } from '../core/llm.service';
 import {
   localEmbed,
   memoryEmbedText,

@@ -12,7 +12,7 @@ import {
 import { loadStoryPackFromDir } from '../src/story/pack-loader';
 import { resolveVersionPath } from '../src/story/pack-ops';
 import { packClarifySessionSchema, storyPackSchema } from '@ocraft/shared';
-import { LlmService } from '../src/agent/llm.service';
+import { LlmService } from '../src/agent/core/llm.service';
 import { PackClarifyService } from '../src/story/pack-clarify.service';
 
 type Case = {

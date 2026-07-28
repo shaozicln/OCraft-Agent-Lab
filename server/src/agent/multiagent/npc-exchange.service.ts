@@ -4,13 +4,13 @@ import type {
   NpcExchangeEvent,
   PackExchangeEvent,
 } from '@ocraft/shared';
-import { LlmService } from './llm.service';
-import { AgentTraceService } from './agent-trace.service';
-import { evaluateExchangeEvents } from './npc-exchange';
-import { looksLikeAiSlop } from './reply-guard';
-import { NpcService } from '../npc/npc.service';
-import { WorldProgressService } from '../story/world-progress.service';
-import { PackService } from '../story/pack.service';
+import { LlmService } from '../core/llm.service';
+import { AgentTraceService } from '../observability/agent-trace.service';
+import { evaluateExchangeEvents } from '../rules/npc-exchange';
+import { looksLikeAiSlop } from '../safety/reply-guard';
+import { NpcService } from '../../npc/npc.service';
+import { WorldProgressService } from '../../story/world-progress.service';
+import { PackService } from '../../story/pack.service';
 
 @Injectable()
 export class NpcExchangeService {

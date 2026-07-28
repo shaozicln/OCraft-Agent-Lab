@@ -7,16 +7,16 @@ import {
   type AutoPlayNextProposal,
   type LlmMessage,
 } from '@ocraft/shared';
-import { LlmService } from './llm.service';
-import { PackService } from '../story/pack.service';
-import { WorldProgressService } from '../story/world-progress.service';
-import { ConversationService } from '../game/conversation.service';
-import { NpcService } from '../npc/npc.service';
-import { listAvailableExchangeEventIds } from './npc-exchange';
+import { LlmService } from '../core/llm.service';
+import { PackService } from '../../story/pack.service';
+import { WorldProgressService } from '../../story/world-progress.service';
+import { ConversationService } from '../../game/conversation.service';
+import { NpcService } from '../../npc/npc.service';
+import { listAvailableExchangeEventIds } from '../rules/npc-exchange';
 import {
   PUBLIC_SCENE_LINE_LIMIT,
   formatSceneUtteranceLines,
-} from './scene-working-memory';
+} from '../memory/scene-working-memory';
 
 @Injectable()
 export class AutoPlayAgentService {

@@ -3,8 +3,8 @@
  *
  * 用法：npm run multiagent:eval
  */
-import { pickAsideSpeaker } from '../src/agent/aside-pick';
-import { detectWhisperIntent } from '../src/agent/whisper-detect';
+import { pickAsideSpeaker } from '../src/agent/multiagent/aside-pick';
+import { detectWhisperIntent } from '../src/agent/multiagent/whisper-detect';
 
 type Case = {
   name: string;

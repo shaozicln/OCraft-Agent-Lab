@@ -12,7 +12,7 @@ import {
   type PackClarifySession,
   type StoryPack,
 } from '@ocraft/shared';
-import { LlmService } from '../agent/llm.service';
+import { LlmService } from '../agent/core/llm.service';
 import { normalizeClarifyLlmOutput } from './pack-clarify-normalize';
 import {
   formatGlossaryForPrompt,

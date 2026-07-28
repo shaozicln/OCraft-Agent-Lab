@@ -18,11 +18,11 @@ import {
   runQueryRuntime,
   runRequestHint,
   tryExecuteStrongTool,
-} from '../src/agent/npc-strong-tools';
+} from '../src/agent/tools/npc-strong-tools';
 import {
   filterUnlockedMemories,
   retrieveByKeyword,
-} from '../src/agent/rag-retrieve';
+} from '../src/agent/memory/rag-retrieve';
 
 type Case = {
   name: string;

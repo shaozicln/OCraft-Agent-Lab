@@ -7,12 +7,12 @@ import {
   type LabPeerLineEvent,
   type LlmMessage,
 } from '@ocraft/shared';
-import { LlmService } from './llm.service';
-import { looksLikeAiSlop } from './reply-guard';
-import { NpcService } from '../npc/npc.service';
-import { PackService } from '../story/pack.service';
-import { WorldProgressService } from '../story/world-progress.service';
-import { ConversationService } from '../game/conversation.service';
+import { LlmService } from '../core/llm.service';
+import { looksLikeAiSlop } from '../safety/reply-guard';
+import { NpcService } from '../../npc/npc.service';
+import { PackService } from '../../story/pack.service';
+import { WorldProgressService } from '../../story/world-progress.service';
+import { ConversationService } from '../../game/conversation.service';
 
 const PEER_FALLBACKS = [
   '……我也听到了。',

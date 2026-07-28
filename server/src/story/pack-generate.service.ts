@@ -13,7 +13,7 @@ import {
   type PlayerProfileField,
   type StoryPack,
 } from '@ocraft/shared';
-import { LlmService } from '../agent/llm.service';
+import { LlmService } from '../agent/core/llm.service';
 
 const SYSTEM_BASE = `你是 Story Pack 局部配置生成器。根据用户提示词与「当前包摘要」，只输出指定片段的 JSON 对象，不要 markdown。
 创作原则：规模与内容严格跟用户提示词；id/name/npc_id 仅字母数字下划线连字符；交叉引用须指向摘要里已有或本片段新建的 id。

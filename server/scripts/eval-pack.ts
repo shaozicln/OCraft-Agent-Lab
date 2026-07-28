@@ -13,8 +13,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { loadStoryPackFromDir } from '../src/story/pack-loader';
 import { resolveVersionPath } from '../src/story/pack-ops';
-import { evalSuiteSchema } from '../src/agent/pack-eval.schema';
-import { runEvalSuite, type EvalCaseResult, type EvalSuiteResult } from '../src/agent/pack-eval';
+import { evalSuiteSchema } from '../src/agent/observability/pack-eval.schema';
+import { runEvalSuite, type EvalCaseResult, type EvalSuiteResult } from '../src/agent/observability/pack-eval';
 
 const CASES_DIR = path.resolve(__dirname, '..', 'eval', 'cases');
 

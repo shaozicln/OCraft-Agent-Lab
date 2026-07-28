@@ -9,9 +9,9 @@ import type {
 import {
   evaluateChapterTransition,
   evaluateNpcReplyFlags,
-} from './chapter-transition';
-import { evaluateExchangeEvents } from './npc-exchange';
-import { looksLikeAiSlop } from './reply-guard';
+} from '../rules/chapter-transition';
+import { evaluateExchangeEvents } from '../rules/npc-exchange';
+import { looksLikeAiSlop } from '../safety/reply-guard';
 import type { EvalCase, EvalExpect, EvalSuite } from './pack-eval.schema';
 
 export type EvalAssertionFailure = {

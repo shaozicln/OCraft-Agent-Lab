@@ -6,9 +6,9 @@ import {
   type PackNpc,
 } from '@ocraft/shared';
 import { LlmService } from './llm.service';
-import { PackService } from '../story/pack.service';
-import { WorldProgressService } from '../story/world-progress.service';
-import { ConversationService } from '../game/conversation.service';
+import { PackService } from '../../story/pack.service';
+import { WorldProgressService } from '../../story/world-progress.service';
+import { ConversationService } from '../../game/conversation.service';
 import type {
   CastMember,
   DirectorDecision,
@@ -17,8 +17,8 @@ import type {
 import {
   PUBLIC_SCENE_LINE_LIMIT,
   formatSceneUtteranceLines,
-} from './scene-working-memory';
-import { listAvailableExchangeEventIds } from './npc-exchange';
+} from '../memory/scene-working-memory';
+import { listAvailableExchangeEventIds } from '../rules/npc-exchange';
 
 const BLURB_MAX_LEN = 40;
 const REASON_MAX_LEN = 60;

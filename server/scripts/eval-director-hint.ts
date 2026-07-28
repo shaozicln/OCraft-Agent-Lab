@@ -3,11 +3,11 @@
  *
  * 用法：npm run director:eval
  */
-import { DirectorService } from '../src/agent/director.service';
-import { listAvailableExchangeEventIds } from '../src/agent/npc-exchange';
+import { DirectorService } from '../src/agent/core/director.service';
+import { listAvailableExchangeEventIds } from '../src/agent/rules/npc-exchange';
 import { loadStoryPackFromDir } from '../src/story/pack-loader';
 import { resolveVersionPath } from '../src/story/pack-ops';
-import type { DirectorInput } from '../src/agent/director.types';
+import type { DirectorInput } from '../src/agent/core/director.types';
 
 type Case = {
   name: string;

@@ -5,12 +5,12 @@ import {
   type LlmMessage,
   type NpcAsideEvent,
 } from '@ocraft/shared';
-import { LlmService } from './llm.service';
-import { looksLikeAiSlop } from './reply-guard';
+import { LlmService } from '../core/llm.service';
+import { looksLikeAiSlop } from '../safety/reply-guard';
 import { pickAsideSpeaker } from './aside-pick';
-import { NpcService } from '../npc/npc.service';
-import { PackService } from '../story/pack.service';
-import { WorldProgressService } from '../story/world-progress.service';
+import { NpcService } from '../../npc/npc.service';
+import { PackService } from '../../story/pack.service';
+import { WorldProgressService } from '../../story/world-progress.service';
 
 const ASIDE_PROBABILITY = 0.42;
 /** 有导演 preferred speakers 命中候选时略提高插话率 */

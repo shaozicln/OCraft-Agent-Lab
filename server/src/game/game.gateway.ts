@@ -24,19 +24,19 @@ import {
   startNewRunPayloadSchema,
 } from '@ocraft/shared';
 import { AuthService } from '../auth/auth.service';
-import { AgentHarnessService } from '../agent/agent-harness.service';
-import { NpcExchangeService } from '../agent/npc-exchange.service';
-import { NpcAsideService } from '../agent/npc-aside.service';
-import { DirectorService } from '../agent/director.service';
-import { AutoPlayAgentService } from '../agent/autoplay-agent.service';
-import { LabPeerService } from '../agent/lab-peer.service';
-import { detectWhisperIntent } from '../agent/whisper-detect';
+import { AgentHarnessService } from '../agent/core/agent-harness.service';
+import { NpcExchangeService } from '../agent/multiagent/npc-exchange.service';
+import { NpcAsideService } from '../agent/multiagent/npc-aside.service';
+import { DirectorService } from '../agent/core/director.service';
+import { AutoPlayAgentService } from '../agent/multiagent/autoplay-agent.service';
+import { LabPeerService } from '../agent/multiagent/lab-peer.service';
+import { detectWhisperIntent } from '../agent/multiagent/whisper-detect';
 import {
   pickSafetyFallback,
   scanNpcReplySafety,
-} from '../agent/reply-safety';
-import { evaluateEndingSettlement } from '../agent/ending-settle';
-import { AgentTraceService } from '../agent/agent-trace.service';
+} from '../agent/safety/reply-safety';
+import { evaluateEndingSettlement } from '../agent/rules/ending-settle';
+import { AgentTraceService } from '../agent/observability/agent-trace.service';
 import { PackService } from '../story/pack.service';
 import { ConversationService } from './conversation.service';
 import { NpcService } from '../npc/npc.service';

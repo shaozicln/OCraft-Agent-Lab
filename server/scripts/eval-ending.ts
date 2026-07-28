@@ -8,7 +8,7 @@ import { resolveVersionPath } from '../src/story/pack-ops';
 import {
   evaluateEndingSettlement,
   hasSettledEnding,
-} from '../src/agent/ending-settle';
+} from '../src/agent/rules/ending-settle';
 
 type Case = {
   name: string;

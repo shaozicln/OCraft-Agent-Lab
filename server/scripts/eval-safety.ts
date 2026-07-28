@@ -5,7 +5,7 @@
  */
 import { loadStoryPackFromDir } from '../src/story/pack-loader';
 import { resolveVersionPath } from '../src/story/pack-ops';
-import { scanNpcReplySafety } from '../src/agent/reply-safety';
+import { scanNpcReplySafety } from '../src/agent/safety/reply-safety';
 
 type Case = {
   name: string;

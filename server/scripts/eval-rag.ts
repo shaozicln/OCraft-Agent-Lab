@@ -10,13 +10,13 @@ import {
   getDefaultChapterId,
   type NpcMemory,
 } from '@ocraft/shared';
-import { localEmbed, memoryEmbedText } from '../src/agent/local-embedding';
+import { localEmbed, memoryEmbedText } from '../src/agent/memory/local-embedding';
 import {
   buildLocalMemoryVectors,
   filterUnlockedMemories,
   retrieveByKeyword,
   retrieveByVector,
-} from '../src/agent/rag-retrieve';
+} from '../src/agent/memory/rag-retrieve';
 
 type Case = {
   name: string;
