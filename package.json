@@ -3,5 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-all.ps1"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
   }
 }
