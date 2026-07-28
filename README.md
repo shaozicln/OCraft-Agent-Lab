@@ -130,67 +130,9 @@ npm run dev
 > 首次若报 `@ocraft/shared` 找不到，先执行：  
 > `cd packages/shared && npm install && npm run build`
 
-## 协议速查
-
-默认 HTTP：`http://localhost:4000` · WS：同端口 Socket.io（需登录 token）
-
-### HTTP（Harness 相关）
 
 
-| 方法             | 路径                               | 用途                              |
-| -------------- | -------------------------------- | ------------------------------- |
-| GET/PUT/DELETE | `/packs/selection`               | 选用 / 切换 / 取消剧情包                 |
-| GET            | `/packs/runtime`                 | 进场摘要（章标签、NPC 列表）                |
-| GET            | `/packs/worlds`…                 | 列世界 / 版本 / 拉 Pack               |
-| GET            | `/agent/traces`                  | 本账号 Agent 决策轨迹（tool / 升章 / 互聊等） |
-| DELETE         | `/agent/traces`                  | 清空 Trace                        |
-| POST           | `/auth/login` · `/auth/register` | 登录注册（后续请求带 Bearer）              |
 
-
-### WebSocket（对白 / 存档）
-
-
-| 方向  | 事件                                                         | 用途 |
-| --- | ---------------------------------------------------------- | --- |
-| C→S | `player_chat`                                              | 玩家发言 → Harness；可选 `nearbyNpcIds`、`whisper` |
-| S→C | `npc_stream`                                               | 对白流式输出 |
-| S→C | `npc_state_update`                                         | 好感/疲惫/章/旗等 |
-| S→C | `npc_exchange`                                             | 关系互聊旁听（写入 `scene_log`） |
-| S→C | `npc_aside`                                                | 同场短接话（写入 `scene_log`，`meta.aside`） |
-| S→C | `conversation_saved`                                       | 自动存档成功 |
-| S→C | `conversation_loaded`                                      | 读档：`messages` + 可选 `scene_log`（整场流） |
-| C→S | `list_conversation_archives` / `load_conversation_archive` | 列档 / 读档 |
-| C→S | `start_new_run`                                            | 新开一个档 |
-| C→S | `request_story_map`                                        | 剧情进度图 |
-| C→S | `set_run_npc_selection`                                    | 本局出场 NPC 筛选 |
-
-### 存档快照与 `scene_log`（v3）
-
-当前写入版本 **`schema_version: 3`**（v2 + run 级整场对白时间线）。聊天窗平时展示整场流；LLM 仍只用分人 `messages` 子集（双写，互不替代）。
-
-| 字段 / 约定 | 说明 |
-| --- | --- |
-| `scene_log: SceneUtterance[]` | 一局时间线：玩家↔NPC、互聊、旁听等 |
-| `kind` | `player_to_npc` · `npc_to_player` · `npc_to_npc` · `system` |
-| 玩家 id / 显示名 | `player` / `沈檐` |
-| `meta.whisper` | 悄悄话：仅目标 NPC；跳过 aside / exchange |
-| `meta.aside` | 同场短接话；含 `chat_npc_id`（当时焦点） |
-| 写入时机 | 主对话成对写入；`npc_exchange` / `npc_aside` 推送时追加 |
-| 读档 | `conversation_loaded.scene_log` → ChatBox；缺省则回退 `messages` |
-| 进程重启 | 从活跃档 `ensureSceneLogHydrated` 灌回内存 |
-| 首版不做 | 升章系统句不进 `scene_log`；无 `audience[]` |
 
 *还要做好多东西啊。。。不然可能打不出预想中的自定义和多结局ORZ*
 
-## Pack Eval（离线规则回归）
-
-不启 Nest / 不调真 LLM。用例按世界分类：`server/eval/cases/{world}/{version}.json`（与 `story-packs` 对齐），跑同一套升章 / flag / 互聊 / 薄护栏逻辑。
-
-```bash
-cd server
-npm run pack:eval:all          # 全部世界种子
-npm run pack:eval              # 默认 feel 包
-npm run pack:eval -- office official-mvp__20260710T1045
-```
-
-通过标准：终端 `OK all cases passed`，且 Summary 里 failed=0。失败会打印 turn Trace（章前后、命中规则、flags、互聊）。
