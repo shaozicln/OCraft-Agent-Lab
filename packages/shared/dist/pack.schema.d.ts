@@ -50,6 +50,7 @@ export declare const packNpcSchema: z.ZodObject<{
         content: z.ZodString;
         min_chapter: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>>>;
+    forbidden_behaviors: z.ZodDefault<z.ZodArray<z.ZodString>>;
     appear_from_chapter: z.ZodOptional<z.ZodString>;
     appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
@@ -508,6 +509,7 @@ export declare const storyPackSchema: z.ZodObject<{
             content: z.ZodString;
             min_chapter: z.ZodOptional<z.ZodString>;
         }, z.core.$strip>>>;
+        forbidden_behaviors: z.ZodDefault<z.ZodArray<z.ZodString>>;
         appear_from_chapter: z.ZodOptional<z.ZodString>;
         appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
     }, z.core.$strip>>;

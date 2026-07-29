@@ -90,6 +90,30 @@ const cases: Case[] = [
       };
     },
   },
+  {
+    name: 'CD-B：forbidden_behaviors 指纹命中',
+    run: () => {
+      const withForbid = {
+        ...pack,
+        npcs: pack.npcs.map((n) =>
+          n.npc_id === npcId
+            ? {
+                ...n,
+                forbidden_behaviors: ['宣布升章或结局'],
+              }
+            : n,
+        ),
+      };
+      const r = scanNpcReplySafety('好，现在升章。', {
+        pack: withForbid,
+        chapterState: 'ch1_daily',
+        npcId,
+      });
+      const ok =
+        !r.ok && r.reasons.some((x) => x.code === 'forbidden_behavior');
+      return { ok, detail: r.reasons.map((x) => x.code).join(',') };
+    },
+  },
 ];
 
 let failed = 0;

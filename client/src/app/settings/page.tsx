@@ -1794,6 +1794,8 @@ function SettingsInner({
                       ? SECTION_TO_TOC[genActiveSection] ?? null
                       : null
                   }
+                  distillToken={token}
+                  onDistillMessage={setMessage}
                 />
               )}
             </div>

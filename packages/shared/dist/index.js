@@ -27,6 +27,7 @@ __exportStar(require("./llm.schema"), exports);
 __exportStar(require("./mock-reply"), exports);
 __exportStar(require("./agent-trace.schema"), exports);
 __exportStar(require("./pack-clarify.schema"), exports);
+__exportStar(require("./pack-distill.schema"), exports);
 __exportStar(require("./autoplay.schema"), exports);
 __exportStar(require("./autoplay-propose"), exports);
 __exportStar(require("./autoplay-session"), exports);

@@ -59,6 +59,11 @@ export const packNpcSchema = z.object({
   system_prompt_template: z.string(),
   memories: z.array(packMemorySchema).default([]),
   /**
+   * CD-B：人设禁忌 → 运行时 safety 指纹源（可选；缺省 [] 兼容旧 Pack）。
+   * 蒸馏 apply 会写入；也可在编辑器手改。
+   */
+  forbidden_behaviors: z.array(z.string().trim().min(1).max(200)).max(24).default([]),
+  /**
    * 场景出场：当前章节 rank ≥ 该章，且 require_flags 均已置位时才刷小人。
    * 省略 appear_from_chapter = 开场即在。
    */

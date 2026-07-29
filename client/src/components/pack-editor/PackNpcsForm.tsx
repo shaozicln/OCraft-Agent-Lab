@@ -1,6 +1,7 @@
 'use client';
 
-import type { PackMemory, PackNpc } from '@ocraft/shared';
+import { useState } from 'react';
+import type { PackMemory, PackNpc, StoryPack } from '@ocraft/shared';
 import type { PackFormProps } from './fields';
 import {
   ANIMATION_OPTIONS,
@@ -15,6 +16,7 @@ import {
   TextAreaInput,
   TextInput,
 } from './fields';
+import { PackDistillModal } from './PackDistillModal';
 
 function synonymsToLines(
   syn: Record<string, string[]> | undefined,
@@ -44,12 +46,20 @@ export function PackNpcsForm({
   onChange,
   example,
   panelStyle,
-}: PackFormProps) {
+  distillToken,
+  onDistillMessage,
+}: PackFormProps & {
+  /** 有 token 才显示蒸馏向导 */
+  distillToken?: string | null;
+  onDistillMessage?: (msg: string) => void;
+}) {
   const animOpts = ANIMATION_OPTIONS.map((a) => ({ value: a, label: a }));
   const chapterOpts = value.world.chapters.map((c) => ({
     value: c.id,
     label: `${c.display_name} (${c.id})`,
   }));
+  const [distillOpen, setDistillOpen] = useState(false);
+  const [distillTarget, setDistillTarget] = useState<string | null>(null);
 
   const updateNpc = (i: number, next: PackNpc) => {
     const npcs = [...value.npcs];
@@ -64,44 +74,63 @@ export function PackNpcsForm({
     updateNpc(ni, { ...npc, memories });
   };
 
+  const openDistill = (targetNpcId: string | null) => {
+    if (!distillToken) {
+      onDistillMessage?.('请先登录后再用人设蒸馏。');
+      return;
+    }
+    setDistillTarget(targetNpcId);
+    setDistillOpen(true);
+  };
+
   return (
+    <>
     <SectionCard
       id="pack-sec-npcs"
       title="NPC"
-      hint="出场：appear_from_chapter / appear_require_flags 控制场景刷人；current_status 为写死动画；同义词：兴趣=同义词1,同义词2"
+      hint="出场：appear_from_chapter / appear_require_flags 控制场景刷人；current_status 为写死动画；同义词：兴趣=同义词1,同义词2。可用「人设蒸馏」从短描述/已蒸馏卡确认写入。"
       panelStyle={panelStyle}
       actions={
-        <AddButton
-          label="+ NPC"
-          onClick={() =>
-            onChange({
-              ...value,
-              npcs: [
-                ...value.npcs,
-                {
-                  npc_id: `npc_${value.npcs.length + 1}`,
-                  name: '',
-                  meta: {
-                    avatar: '',
-                    model_path: '',
-                    scale: [1, 1, 1],
-                    spawn_position: [0, 0, 0],
+        <div className="flex flex-wrap gap-2">
+          {distillToken ? (
+            <AddButton
+              label="+ 蒸馏新建"
+              onClick={() => openDistill(null)}
+            />
+          ) : null}
+          <AddButton
+            label="+ NPC"
+            onClick={() =>
+              onChange({
+                ...value,
+                npcs: [
+                  ...value.npcs,
+                  {
+                    npc_id: `npc_${value.npcs.length + 1}`,
+                    name: '',
+                    meta: {
+                      avatar: '',
+                      model_path: '',
+                      scale: [1, 1, 1],
+                      spawn_position: [0, 0, 0],
+                    },
+                    attributes: {
+                      fatigue: 0,
+                      max_fatigue: 100,
+                      affinity: 0,
+                      current_status: 'idle',
+                      favorite_things: [],
+                    },
+                    system_prompt_template: '',
+                    memories: [],
+                    forbidden_behaviors: [],
+                    appear_require_flags: [],
                   },
-                  attributes: {
-                    fatigue: 0,
-                    max_fatigue: 100,
-                    affinity: 0,
-                    current_status: 'idle',
-                    favorite_things: [],
-                  },
-                  system_prompt_template: '',
-                  memories: [],
-                  appear_require_flags: [],
-                },
-              ],
-            })
-          }
-        />
+                ],
+              })
+            }
+          />
+        </div>
       }
     >
       {value.npcs.map((npc, i) => {
@@ -120,6 +149,22 @@ export function PackNpcsForm({
                 : undefined
             }
           >
+            {distillToken ? (
+              <div className="mb-2">
+                <button
+                  type="button"
+                  className="rounded-lg border px-2 py-1 text-xs"
+                  style={{
+                    borderColor: 'var(--ui-border)',
+                    color: 'var(--ui-fg)',
+                    background: 'var(--ui-input)',
+                  }}
+                  onClick={() => openDistill(npc.npc_id)}
+                >
+                  人设蒸馏（更新此人）
+                </button>
+              </div>
+            ) : null}
             <div className="grid gap-2 sm:grid-cols-2">
               <FieldLabel label="npc_id" format={FMT.id}>
                 <TextInput
@@ -325,6 +370,23 @@ export function PackNpcsForm({
                   />
                 </FieldLabel>
               </div>
+              <div className="sm:col-span-2">
+                <FieldLabel
+                  label="forbidden_behaviors（CD-B→safety）"
+                  format={FMT.listFree}
+                >
+                  <StringListInput
+                    value={npc.forbidden_behaviors ?? []}
+                    placeholder={
+                      (ex?.forbidden_behaviors ?? []).join('\n') ||
+                      '自称AI\n宣布升章或结局'
+                    }
+                    onChange={(forbidden_behaviors) =>
+                      updateNpc(i, { ...npc, forbidden_behaviors })
+                    }
+                  />
+                </FieldLabel>
+              </div>
             </div>
 
             <div className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: 'var(--ui-border)' }}>
@@ -418,5 +480,19 @@ export function PackNpcsForm({
         );
       })}
     </SectionCard>
+    {distillToken ? (
+      <PackDistillModal
+        open={distillOpen}
+        token={distillToken}
+        pack={value}
+        targetNpcId={distillTarget}
+        onClose={() => setDistillOpen(false)}
+        onApplied={(next: StoryPack, summary: string) => {
+          onChange(next);
+          onDistillMessage?.(summary);
+        }}
+      />
+    ) : null}
+    </>
   );
 }

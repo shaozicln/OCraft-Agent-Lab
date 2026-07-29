@@ -211,6 +211,7 @@ export function blankifyStoryPack(
         keywords: [],
         content: '',
       })),
+      forbidden_behaviors: [],
     })),
   };
 }
@@ -346,6 +347,7 @@ export function createMinimalBlankPack(opts: {
             min_chapter: ch0,
           },
         ],
+        forbidden_behaviors: [],
         appear_require_flags: [],
       },
     ],

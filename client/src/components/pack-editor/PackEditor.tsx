@@ -31,6 +31,8 @@ export function PackEditor({
   example,
   panelStyle,
   highlightTocId,
+  distillToken,
+  onDistillMessage,
 }: {
   value: StoryPack;
   onChange: (next: StoryPack) => void;
@@ -38,6 +40,8 @@ export function PackEditor({
   panelStyle: CSSProperties;
   /** 生成进度：目录项 id 高亮 */
   highlightTocId?: string | null;
+  distillToken?: string | null;
+  onDistillMessage?: (msg: string) => void;
 }) {
   const props = { value, onChange, example, panelStyle };
   return (
@@ -45,7 +49,11 @@ export function PackEditor({
       <div className="min-w-0 flex-1 space-y-4">
         <PackHeaderForm {...props} />
         <PackWorldForm {...props} />
-        <PackNpcsForm {...props} />
+        <PackNpcsForm
+          {...props}
+          distillToken={distillToken}
+          onDistillMessage={onDistillMessage}
+        />
         <PackTriggersForm {...props} />
         <PackPromptsForm {...props} />
       </div>

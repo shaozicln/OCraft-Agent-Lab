@@ -11,7 +11,8 @@ export type SafetyReasonCode =
   | 'ai_slop'
   | 'meta_spoil'
   | 'locked_memory'
-  | 'future_chapter_constraint';
+  | 'future_chapter_constraint'
+  | 'forbidden_behavior';
 
 export type ReplySafetyResult = {
   ok: boolean;
@@ -24,7 +25,7 @@ export type ReplySafetyContext = {
   npcId: string;
 };
 
-/** 主回复安全扫描：薄 AI 腔 + 元叙事 + 未解锁记忆/后章约束指纹 */
+/** 主回复安全扫描：薄 AI 腔 + 元叙事 + 未解锁记忆/后章约束 + CD-B 人设禁忌指纹 */
 export function scanNpcReplySafety(
   text: string,
   ctx: ReplySafetyContext,
@@ -74,7 +75,68 @@ export function scanNpcReplySafety(
     }
   }
 
+  // CD-B：NPC 人设禁忌 → 回复指纹
+  if (npc?.forbidden_behaviors?.length) {
+    for (const item of npc.forbidden_behaviors) {
+      const hit = forbiddenBehaviorHit(compact, item);
+      if (hit) {
+        reasons.push({
+          code: 'forbidden_behavior',
+          detail: `${item.slice(0, 40)}:${hit}`,
+        });
+      }
+    }
+  }
+
   return { ok: reasons.length === 0, reasons };
+}
+
+/** 禁忌短句扩成可扫描指纹（含常见同义说法） */
+export function expandForbiddenFingerprints(item: string): string[] {
+  const raw = item.trim();
+  if (!raw) return [];
+  const compact = raw.replace(/\s+/g, '');
+  const out = new Set<string>();
+  if (compact.length >= 2) out.add(compact);
+
+  if (/自称?\s*AI|人工智能|语言模型|助手/i.test(raw) || /自称AI/.test(compact)) {
+    for (const s of [
+      '作为AI',
+      '我是AI',
+      '人工智能',
+      '语言模型',
+      '作为助手',
+      '我是助手',
+    ]) {
+      out.add(s);
+    }
+  }
+  if (/升章|结局|跳章/.test(raw)) {
+    for (const s of ['升章', '进入下一章', '结局是', '本章结束', '触发结局']) {
+      out.add(s);
+    }
+  }
+  if (/长篇|设定讲解|世界观讲解/.test(raw)) {
+    for (const s of ['根据设定', '世界观是', '剧情背景如下']) {
+      out.add(s);
+    }
+  }
+  return [...out];
+}
+
+function forbiddenBehaviorHit(
+  replyCompact: string,
+  forbiddenItem: string,
+): string | null {
+  for (const fp of expandForbiddenFingerprints(forbiddenItem)) {
+    if (fp.length >= 8) {
+      const hit = fingerprintHit(replyCompact, fp);
+      if (hit) return hit;
+    } else if (fp.length >= 2 && replyCompact.includes(fp)) {
+      return fp;
+    }
+  }
+  return null;
 }
 
 /** 从源文抽 8 字指纹，命中回复则剧透 */

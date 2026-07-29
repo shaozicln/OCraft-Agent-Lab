@@ -26,6 +26,7 @@ import { AuthService } from '../auth/auth.service';
 import { PackService } from './pack.service';
 import { PackGenerateService } from './pack-generate.service';
 import { PackClarifyService } from './pack-clarify.service';
+import { PackDistillService } from './pack-distill.service';
 
 @Controller('packs')
 export class PackController {
@@ -33,6 +34,7 @@ export class PackController {
     private readonly packService: PackService,
     private readonly packGenerateService: PackGenerateService,
     private readonly packClarifyService: PackClarifyService,
+    private readonly packDistillService: PackDistillService,
     private readonly authService: AuthService,
   ) {}
 
@@ -272,6 +274,33 @@ export class PackController {
   ) {
     this.requirePlayerId(authorization);
     return this.packClarifyService.polish(body);
+  }
+
+  @Post('distill/brief')
+  async distillBrief(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    this.requirePlayerId(authorization);
+    return this.packDistillService.brief(body);
+  }
+
+  @Post('distill/normalize')
+  async distillNormalize(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    this.requirePlayerId(authorization);
+    return this.packDistillService.normalize(body);
+  }
+
+  @Post('distill/apply')
+  async distillApply(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    this.requirePlayerId(authorization);
+    return this.packDistillService.apply(body);
   }
 
   @Get('selection')
