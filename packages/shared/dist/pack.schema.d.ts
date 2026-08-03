@@ -332,12 +332,29 @@ export declare const packWorldFileSchema: z.ZodObject<{
         priority: z.ZodDefault<z.ZodNumber>;
     }, z.core.$strip>>>;
 }, z.core.$strip>;
+/**
+ * Pack 可演出玩家位（自动演导演可点名说戏内一句）。
+ * 整段省略 = 兼容旧包，视为 enabled=true、id=player、无出场门槛。
+ */
+export declare const packPlayablePlayerSchema: z.ZodObject<{
+    enabled: z.ZodDefault<z.ZodBoolean>;
+    id: z.ZodDefault<z.ZodString>;
+    appear_from_chapter: z.ZodOptional<z.ZodString>;
+    appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+}, z.core.$strip>;
 export declare const packHeaderSchema: z.ZodObject<{
     schema_version: z.ZodNumber;
     world_id: z.ZodString;
     display_name: z.ZodString;
     created_at: z.ZodString;
     notes: z.ZodOptional<z.ZodString>;
+    default_style_id: z.ZodOptional<z.ZodString>;
+    playable_player: z.ZodOptional<z.ZodObject<{
+        enabled: z.ZodDefault<z.ZodBoolean>;
+        id: z.ZodDefault<z.ZodString>;
+        appear_from_chapter: z.ZodOptional<z.ZodString>;
+        appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    }, z.core.$strip>>;
 }, z.core.$strip>;
 export declare const worldManifestSchema: z.ZodObject<{
     world_id: z.ZodString;
@@ -352,6 +369,13 @@ export declare const storyPackSchema: z.ZodObject<{
         display_name: z.ZodString;
         created_at: z.ZodString;
         notes: z.ZodOptional<z.ZodString>;
+        default_style_id: z.ZodOptional<z.ZodString>;
+        playable_player: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodDefault<z.ZodBoolean>;
+            id: z.ZodDefault<z.ZodString>;
+            appear_from_chapter: z.ZodOptional<z.ZodString>;
+            appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        }, z.core.$strip>>;
     }, z.core.$strip>;
     world: z.ZodObject<{
         chapters: z.ZodArray<z.ZodObject<{
@@ -535,6 +559,7 @@ export type PackAnimationRule = z.infer<typeof packAnimationRuleSchema>;
 export type PackEnding = z.infer<typeof packEndingSchema>;
 export type PackWorldFile = z.infer<typeof packWorldFileSchema>;
 export type PackHeader = z.infer<typeof packHeaderSchema>;
+export type PackPlayablePlayer = z.infer<typeof packPlayablePlayerSchema>;
 export type WorldManifest = z.infer<typeof worldManifestSchema>;
 export type StoryPack = z.infer<typeof storyPackSchema>;
 /** 交叉校验：触发/记忆/约束引用的章节与 flag 必须在 world 中声明 */
@@ -556,4 +581,16 @@ export declare function isNpcPresent(opts: {
     chapterState: string;
     flags: StoryFlagsSnapshot;
     rankMap: Record<string, number>;
+}): boolean;
+/** Pack 是否声明可演出玩家位（旧包省略字段 → true） */
+export declare function isPackPlayablePlayerEnabled(pack: StoryPack): boolean;
+export declare function getPackPlayablePlayerId(pack: StoryPack): string;
+/**
+ * 可演出玩家位当前是否可被导演点名（已启用且过出场门槛）。
+ * 未启用 → false；旧包省略 → 恒 true。
+ */
+export declare function isPackPlayablePlayerPresent(pack: StoryPack, opts: {
+    chapterState: string;
+    flags: StoryFlagsSnapshot;
+    rankMap?: Record<string, number>;
 }): boolean;

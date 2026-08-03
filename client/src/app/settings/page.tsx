@@ -2017,7 +2017,7 @@ function SettingsInner({
                       style={{ color: 'var(--ui-fg-muted)' }}
                     >
                       关闭导演统筹，由多名 NPC 在限额内更自主地互聊（对照实验）。
-
+                      与「自动演绎」互斥：开启本开关时不能开自动演绎。
                     </p>
                   </div>
                   <span

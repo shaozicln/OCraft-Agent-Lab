@@ -2,7 +2,11 @@
   "name": "ocraft-ai-game",
   "private": true,
   "scripts": {
-    "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-all.ps1"
+    "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-all.ps1",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:ps": "docker compose ps"
   },
   "devDependencies": {
     "typescript": "~5.9.3"

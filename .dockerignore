@@ -1,0 +1,16 @@
+# 依赖 / 构建上下文忽略（仓库根）
+**/node_modules
+**/.next
+**/dist
+**/.git
+**/Docs
+**/.cursor
+**/.vscode
+**/*.md
+!**README.md
+client/.env*
+server/.env
+**/.DS_Store
+**/coverage
+**/*.log
+agent-transcripts

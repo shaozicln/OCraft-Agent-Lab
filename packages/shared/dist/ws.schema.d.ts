@@ -26,19 +26,44 @@ export declare const chatSuggestionsEventSchema: z.ZodObject<{
     suggestions: z.ZodArray<z.ZodString>;
     error: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
-/** MA-A-B：请求导演侧生成下一句假玩家话 */
+/** AP-1：请求下一拍导演排场（目标与风格由本局设置传入） */
 export declare const requestAutoplayNextPayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
     turnIndex: z.ZodNumber;
     maxTurns: z.ZodOptional<z.ZodNumber>;
+    chapterSpeakCap: z.ZodOptional<z.ZodNumber>;
     priorSays: z.ZodOptional<z.ZodArray<z.ZodString>>;
     sawTargetExchange: z.ZodOptional<z.ZodBoolean>;
     targetChapter: z.ZodOptional<z.ZodString>;
     targetExchange: z.ZodOptional<z.ZodString>;
+    targetEnding: z.ZodOptional<z.ZodString>;
+    styleId: z.ZodOptional<z.ZodString>;
+    goalTitle: z.ZodOptional<z.ZodString>;
+    accelerate: z.ZodOptional<z.ZodBoolean>;
+    nearbyNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
+}, z.core.$strip>;
+export declare const autoplayBeatLineEventSchema: z.ZodObject<{
+    speaker_kind: z.ZodEnum<{
+        player: "player";
+        npc: "npc";
+    }>;
+    speaker_id: z.ZodString;
+    speaker_name: z.ZodOptional<z.ZodString>;
+    text: z.ZodString;
 }, z.core.$strip>;
 export declare const autoplayNextEventSchema: z.ZodObject<{
     npcId: z.ZodString;
     say: z.ZodOptional<z.ZodString>;
+    lines: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        speaker_kind: z.ZodEnum<{
+            player: "player";
+            npc: "npc";
+        }>;
+        speaker_id: z.ZodString;
+        speaker_name: z.ZodOptional<z.ZodString>;
+        text: z.ZodString;
+    }, z.core.$strip>>>;
+    applied: z.ZodOptional<z.ZodBoolean>;
     done: z.ZodBoolean;
     reason: z.ZodDefault<z.ZodString>;
     source: z.ZodDefault<z.ZodEnum<{
@@ -175,8 +200,8 @@ export declare const archivedMessageSchema: z.ZodObject<{
 }, z.core.$strip>;
 /** 存档作用域：run=一局世界；npc=旧版单人会话 */
 export declare const archiveScopeSchema: z.ZodEnum<{
-    run: "run";
     npc: "npc";
+    run: "run";
 }>;
 export type ArchiveScope = z.infer<typeof archiveScopeSchema>;
 /** 一局档里单个 NPC 的子快照 */
@@ -270,6 +295,7 @@ export type ConversationSnapshotV2 = z.infer<typeof conversationSnapshotV2Schema
 /**
  * 存档快照 v3 = v2 + run 级 scene_log（整场对白时间线）
  * selected_npc_ids：null/缺省 = 全部已可出场；非空数组 = 在已可出场中筛选（至少 1 人）
+ * player_notes：Mem-P 本局玩家要点（缺省 []，旧档兼容）
  */
 export declare const conversationSnapshotV3Schema: z.ZodObject<{
     schema_version: z.ZodLiteral<3>;
@@ -325,6 +351,19 @@ export declare const conversationSnapshotV3Schema: z.ZodObject<{
         meta: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     }, z.core.$strip>>>;
     selected_npc_ids: z.ZodOptional<z.ZodNullable<z.ZodArray<z.ZodString>>>;
+    player_notes: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        text: z.ZodString;
+        keywords: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        source_npc_id: z.ZodOptional<z.ZodString>;
+        chapter_id: z.ZodString;
+        visibility: z.ZodDefault<z.ZodEnum<{
+            public: "public";
+            whisper: "whisper";
+        }>>;
+        at: z.ZodString;
+        conf: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strip>>>;
 }, z.core.$strip>;
 export type ConversationSnapshotV3 = z.infer<typeof conversationSnapshotV3Schema>;
 /** 当前写入版本别名 */
@@ -346,8 +385,8 @@ export declare const conversationArchiveSummarySchema: z.ZodObject<{
     display_name: z.ZodOptional<z.ZodString>;
     session_started_at: z.ZodString;
     scope: z.ZodOptional<z.ZodEnum<{
-        run: "run";
         npc: "npc";
+        run: "run";
     }>>;
     snapshots: z.ZodArray<z.ZodObject<{
         index: z.ZodNumber;
@@ -369,8 +408,8 @@ export declare const conversationSavedEventSchema: z.ZodObject<{
     savedAt: z.ZodString;
     chapter_state: z.ZodOptional<z.ZodString>;
     scope: z.ZodOptional<z.ZodEnum<{
-        run: "run";
         npc: "npc";
+        run: "run";
     }>>;
     world_changed: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
@@ -381,8 +420,8 @@ export declare const conversationArchivesListEventSchema: z.ZodObject<{
         display_name: z.ZodOptional<z.ZodString>;
         session_started_at: z.ZodString;
         scope: z.ZodOptional<z.ZodEnum<{
-            run: "run";
             npc: "npc";
+            run: "run";
         }>>;
         snapshots: z.ZodArray<z.ZodObject<{
             index: z.ZodNumber;
@@ -418,8 +457,8 @@ export declare const conversationLoadedEventSchema: z.ZodObject<{
         story_flags: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodString>>;
     }, z.core.$strip>;
     scope: z.ZodOptional<z.ZodEnum<{
-        run: "run";
         npc: "npc";
+        run: "run";
     }>>;
     restored_npc_ids: z.ZodOptional<z.ZodArray<z.ZodString>>;
     scene_log: z.ZodOptional<z.ZodArray<z.ZodObject<{

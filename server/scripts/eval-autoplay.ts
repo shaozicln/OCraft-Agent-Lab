@@ -9,6 +9,8 @@ import {
   AutoPlaySession,
   FEEL_DEMO_AUTO_GOAL,
   autoPlayGoalSchema,
+  buildAutoPlayGoal,
+  DEFAULT_AUTO_PLAY_STYLE_ID,
   isAutoPlayGoalReached,
   mockProposeAutoPlayNext,
   parseAutoPlayNextJson,
@@ -133,27 +135,34 @@ const cases: Case[] = [
     },
   },
   {
-    name: 'FSM：start → advance → done（达上限）',
+    name: 'FSM：advance 顶章发言软顶（不硬停）',
     run: () => {
       const goal = autoPlayGoalSchema.parse({
         ...FEEL_DEMO_AUTO_GOAL,
+        chapter_speak_cap: 2,
         max_turns: 2,
       });
       const s = new AutoPlaySession(goal);
       if (!s.start()) return { ok: false, detail: 'start failed' };
-      s.advance();
-      if (String(s.status) !== 'running' || Number(s.turnIndex) !== 1) {
-        return { ok: false, detail: `after1 ${s.status}@${s.turnIndex}` };
+      s.advance('ch1_daily');
+      if (s.needsAcceleratePrompt || String(s.status) !== 'running') {
+        return {
+          ok: false,
+          detail: `after1 prompt=${s.needsAcceleratePrompt} ${s.status}`,
+        };
       }
-      s.advance();
+      s.advance('ch1_daily');
       return {
-        ok: String(s.status) === 'done' && Number(s.turnIndex) === 2,
-        detail: `${s.status}@${s.turnIndex}`,
+        ok:
+          String(s.status) === 'running' &&
+          Boolean(s.needsAcceleratePrompt) &&
+          Number(s.chapterSpeakCount) === 2,
+        detail: `${s.status} count=${s.chapterSpeakCount} prompt=${s.needsAcceleratePrompt}`,
       };
     },
   },
   {
-    name: 'FSM：pause / resume / stop(接管)',
+    name: 'FSM：pause / resume / stop',
     run: () => {
       const s = new AutoPlaySession(FEEL_DEMO_AUTO_GOAL);
       s.start();
@@ -163,10 +172,32 @@ const cases: Case[] = [
       if (!s.resume() || String(s.status) !== 'running') {
         return { ok: false, detail: `resume→${s.status}` };
       }
-      s.stop('接管');
+      s.stop('停止');
       const ok =
-        String(s.status) === 'abort' && s.failReason === '接管';
+        String(s.status) === 'abort' && s.failReason === '停止';
       return { ok, detail: `${s.status}:${s.failReason}` };
+    },
+  },
+  {
+    name: 'FSM：接管 / 交回',
+    run: () => {
+      const s = new AutoPlaySession(FEEL_DEMO_AUTO_GOAL);
+      s.start();
+      if (
+        !s.enterIntervene() ||
+        !s.intervening ||
+        String(s.status) !== 'paused'
+      ) {
+        return { ok: false, detail: `intervene→${s.status}` };
+      }
+      if (
+        !s.handBack() ||
+        s.intervening ||
+        String(s.status) !== 'running'
+      ) {
+        return { ok: false, detail: `handBack→${s.status}` };
+      }
+      return { ok: true, detail: 'ok' };
     },
   },
   {
@@ -177,6 +208,71 @@ const cases: Case[] = [
       s.markExchange('ex_ch2_first_meet');
       const ok = s.goalReached('ch2_unease');
       return { ok, detail: ok ? 'reached' : 'miss' };
+    },
+  },
+  {
+    name: 'AP-0b：buildAutoPlayGoal 必结局、无时长',
+    run: () => {
+      const g = buildAutoPlayGoal({
+        npcId: 'npc_any',
+        prefs: {
+          style_id: DEFAULT_AUTO_PLAY_STYLE_ID,
+          ending_mode: 'random',
+          takeover_mode: 'watch_only',
+          wait_ms: 800,
+          chapter_speak_cap: 100,
+          enter_epilogue: true,
+        },
+        pack: {
+          world_id: 'demo',
+          display_name: '测试包',
+          endings: [
+            { id: 'ending_a', display_name: '甲' },
+            { id: 'ending_b', display_name: '乙' },
+          ],
+        },
+      });
+      const ok =
+        g.npc_id === 'npc_any' &&
+        g.chapter_speak_cap === 100 &&
+        g.style_id === 'direct' &&
+        g.takeover_mode === 'watch_only' &&
+        g.enter_epilogue === true &&
+        (g.target_ending === 'ending_a' || g.target_ending === 'ending_b') &&
+        g.id !== FEEL_DEMO_AUTO_GOAL.id;
+      return {
+        ok,
+        detail: `style=${g.style_id} ending=${g.target_ending ?? '-'} epi=${g.enter_epilogue}`,
+      };
+    },
+  },
+  {
+    name: 'AP-0b：无结局 → final_chapter',
+    run: () => {
+      const g = buildAutoPlayGoal({
+        npcId: 'npc_x',
+        prefs: {
+          style_id: 'direct',
+          ending_mode: 'random',
+          takeover_mode: 'allow',
+          wait_ms: 800,
+          chapter_speak_cap: 50,
+          enter_epilogue: false,
+        },
+        pack: {
+          chapters: [{ id: 'ch1' }, { id: 'ch_last' }],
+          endings: [],
+        },
+      });
+      const ok =
+        g.stop_at_final_chapter === true &&
+        g.target_chapter === 'ch_last' &&
+        g.enter_epilogue === false &&
+        !g.target_ending;
+      return {
+        ok,
+        detail: `ch=${g.target_chapter} stopFinal=${g.stop_at_final_chapter}`,
+      };
     },
   },
 ];

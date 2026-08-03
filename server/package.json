@@ -30,7 +30,8 @@
     "safety:eval": "ts-node -r tsconfig-paths/register scripts/eval-safety.ts",
     "autoplay:eval": "ts-node -r tsconfig-paths/register scripts/eval-autoplay.ts",
     "ending:eval": "ts-node -r tsconfig-paths/register scripts/eval-ending.ts",
-    "lab:eval": "ts-node -r tsconfig-paths/register scripts/eval-lab.ts"
+    "lab:eval": "ts-node -r tsconfig-paths/register scripts/eval-lab.ts",
+    "notes:eval": "ts-node -r tsconfig-paths/register scripts/eval-player-notes.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

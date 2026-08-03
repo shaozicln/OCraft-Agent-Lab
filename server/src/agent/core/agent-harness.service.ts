@@ -31,6 +31,12 @@ import {
   tryExecuteStrongTool,
 } from '../tools/npc-strong-tools';
 import { buildPublicSceneWorkingMemoryBlock } from '../memory/scene-working-memory';
+import {
+  buildPlayerNotesPromptBlock,
+  extractPlayerNotes,
+  mergePlayerNotes,
+  selectNotesForInject,
+} from '../memory/player-notes';
 
 export interface AgentRunResult {
   toolCalls: ToolCallResult[];
@@ -88,6 +94,25 @@ export class AgentHarnessService {
         this.conversationService.getPublicSceneLog(playerId),
       );
 
+    const isWhisper = Boolean(opts?.whisperSource);
+    const extracted = extractPlayerNotes({
+      message: playerMessage,
+      chapterId: chapterState,
+      sourceNpcId: npcId,
+      whisper: isWhisper,
+    });
+    const mergedNotes = mergePlayerNotes(
+      this.conversationService.getPlayerNotes(playerId),
+      extracted,
+    );
+    this.conversationService.setPlayerNotes(playerId, mergedNotes);
+    const notesForPrompt = selectNotesForInject(mergedNotes, {
+      chatNpcId: npcId,
+      chapterId: chapterState,
+    });
+    const { ids: playerNotesInjected, block: playerNotesBlock } =
+      buildPlayerNotesPromptBlock(notesForPrompt);
+
     const systemPrompt = this.npcService.buildSystemPrompt(npcId, {
       chapterState,
       affinity: preState.affinity,
@@ -103,7 +128,7 @@ export class AgentHarnessService {
       '不要在回复正文里伪造工具 JSON；需要时请发起 tool call。',
       '禁止用工具改章节、写记忆或发明事件；无关闲聊可不调用。',
     ].join('');
-    const systemContent = `${systemPrompt}\n\n${workingMemoryBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}\n\n${toolPolicy}`;
+    const systemContent = `${systemPrompt}\n\n${workingMemoryBlock}\n\n${playerNotesBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}\n\n${toolPolicy}`;
 
     const dialogMessages = this.conversationService.buildDialogMessages(
       playerId,
@@ -188,7 +213,7 @@ export class AgentHarnessService {
       toolCalls.length > 0
         ? `\n\n【本轮已执行工具】\n${toolCalls.map((t) => `- ${t.tool}: ${t.observation}`).join('\n')}`
         : '';
-    const replySystem = `${systemAfter}\n\n${workingMemoryBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}${toolObs}\n\n请用角色口吻直接回复玩家，不要再输出工具调用。\n禁止自称 AI/助手/语言模型；不要总结剧情或宣布升章。`;
+    const replySystem = `${systemAfter}\n\n${workingMemoryBlock}\n\n${playerNotesBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}${toolObs}\n\n请用角色口吻直接回复玩家，不要再输出工具调用。\n禁止自称 AI/助手/语言模型；不要总结剧情或宣布升章。`;
 
     const replyMessages = this.conversationService.buildDialogMessages(
       playerId,
@@ -247,6 +272,8 @@ export class AgentHarnessService {
       rag_embed_backend: ragResult.embed_backend,
       rag_error: ragResult.error,
       working_memory_lines: workingMemoryLines,
+      player_notes_added: extracted.map((n) => n.id),
+      player_notes_injected: playerNotesInjected,
       animation,
       ...(opts?.director
         ? {
@@ -273,7 +300,7 @@ export class AgentHarnessService {
     });
 
     this.logger.log(
-      `Agent run player=${playerId} npc=${npcId} pack=${pack.header.world_id}/${pack.version_dir} chapter=${chapterState} flags=${Object.keys(storyFlags).join(',') || '-'} sceneCtx=${workingMemoryLines.length} rag=${ragResult.path}/${ragResult.embed_backend ?? '-'} hits=${ragHits.length} tools=${toolCalls.map((t) => t.tool).join(',') || '-'} mock=${this.llmService.isMockMode()} trace=${traceId}`,
+      `Agent run player=${playerId} npc=${npcId} pack=${pack.header.world_id}/${pack.version_dir} chapter=${chapterState} flags=${Object.keys(storyFlags).join(',') || '-'} sceneCtx=${workingMemoryLines.length} notes=+${extracted.length}/inj=${playerNotesInjected.length} rag=${ragResult.path}/${ragResult.embed_backend ?? '-'} hits=${ragHits.length} tools=${toolCalls.map((t) => t.tool).join(',') || '-'} mock=${this.llmService.isMockMode()} trace=${traceId}`,
     );
 
     return { toolCalls, finalState, animation, stream, traceId };

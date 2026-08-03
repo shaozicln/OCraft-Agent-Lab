@@ -569,6 +569,18 @@ function GamePageInner({
         chapterLabels={chapterLabels}
         chapterDisplayName={chapterDisplayName}
         chapterId={worldChapter}
+        chapterOptions={(runtime?.chapters ?? []).map((c) => ({
+          id: c.id,
+          label: c.hud_label || c.display_name || c.id,
+        }))}
+        endingOptions={runtime?.endings ?? []}
+        packMeta={{
+          world_id: runtime?.world_id ?? runtime?.selection?.world_id,
+          version_dir: runtime?.selection?.pack_version_id,
+          display_name: runtime?.display_name,
+          default_style_id: runtime?.default_style_id,
+          playable_player_enabled: runtime?.playable_player_enabled,
+        }}
         lastNewRun={lastNewRun}
         suggestions={suggestions}
         suggestionsLoading={suggestionsLoading}
@@ -576,6 +588,10 @@ function GamePageInner({
         onClose={closeChat}
         onSend={handleSendChat}
         onRequestAutoplayNext={requestAutoplayNext}
+        nearbyNpcIds={[
+          ...nearbyNpcs.map((n) => n.npcId),
+          ...visibleNpcs.map((n) => n.npc_id),
+        ]}
         onSubscribeAutoplayNext={subscribeAutoplayNext}
         onRequestSuggestions={requestSuggestions}
         onClearSuggestions={clearSuggestions}

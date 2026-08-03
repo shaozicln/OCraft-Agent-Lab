@@ -5,6 +5,15 @@ export declare class AutoPlaySession {
     status: AutoPlayStatus;
     /** 已完成的拍数（即将执行的是 turnIndex） */
     turnIndex: number;
+    /** 当前章内已发言次数（换章清零） */
+    chapterSpeakCount: number;
+    chapterIdForCap: string | undefined;
+    /** 已顶到章发言上限，等待用户选保持/加速（不硬停） */
+    needsAcceleratePrompt: boolean;
+    /** 接管介入中：暂停自动拍，允许玩家输入 */
+    intervening: boolean;
+    /** 本局是否处于加速 */
+    accelerate: boolean;
     failReason?: string;
     sawTargetExchange: boolean;
     constructor(goal: AutoPlayGoal);
@@ -12,13 +21,22 @@ export declare class AutoPlaySession {
     start(): boolean;
     pause(): boolean;
     resume(): boolean;
+    /** 接管：暂停自动拍，解锁输入 */
+    enterIntervene(): boolean;
+    /** 交回：继续自动演 */
+    handBack(): boolean;
     stop(reason?: string): void;
     markExchange(eventId: string | null | undefined): void;
-    /** 本拍成功后推进；达上限 → done */
-    advance(): void;
+    setAccelerate(on: boolean): void;
+    /**
+     * 本拍成功后推进；换章清零章内计数。
+     * 顶到 chapter_speak_cap → 置 needsAcceleratePrompt，不自动 done。
+     */
+    advance(chapterId?: string): void;
+    clearAcceleratePrompt(): void;
     complete(reason?: string): void;
     fail(reason: string): void;
-    goalReached(chapter?: string): boolean;
+    goalReached(chapter?: string, endingId?: string | null): boolean;
     isActive(): boolean;
     locksInput(): boolean;
 }

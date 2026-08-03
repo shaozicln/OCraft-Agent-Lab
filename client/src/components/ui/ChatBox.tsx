@@ -16,8 +16,10 @@ import type {
   LabProgressEvent,
   SceneUtterance,
   AutoplayNextEvent,
+  AutoPlayEndingOption,
 } from '@ocraft/shared';
 import { useAutoPlay } from '@/lib/autoplay/useAutoPlay';
+import { AutoPlaySetupModal } from './AutoPlaySetupModal';
 import { getLabPeerAgentsEnabled } from '@/lib/lab-settings';
 
 interface ChatBoxProps {
@@ -42,6 +44,16 @@ interface ChatBoxProps {
   chapterDisplayName?: string;
   /** 当前章节 id（自动演目标核对） */
   chapterId?: string;
+  /** 可选停章列表 */
+  chapterOptions?: Array<{ id: string; label: string }>;
+  endingOptions?: AutoPlayEndingOption[];
+  packMeta?: {
+    world_id?: string;
+    version_dir?: string;
+    display_name?: string;
+    default_style_id?: string;
+    playable_player_enabled?: boolean;
+  };
   lastNewRun?: NewRunStartedEvent | null;
   suggestions: string[] | null;
   suggestionsLoading: boolean;
@@ -54,11 +66,19 @@ interface ChatBoxProps {
   onRequestAutoplayNext: (payload: {
     turnIndex: number;
     maxTurns: number;
+    chapterSpeakCap?: number;
     priorSays: string[];
     sawTargetExchange: boolean;
     targetChapter?: string;
     targetExchange?: string;
+    targetEnding?: string;
+    styleId?: string;
+    goalTitle?: string;
+    accelerate?: boolean;
+    nearbyNpcIds?: string[];
   }) => boolean;
+  /** 导演 cast 用附近 NPC */
+  nearbyNpcIds?: string[];
   onSubscribeAutoplayNext: (
     handler: (ev: AutoplayNextEvent) => void,
   ) => () => void;
@@ -183,6 +203,9 @@ export function ChatBox({
   chapterLabels,
   chapterDisplayName,
   chapterId,
+  chapterOptions,
+  endingOptions,
+  packMeta,
   lastNewRun,
   suggestions,
   suggestionsLoading,
@@ -190,6 +213,7 @@ export function ChatBox({
   onClose,
   onSend,
   onRequestAutoplayNext,
+  nearbyNpcIds,
   onSubscribeAutoplayNext,
   onRequestSuggestions,
   onClearSuggestions,
@@ -219,6 +243,7 @@ export function ChatBox({
   const [labEnabled, setLabEnabled] = useState(false);
   /** 悄悄话开关（默认关；导演自动辨明为后续） */
   const [whisperMode, setWhisperMode] = useState(false);
+  const [autoPlaySetupOpen, setAutoPlaySetupOpen] = useState(false);
   /** 当前活跃存档槽（高亮 / 顶栏） */
   const [activeSlotFilename, setActiveSlotFilename] = useState<string | null>(
     null,
@@ -259,15 +284,50 @@ export function ChatBox({
     [connected, onSend],
   );
 
+  const applyBeatLines = useCallback(
+    (lines: NonNullable<AutoplayNextEvent['lines']>) => {
+      setHistory((prev) => [
+        ...prev,
+        ...lines.map((l) =>
+          l.speaker_kind === 'player'
+            ? {
+                role: 'player' as const,
+                text: l.text,
+                autoPlay: true,
+              }
+            : {
+                role: 'aside' as const,
+                text: l.text,
+                speakerName: l.speaker_name ?? l.speaker_id,
+                speakerId: l.speaker_id,
+                autoPlay: true,
+              },
+        ),
+      ]);
+    },
+    [],
+  );
+
+  const nearbyRef = useRef(nearbyNpcIds ?? []);
+  nearbyRef.current = nearbyNpcIds ?? [];
+
   const autoPlay = useAutoPlay({
     npcId,
     isBusy: isStreaming || listening,
     isStreaming,
     chapterId,
     lastExchangeId: lastExchange?.eventId ?? null,
+    lastEndingId: lastEnding?.endingId ?? null,
     connected,
+    packMeta: {
+      ...packMeta,
+      endings: endingOptions,
+      chapters: (chapterOptions ?? []).map((c) => ({ id: c.id })),
+    },
     onSendAuto: sendAutoLine,
+    onApplyBeatLines: applyBeatLines,
     onRequestNext: onRequestAutoplayNext,
+    getNearbyNpcIds: () => nearbyRef.current,
     subscribeNext: onSubscribeAutoplayNext,
     onNote: pushSystemNote,
   });
@@ -276,7 +336,9 @@ export function ChatBox({
 
   useEffect(() => {
     if (!open) {
-      // 关闭聊天窗不清空整场流（Q1=B）；仅收起面板
+      // 关聊天窗不停自动演（观察箱）；仅收起面板。stopOnClose 为 no-op。
+      autoPlay.stopOnClose();
+      setAutoPlaySetupOpen(false);
       setInput('');
       setHistoryFullscreen(false);
       setLoadPanelOpen(false);
@@ -289,6 +351,7 @@ export function ChatBox({
     document.exitPointerLock();
     const timer = window.setTimeout(() => inputRef.current?.focus(), 80);
     return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随 open 开关
   }, [open, onClearSuggestions]);
 
   useEffect(() => {
@@ -785,46 +848,122 @@ export function ChatBox({
             autoPlay.ui.status === 'paused' ||
             autoPlay.ui.status === 'done' ||
             autoPlay.ui.status === 'abort') && (
-            <div className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-slate-700 bg-slate-950/60">
-              <span className="text-[11px] text-amber-200/90 truncate">
-                {autoPlay.ui.status === 'running'
-                  ? `自动演 ${autoPlay.ui.progressLabel}`
-                  : autoPlay.ui.status === 'paused'
-                    ? `已暂停 ${autoPlay.ui.progressLabel}`
-                    : autoPlay.ui.status === 'done'
-                      ? '自动演已完成'
-                      : `已中断${autoPlay.ui.failReason ? ` · ${autoPlay.ui.failReason}` : ''}`}
-              </span>
-              <div className="flex items-center gap-1 shrink-0">
-                {autoPlay.ui.status === 'running' && (
-                  <button
-                    type="button"
-                    onClick={autoPlay.pause}
-                    className="text-[11px] px-2 py-0.5 rounded text-slate-300 hover:bg-slate-800"
-                  >
-                    暂停
-                  </button>
-                )}
-                {autoPlay.ui.status === 'paused' && (
-                  <button
-                    type="button"
-                    onClick={autoPlay.resume}
-                    className="text-[11px] px-2 py-0.5 rounded text-sky-300 hover:bg-slate-800"
-                  >
-                    继续
-                  </button>
-                )}
-                {(autoPlay.ui.status === 'running' ||
-                  autoPlay.ui.status === 'paused') && (
-                  <button
-                    type="button"
-                    onClick={autoPlay.takeover}
-                    className="text-[11px] px-2 py-0.5 rounded text-rose-300 hover:bg-slate-800"
-                  >
-                    接管
-                  </button>
-                )}
+            <div className="flex flex-col gap-1 px-4 py-1.5 border-b border-slate-700 bg-slate-950/60">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-amber-200/90 truncate">
+                  {autoPlay.ui.intervening
+                    ? `已接管 · ${autoPlay.ui.progressLabel}`
+                    : autoPlay.ui.status === 'running'
+                      ? `自动演绎 ${autoPlay.ui.progressLabel}${autoPlay.ui.accelerate ? ' · 加速' : ''}`
+                      : autoPlay.ui.status === 'paused'
+                        ? `已暂停 ${autoPlay.ui.progressLabel}`
+                        : autoPlay.ui.status === 'done'
+                          ? '自动演绎已完成'
+                          : `已中断${autoPlay.ui.failReason ? ` · ${autoPlay.ui.failReason}` : ''}`}
+                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  {autoPlay.ui.status === 'running' && !autoPlay.ui.intervening && (
+                    <button
+                      type="button"
+                      onClick={autoPlay.pause}
+                      className="text-[11px] px-2 py-0.5 rounded text-slate-300 hover:bg-slate-800"
+                    >
+                      暂停
+                    </button>
+                  )}
+                  {autoPlay.ui.status === 'paused' &&
+                    !autoPlay.ui.intervening &&
+                    !autoPlay.ui.needsAcceleratePrompt && (
+                      <button
+                        type="button"
+                        onClick={autoPlay.resume}
+                        className="text-[11px] px-2 py-0.5 rounded text-sky-300 hover:bg-slate-800"
+                      >
+                        继续
+                      </button>
+                    )}
+                  {(autoPlay.ui.status === 'running' ||
+                    autoPlay.ui.status === 'paused') &&
+                    !autoPlay.ui.intervening && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          autoPlay.setAccelerate(!autoPlay.ui.accelerate)
+                        }
+                        className={`text-[11px] px-2 py-0.5 rounded hover:bg-slate-800 ${
+                          autoPlay.ui.accelerate
+                            ? 'text-amber-200'
+                            : 'text-slate-300'
+                        }`}
+                        title="加速：尽快升章；终章则冲结局"
+                      >
+                        {autoPlay.ui.accelerate ? '加速中' : '加速'}
+                      </button>
+                    )}
+                  {(autoPlay.ui.status === 'running' ||
+                    autoPlay.ui.status === 'paused') &&
+                    autoPlay.ui.takeoverMode === 'allow' &&
+                    !autoPlay.ui.intervening && (
+                      <button
+                        type="button"
+                        onClick={autoPlay.takeover}
+                        className="text-[11px] px-2 py-0.5 rounded text-rose-300 hover:bg-slate-800"
+                      >
+                        接管
+                      </button>
+                    )}
+                  {autoPlay.ui.intervening && (
+                    <button
+                      type="button"
+                      onClick={autoPlay.handBack}
+                      className="text-[11px] px-2 py-0.5 rounded text-emerald-300 hover:bg-slate-800"
+                    >
+                      交回
+                    </button>
+                  )}
+                  {(autoPlay.ui.status === 'running' ||
+                    autoPlay.ui.status === 'paused') && (
+                    <button
+                      type="button"
+                      onClick={autoPlay.stop}
+                      className="text-[11px] px-2 py-0.5 rounded text-slate-300 hover:bg-slate-800"
+                    >
+                      停止
+                    </button>
+                  )}
+                  {(autoPlay.ui.status === 'done' ||
+                    autoPlay.ui.status === 'abort') && (
+                    <button
+                      type="button"
+                      onClick={autoPlay.dismiss}
+                      className="text-[11px] px-2 py-0.5 rounded text-slate-400 hover:bg-slate-800"
+                    >
+                      收起
+                    </button>
+                  )}
+                </div>
               </div>
+              {autoPlay.ui.needsAcceleratePrompt &&
+                autoPlay.ui.status === 'paused' &&
+                !autoPlay.ui.intervening && (
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <span className="text-amber-200/80">本章发言已达上限</span>
+                    <button
+                      type="button"
+                      onClick={autoPlay.keepPace}
+                      className="px-2 py-0.5 rounded border border-slate-600 text-slate-200 hover:bg-slate-800"
+                    >
+                      保持
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => autoPlay.setAccelerate(true)}
+                      className="px-2 py-0.5 rounded border border-amber-600/50 text-amber-100 hover:bg-slate-800"
+                    >
+                      加速
+                    </button>
+                  </div>
+                )}
             </div>
           )}
 
@@ -960,15 +1099,23 @@ export function ChatBox({
             >
               悄悄话
             </button>
-            {!autoPlay.locksInput ? (
+            {!autoPlay.locksInput && !autoPlay.ui.intervening ? (
               <button
                 type="button"
-                onClick={autoPlay.start}
+                onClick={() => {
+                  if (getLabPeerAgentsEnabled()) {
+                    pushSystemNote(
+                      '请先关闭设置页「实验室 · 平级多 Agent」，再开自动演绎（二者互斥）。',
+                    );
+                    return;
+                  }
+                  setAutoPlaySetupOpen(true);
+                }}
                 disabled={!connected || isStreaming || listening}
-                title={autoPlay.goal.title}
+                title="打开自动演绎设置"
                 className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed border border-amber-700/60 rounded-lg text-sm text-amber-200/90 transition-colors"
               >
-                自动演
+                自动演绎
               </button>
             ) : null}
             <input
@@ -981,9 +1128,11 @@ export function ChatBox({
                 !connected
                   ? '等待连接服务器…'
                   : autoPlay.ui.status === 'running'
-                    ? '自动演绎中…（可暂停/接管）'
-                    : autoPlay.ui.status === 'paused'
-                      ? '已暂停 · 点继续或接管'
+                    ? '自动演绎中…（可暂停/接管/加速）'
+                    : autoPlay.ui.intervening
+                      ? '已接管 · 可输入；点交回继续自动演'
+                      : autoPlay.ui.status === 'paused'
+                      ? '已暂停 · 点继续或停止'
                       : listening
                         ? '…正在旁听'
                         : isStreaming
@@ -1005,6 +1154,31 @@ export function ChatBox({
           </form>
         </div>
       </div>
+
+      <AutoPlaySetupModal
+        open={autoPlaySetupOpen}
+        npcName={npcName}
+        chapters={
+          chapterOptions ??
+          Object.entries(chapterLabels ?? {}).map(([id, label]) => ({
+            id,
+            label,
+          }))
+        }
+        endings={endingOptions ?? []}
+        packDefaultStyleId={packMeta?.default_style_id}
+        onClose={() => setAutoPlaySetupOpen(false)}
+        onConfirm={(prefs) => {
+          if (getLabPeerAgentsEnabled()) {
+            pushSystemNote(
+              '请先关闭设置页「实验室 · 平级多 Agent」，再开自动演绎（二者互斥）。',
+            );
+            return;
+          }
+          setAutoPlaySetupOpen(false);
+          autoPlay.startWithPrefs(prefs);
+        }}
+      />
     </>
   );
 }

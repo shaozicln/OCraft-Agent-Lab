@@ -26,6 +26,53 @@ export interface ChapterTransitionResult {
   matchedRuleIds: string[];
 }
 
+export type ReadyChapterAdvance = {
+  id: string;
+  toChapter: string;
+  playerTriggers: string[];
+  notes?: string;
+};
+
+/**
+ * 当前章已满足 flag/好感、且带 to_chapter 的升章规则（供自动演加速注入关键词）。
+ * 不检查 player_triggers（那是要玩家说出口的）。
+ */
+export function listReadyChapterAdvances(opts: {
+  chapterState: ChapterState;
+  runtimeState: NpcRuntimeState;
+  flags: StoryFlagsSnapshot;
+  triggers: PackTriggersFile;
+}): ReadyChapterAdvance[] {
+  const out: ReadyChapterAdvance[] = [];
+  for (const rule of opts.triggers.rules) {
+    if (!rule.enabled) continue;
+    if (rule.from_chapter !== opts.chapterState) continue;
+    if (!rule.to_chapter || rule.to_chapter === opts.chapterState) continue;
+    if (opts.runtimeState.affinity < rule.min_affinity) continue;
+    if (
+      rule.max_fatigue !== undefined &&
+      opts.runtimeState.fatigue > rule.max_fatigue
+    ) {
+      continue;
+    }
+    let flagsOk = true;
+    for (const flag of rule.require_flags) {
+      if (!isFlagSet(opts.flags, flag)) {
+        flagsOk = false;
+        break;
+      }
+    }
+    if (!flagsOk) continue;
+    out.push({
+      id: rule.id,
+      toChapter: rule.to_chapter,
+      playerTriggers: [...rule.player_triggers],
+      notes: rule.notes,
+    });
+  }
+  return out;
+}
+
 function messageHitsTriggers(message: string, triggers: string[]): boolean {
   if (triggers.length === 0) return true;
   const msg = message.toLowerCase();

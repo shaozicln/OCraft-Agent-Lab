@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.storyPackSchema = exports.worldManifestSchema = exports.packHeaderSchema = exports.packWorldFileSchema = exports.packEndingSchema = exports.packAnimationRuleSchema = exports.packAnimationRuleWhenSchema = exports.packAnimationIdSchema = exports.packNumericToolsSchema = exports.packPromptsFileSchema = exports.packFlagConstraintSchema = exports.packFlagConstraintWhenSchema = exports.packFatigueHintSchema = exports.packAffinityTierSchema = exports.packTriggersFileSchema = exports.packExchangeEventSchema = exports.packNpcReplyFlagRuleSchema = exports.packTriggerRuleSchema = exports.packFlagSetEntrySchema = exports.packNpcSchema = exports.packMemorySchema = exports.packFlagDefSchema = exports.packChapterSchema = exports.packIdSchema = void 0;
+exports.storyPackSchema = exports.worldManifestSchema = exports.packHeaderSchema = exports.packPlayablePlayerSchema = exports.packWorldFileSchema = exports.packEndingSchema = exports.packAnimationRuleSchema = exports.packAnimationRuleWhenSchema = exports.packAnimationIdSchema = exports.packNumericToolsSchema = exports.packPromptsFileSchema = exports.packFlagConstraintSchema = exports.packFlagConstraintWhenSchema = exports.packFatigueHintSchema = exports.packAffinityTierSchema = exports.packTriggersFileSchema = exports.packExchangeEventSchema = exports.packNpcReplyFlagRuleSchema = exports.packTriggerRuleSchema = exports.packFlagSetEntrySchema = exports.packNpcSchema = exports.packMemorySchema = exports.packFlagDefSchema = exports.packChapterSchema = exports.packIdSchema = void 0;
 exports.assertPackReferences = assertPackReferences;
 exports.getDefaultChapterId = getDefaultChapterId;
 exports.getFirstChapterId = getFirstChapterId;
@@ -8,6 +8,9 @@ exports.getDefaultNpcId = getDefaultNpcId;
 exports.getChapterRankMap = getChapterRankMap;
 exports.getChapterLabelMap = getChapterLabelMap;
 exports.isNpcPresent = isNpcPresent;
+exports.isPackPlayablePlayerEnabled = isPackPlayablePlayerEnabled;
+exports.getPackPlayablePlayerId = getPackPlayablePlayerId;
+exports.isPackPlayablePlayerPresent = isPackPlayablePlayerPresent;
 const zod_1 = require("zod");
 const chapter_util_1 = require("./chapter.util");
 const story_schema_1 = require("./story.schema");
@@ -249,6 +252,17 @@ exports.packWorldFileSchema = zod_1.z.object({
     animation_rules: zod_1.z.array(exports.packAnimationRuleSchema).default([]),
     endings: zod_1.z.array(exports.packEndingSchema).default([]),
 });
+/**
+ * Pack 可演出玩家位（自动演导演可点名说戏内一句）。
+ * 整段省略 = 兼容旧包，视为 enabled=true、id=player、无出场门槛。
+ */
+exports.packPlayablePlayerSchema = zod_1.z.object({
+    enabled: zod_1.z.boolean().default(true),
+    /** 演出位稳定 id（台词 speaker_id）；建议 `player` */
+    id: exports.packIdSchema.default('player'),
+    appear_from_chapter: exports.packIdSchema.optional(),
+    appear_require_flags: zod_1.z.array(exports.packIdSchema).default([]),
+});
 exports.packHeaderSchema = zod_1.z.object({
     schema_version: zod_1.z.number().int().positive(),
     world_id: exports.packIdSchema,
@@ -257,6 +271,13 @@ exports.packHeaderSchema = zod_1.z.object({
     /** ISO 或 yyyyMMddTHHmm */
     created_at: zod_1.z.string().min(1),
     notes: zod_1.z.string().optional(),
+    /**
+     * 自动演默认风格 id（如 direct）；开演可覆盖、不写回 Pack。
+     * 未知 id 运行时回落 direct。
+     */
+    default_style_id: zod_1.z.string().min(1).max(64).optional(),
+    /** 可演出玩家位；省略=旧包兼容（开启） */
+    playable_player: exports.packPlayablePlayerSchema.optional(),
 });
 exports.worldManifestSchema = zod_1.z.object({
     world_id: exports.packIdSchema,
@@ -295,6 +316,13 @@ function assertPackReferences(pack) {
         if (!pack.npcs.some((n) => n.npc_id === pack.world.default_npc)) {
             throw new Error(`Pack 引用未知 NPC "${pack.world.default_npc}" @ world.default_npc`);
         }
+    }
+    const pp = pack.header.playable_player;
+    if (pp?.appear_from_chapter) {
+        needChapter(pp.appear_from_chapter, 'header.playable_player.appear_from_chapter');
+    }
+    for (const f of pp?.appear_require_flags ?? []) {
+        needFlag(f, 'header.playable_player.appear_require_flags');
     }
     for (const [ch] of Object.entries(pack.prompts.chapter_constraints)) {
         needChapter(ch, 'prompts.chapter_constraints');
@@ -423,4 +451,32 @@ function isNpcPresent(opts) {
             return false;
     }
     return true;
+}
+/** Pack 是否声明可演出玩家位（旧包省略字段 → true） */
+function isPackPlayablePlayerEnabled(pack) {
+    const pp = pack.header.playable_player;
+    if (pp === undefined)
+        return true;
+    return pp.enabled !== false;
+}
+function getPackPlayablePlayerId(pack) {
+    return pack.header.playable_player?.id?.trim() || 'player';
+}
+/**
+ * 可演出玩家位当前是否可被导演点名（已启用且过出场门槛）。
+ * 未启用 → false；旧包省略 → 恒 true。
+ */
+function isPackPlayablePlayerPresent(pack, opts) {
+    if (!isPackPlayablePlayerEnabled(pack))
+        return false;
+    const pp = pack.header.playable_player;
+    if (pp === undefined)
+        return true;
+    return isNpcPresent({
+        appear_from_chapter: pp.appear_from_chapter,
+        appear_require_flags: pp.appear_require_flags,
+        chapterState: opts.chapterState,
+        flags: opts.flags,
+        rankMap: opts.rankMap ?? getChapterRankMap(pack),
+    });
 }

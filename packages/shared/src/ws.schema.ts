@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { playerNoteSchema } from './player-note.schema';
 import { storyFlagsSnapshotSchema } from './story.schema';
 
 /**
@@ -40,21 +41,39 @@ export const chatSuggestionsEventSchema = z.object({
   error: z.string().optional(),
 });
 
-/** MA-A-B：请求导演侧生成下一句假玩家话 */
+/** AP-1：请求下一拍导演排场（目标与风格由本局设置传入） */
 export const requestAutoplayNextPayloadSchema = z.object({
   npcId: z.string().min(1).max(64),
-  turnIndex: z.number().int().min(0).max(32),
-  maxTurns: z.number().int().min(1).max(16).optional(),
-  priorSays: z.array(z.string().trim().min(1).max(500)).max(16).optional(),
-  /** 本局是否已见目标互聊（客户端会话态） */
+  turnIndex: z.number().int().min(0).max(10_000),
+  /** 兼容旧字段；语义=章发言软顶 */
+  maxTurns: z.number().int().min(1).max(10_000).optional(),
+  chapterSpeakCap: z.number().int().min(1).max(10_000).optional(),
+  priorSays: z.array(z.string().trim().min(1).max(500)).max(200).optional(),
   sawTargetExchange: z.boolean().optional(),
   targetChapter: z.string().min(1).max(64).optional(),
   targetExchange: z.string().min(1).max(64).optional(),
+  targetEnding: z.string().min(1).max(64).optional(),
+  styleId: z.string().min(1).max(64).optional(),
+  goalTitle: z.string().max(120).optional(),
+  accelerate: z.boolean().optional(),
+  /** 附近 NPC，供导演 cast */
+  nearbyNpcIds: z.array(z.string().min(1).max(64)).max(32).optional(),
+});
+
+export const autoplayBeatLineEventSchema = z.object({
+  speaker_kind: z.enum(['player', 'npc']),
+  speaker_id: z.string().min(1).max(64),
+  speaker_name: z.string().max(64).optional(),
+  text: z.string().trim().min(1).max(500),
 });
 
 export const autoplayNextEventSchema = z.object({
   npcId: z.string(),
   say: z.string().trim().min(1).max(500).optional(),
+  /** AP-1 排场台词；纯 NPC 拍时服务端已落 scene_log */
+  lines: z.array(autoplayBeatLineEventSchema).max(6).optional(),
+  /** true=本拍已在服务端落档（无需再 player_chat） */
+  applied: z.boolean().optional(),
   done: z.boolean(),
   reason: z.string().max(200).default(''),
   source: z.enum(['agent', 'mock']).default('agent'),
@@ -254,6 +273,7 @@ export type ConversationSnapshotV2 = z.infer<typeof conversationSnapshotV2Schema
 /**
  * 存档快照 v3 = v2 + run 级 scene_log（整场对白时间线）
  * selected_npc_ids：null/缺省 = 全部已可出场；非空数组 = 在已可出场中筛选（至少 1 人）
+ * player_notes：Mem-P 本局玩家要点（缺省 []，旧档兼容）
  */
 export const conversationSnapshotV3Schema = z.object({
   schema_version: z.literal(3),
@@ -274,6 +294,8 @@ export const conversationSnapshotV3Schema = z.object({
     .max(32)
     .nullable()
     .optional(),
+  /** Mem-P：本局玩家要点笔记 */
+  player_notes: z.array(playerNoteSchema).max(40).default([]),
 });
 export type ConversationSnapshotV3 = z.infer<typeof conversationSnapshotV3Schema>;
 /** 当前写入版本别名 */

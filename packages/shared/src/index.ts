@@ -16,3 +16,4 @@ export * from './autoplay.schema';
 export * from './autoplay-propose';
 export * from './autoplay-session';
 export * from './lab-progress';
+export * from './player-note.schema';

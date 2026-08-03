@@ -85,6 +85,23 @@ export const packRuntimeSchema = z.object({
   /** chapterId → 展示名（display_name 优先） */
   chapter_labels: z.record(z.string(), z.string()),
   npcs: z.array(packRuntimeNpcSchema),
+  /** 自动演结局选择器用 */
+  endings: z
+    .array(
+      z.object({
+        id: packIdSchema,
+        display_name: z.string(),
+        enabled: z.boolean().default(true),
+      }),
+    )
+    .default([]),
+  world_id: packIdSchema.optional(),
+  display_name: z.string().optional(),
+  /** AP-2：Pack 默认自动演风格；开演可覆盖 */
+  default_style_id: z.string().min(1).max(64).optional(),
+  /** AP-2：是否含可演出玩家位（旧包缺省 true） */
+  playable_player_enabled: z.boolean().default(true),
+  playable_player_id: packIdSchema.optional(),
 });
 
 export type PackVersionSummary = z.infer<typeof packVersionSummarySchema>;

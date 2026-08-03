@@ -69,6 +69,10 @@ exports.agentTraceRecordSchema = zod_1.z.object({
     rag_error: zod_1.z.string().optional(),
     /** Mem-W：本轮注入的公开场近期句（不含悄悄话） */
     working_memory_lines: zod_1.z.array(zod_1.z.string()).optional(),
+    /** Mem-P：本轮新抽取的玩家要点 id */
+    player_notes_added: zod_1.z.array(zod_1.z.string()).optional(),
+    /** Mem-P：本轮注入 prompt 的要点 id */
+    player_notes_injected: zod_1.z.array(zod_1.z.string()).optional(),
     animation: zod_1.z.string().optional(),
     /** NPC 回复后置 flag（异步补记） */
     reply_flags_set: zod_1.z

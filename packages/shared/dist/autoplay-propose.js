@@ -5,14 +5,7 @@ exports.parseAutoPlayNextJson = parseAutoPlayNextJson;
 exports.mockProposeAutoPlayNext = mockProposeAutoPlayNext;
 const autoplay_schema_1 = require("./autoplay.schema");
 function isAutoPlayGoalReached(goal, actual) {
-    if (goal.target_chapter && actual.chapter !== goal.target_chapter) {
-        return false;
-    }
-    if (goal.target_exchange && !actual.sawTargetExchange) {
-        return false;
-    }
-    // 至少有一个目标时才算「达成」；都没写则永不靠目标完成
-    return Boolean(goal.target_chapter || goal.target_exchange);
+    return (0, autoplay_schema_1.resolveAutoPlayStopKind)(goal, actual) != null;
 }
 function parseAutoPlayNextJson(raw) {
     try {
@@ -23,19 +16,25 @@ function parseAutoPlayNextJson(raw) {
         });
         if (!r.success)
             return null;
-        if (!r.data.done && !r.data.say?.trim())
+        const lines = (0, autoplay_schema_1.normalizeAutoPlayBeatLines)(r.data);
+        if (!r.data.done && lines.length === 0)
             return null;
-        return r.data;
+        const playerSay = lines.find((l) => l.speaker_kind === 'player')?.text ?? r.data.say;
+        return {
+            ...r.data,
+            lines,
+            say: playerSay,
+        };
     }
     catch {
         return null;
     }
 }
 /**
- * MOCK / 无 key：按章与目标启发式生成下一句（可推进 feel 演示路径）
+ * MOCK / 无 key：按章与目标启发式生成下一拍（eval 夹具；运行时自动演禁 MOCK）
  */
 function mockProposeAutoPlayNext(input) {
-    const { goal, turnIndex, chapterId, flagNames, availableEvents, priorSays, focusNpcName, sawTargetExchange, } = input;
+    const { goal, turnIndex, chapterId, flagNames, availableEvents, priorSays, focusNpcName, sawTargetExchange, requirePlayerLine, } = input;
     if (isAutoPlayGoalReached(goal, {
         chapter: chapterId,
         sawTargetExchange,
@@ -44,19 +43,40 @@ function mockProposeAutoPlayNext(input) {
             done: true,
             reason: '目标已达成',
             source: 'mock',
+            lines: [],
         };
     }
+    // eval 夹具仍可用 max_turns 软结束；产品路径不应走到 MOCK
     if (turnIndex >= goal.max_turns) {
         return {
             done: true,
-            reason: '达到最大拍数',
+            reason: '达到拍数软顶（MOCK）',
             source: 'mock',
+            lines: [],
         };
     }
     const hasMetHook = flagNames.includes('met_hook');
     const exchangeReady = goal.target_exchange != null &&
         availableEvents.includes(goal.target_exchange);
-    // 已在目标章且戏码可尝试：再推一句现场闲聊，让 Pack 有机会命中
+    const playerLine = (text, reason) => ({
+        say: text,
+        lines: [{ speaker_kind: 'player', speaker_id: 'player', text }],
+        done: false,
+        reason,
+        source: 'mock',
+    });
+    const npcLine = (text, reason) => ({
+        lines: [
+            {
+                speaker_kind: 'npc',
+                speaker_id: goal.npc_id,
+                text,
+            },
+        ],
+        done: false,
+        reason,
+        source: 'mock',
+    });
     if (goal.target_chapter &&
         chapterId === goal.target_chapter &&
         (exchangeReady || hasMetHook) &&
@@ -64,43 +84,20 @@ function mockProposeAutoPlayNext(input) {
         const say = priorSays.length === 0
             ? `对了，${focusNpcName}，走廊钟声是不是有点怪？`
             : '你刚才说的转校生……她现在在附近吗？';
-        return {
-            say,
-            done: false,
-            reason: '目标章已到，推进互聊窗口',
-            source: 'mock',
-        };
+        return playerLine(say, '目标章已到，推进互聊窗口');
     }
-    // 日常章：先闲聊，再点转校/希尔薇以触发升章（与旧 feel 路径同语义，但是启发式）
-    if (chapterId === 'ch1_daily' || chapterId.startsWith('ch1_')) {
-        if (turnIndex === 0 && priorSays.length === 0) {
-            return {
-                say: '放学一起去球场吗',
-                done: false,
-                reason: '开场闲聊',
-                source: 'mock',
-            };
+    if (requirePlayerLine || input.accelerate) {
+        if (chapterId === 'ch1_daily' || chapterId.startsWith('ch1_')) {
+            if (turnIndex === 0 && priorSays.length === 0) {
+                return playerLine('放学一起去球场吗', '开场闲聊');
+            }
+            return playerLine('听说有转校生要来，叫希尔薇？', '点名钩子推进升章');
         }
-        return {
-            say: '听说有转校生要来，叫希尔薇？',
-            done: false,
-            reason: '点名钩子推进升章',
-            source: 'mock',
-        };
+        if (goal.target_chapter && chapterId !== goal.target_chapter) {
+            return playerLine('最近班上有什么新消息吗？听说要来转校生……', '未达目标章，试探推进');
+        }
+        return playerLine(`${focusNpcName}，我们继续刚才的话题吧。`, '保底续聊');
     }
-    // 其它章：顺着场上往目标靠
-    if (goal.target_chapter && chapterId !== goal.target_chapter) {
-        return {
-            say: '最近班上有什么新消息吗？听说要来转校生……',
-            done: false,
-            reason: '未达目标章，试探推进',
-            source: 'mock',
-        };
-    }
-    return {
-        say: `${focusNpcName}，我们继续刚才的话题吧。`,
-        done: turnIndex >= goal.max_turns - 1,
-        reason: '保底续聊',
-        source: 'mock',
-    };
+    // AP-1：无玩家门槛时允许纯 NPC 拍
+    return npcLine('刚才那事……你们怎么看？', 'NPC 排场拍');
 }

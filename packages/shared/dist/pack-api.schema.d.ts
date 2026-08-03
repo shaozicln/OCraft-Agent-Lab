@@ -86,6 +86,16 @@ export declare const packRuntimeSchema: z.ZodObject<{
         appear_from_chapter: z.ZodOptional<z.ZodString>;
         appear_require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
     }, z.core.$strip>>;
+    endings: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        display_name: z.ZodString;
+        enabled: z.ZodDefault<z.ZodBoolean>;
+    }, z.core.$strip>>>;
+    world_id: z.ZodOptional<z.ZodString>;
+    display_name: z.ZodOptional<z.ZodString>;
+    default_style_id: z.ZodOptional<z.ZodString>;
+    playable_player_enabled: z.ZodDefault<z.ZodBoolean>;
+    playable_player_id: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export type PackVersionSummary = z.infer<typeof packVersionSummarySchema>;
 export type PackWorldSummary = z.infer<typeof packWorldSummarySchema>;

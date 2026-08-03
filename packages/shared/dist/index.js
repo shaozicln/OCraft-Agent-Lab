@@ -32,3 +32,4 @@ __exportStar(require("./autoplay.schema"), exports);
 __exportStar(require("./autoplay-propose"), exports);
 __exportStar(require("./autoplay-session"), exports);
 __exportStar(require("./lab-progress"), exports);
+__exportStar(require("./player-note.schema"), exports);

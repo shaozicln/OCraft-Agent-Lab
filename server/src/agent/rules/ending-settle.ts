@@ -68,6 +68,58 @@ export function hasSettledEnding(
   );
 }
 
+export type ReadyEndingHint = {
+  id: string;
+  displayName: string;
+  playerTriggers: string[];
+};
+
+/**
+ * 当前进度下「差一句关键词就能结算」的结局（供自动演加速）。
+ * 不检查 player_triggers。
+ */
+export function listReadyEndingHints(opts: {
+  pack: StoryPack;
+  chapterState: ChapterState;
+  flags: StoryFlagsSnapshot;
+  /** 若指定，只返回该结局 */
+  targetEndingId?: string;
+}): ReadyEndingHint[] {
+  if (hasSettledEnding(opts.flags, opts.pack.world.endings)) return [];
+  const out: ReadyEndingHint[] = [];
+  for (const ending of opts.pack.world.endings) {
+    if (ending.enabled === false) continue;
+    if ((ending.set_flags ?? []).length === 0) continue;
+    if (opts.targetEndingId && ending.id !== opts.targetEndingId) continue;
+    if (ending.chapter && ending.chapter !== opts.chapterState) continue;
+    let ok = true;
+    for (const name of ending.require_flags ?? []) {
+      if (!isFlagSet(opts.flags, name)) {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok) continue;
+    const any = ending.require_any_flags ?? [];
+    if (any.length > 0 && !any.some((name) => isFlagSet(opts.flags, name))) {
+      continue;
+    }
+    for (const name of ending.forbid_flags ?? []) {
+      if (isFlagSet(opts.flags, name)) {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok) continue;
+    out.push({
+      id: ending.id,
+      displayName: ending.display_name,
+      playerTriggers: [...(ending.player_triggers ?? [])],
+    });
+  }
+  return out;
+}
+
 /**
  * G：按 Pack endings 条件结算。返回至多一个命中（priority 高优先，同级按声明序）。
  * 不写库；调用方负责 set/clear flags 与推送 UI。

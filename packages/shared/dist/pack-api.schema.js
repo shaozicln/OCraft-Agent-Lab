@@ -77,6 +77,21 @@ exports.packRuntimeSchema = zod_1.z.object({
     /** chapterId → 展示名（display_name 优先） */
     chapter_labels: zod_1.z.record(zod_1.z.string(), zod_1.z.string()),
     npcs: zod_1.z.array(exports.packRuntimeNpcSchema),
+    /** 自动演结局选择器用 */
+    endings: zod_1.z
+        .array(zod_1.z.object({
+        id: pack_schema_1.packIdSchema,
+        display_name: zod_1.z.string(),
+        enabled: zod_1.z.boolean().default(true),
+    }))
+        .default([]),
+    world_id: pack_schema_1.packIdSchema.optional(),
+    display_name: zod_1.z.string().optional(),
+    /** AP-2：Pack 默认自动演风格；开演可覆盖 */
+    default_style_id: zod_1.z.string().min(1).max(64).optional(),
+    /** AP-2：是否含可演出玩家位（旧包缺省 true） */
+    playable_player_enabled: zod_1.z.boolean().default(true),
+    playable_player_id: pack_schema_1.packIdSchema.optional(),
 });
 exports.packUpdatePayloadSchema = zod_1.z.object({
     pack: zod_1.z.unknown(),

@@ -13,6 +13,7 @@ import {
   getDefaultNpcId,
   listConversationArchivesPayloadSchema,
   loadConversationArchivePayloadSchema,
+  normalizeAutoPlayBeatLines,
   playerChatPayloadSchema,
   renameArchivePayloadSchema,
   requestAutoplayNextPayloadSchema,
@@ -36,6 +37,7 @@ import {
   scanNpcReplySafety,
 } from '../agent/safety/reply-safety';
 import { evaluateEndingSettlement } from '../agent/rules/ending-settle';
+import { evaluateNpcReplyFlags } from '../agent/rules/chapter-transition';
 import { AgentTraceService } from '../agent/observability/agent-trace.service';
 import { PackService } from '../story/pack.service';
 import { ConversationService } from './conversation.service';
@@ -213,28 +215,139 @@ export class GameGateway implements OnGatewayConnection {
       npcId,
       turnIndex,
       maxTurns,
+      chapterSpeakCap,
       priorSays,
       sawTargetExchange,
       targetChapter,
       targetExchange,
+      targetEnding,
+      styleId,
+      goalTitle,
+      accelerate,
+      nearbyNpcIds,
     } = parsed.data;
 
     return this.packService.runWithPlayerAsync(playerId, async () => {
       await this.conversationService.ensureSession(playerId, npcId);
       try {
+        if (!this.autoPlayAgent.isAvailable()) {
+          client.emit('autoplay_next', {
+            npcId,
+            done: true,
+            reason: '',
+            source: 'mock',
+            error: '自动演绎需要配置 API Key（当前为 MOCK 模式）',
+          });
+          return;
+        }
         const next = await this.autoPlayAgent.proposeNext({
           playerId,
           npcId,
           turnIndex,
           maxTurns,
+          chapterSpeakCap,
           priorSays,
           sawTargetExchange,
           targetChapter,
           targetExchange,
+          targetEnding,
+          styleId,
+          goalTitle,
+          accelerate,
+          nearbyNpcIds,
         });
+
+        const lines = normalizeAutoPlayBeatLines(next);
+        const hasPlayer = lines.some((l) => l.speaker_kind === 'player');
+
+        // AP-1：纯 NPC 拍 — 服务端落档，客户端不必再 player_chat
+        if (!next.done && lines.length > 0 && !hasPlayer) {
+          const pack = this.packService.getPack();
+          const enriched: Array<{
+            speaker_kind: 'player' | 'npc';
+            speaker_id: string;
+            speaker_name?: string;
+            text: string;
+          }> = [];
+
+          for (const line of lines) {
+            let text = line.text;
+            const chapterState = this.worldProgress.getChapter(playerId);
+            const safety = scanNpcReplySafety(text, {
+              pack,
+              chapterState,
+              npcId: line.speaker_id,
+            });
+            if (!safety.ok) {
+              text = pickSafetyFallback();
+              this.logger.warn(
+                `autoplay beat safety rewrite npc=${line.speaker_id}`,
+              );
+            }
+            await this.conversationService.appendAutoplayNpcLine(
+              playerId,
+              npcId,
+              line.speaker_id,
+              text,
+            );
+            const flagSets = evaluateNpcReplyFlags(
+              this.worldProgress.getChapter(playerId),
+              text,
+              this.worldProgress.getFlags(playerId),
+              pack.triggers,
+            );
+            if (flagSets.length > 0) {
+              await this.worldProgress.setFlags(playerId, flagSets);
+            }
+            const name =
+              this.npcService.getDefinition(line.speaker_id)?.name ??
+              line.speaker_id;
+            enriched.push({
+              speaker_kind: 'npc',
+              speaker_id: line.speaker_id,
+              speaker_name: name,
+              text,
+            });
+          }
+
+          const progressNpcId = getDefaultNpcId(pack);
+          client.emit(
+            'npc_state_update',
+            this.buildStatePayload(playerId, progressNpcId),
+          );
+          if (progressNpcId !== npcId) {
+            client.emit(
+              'npc_state_update',
+              this.buildStatePayload(playerId, npcId),
+            );
+          }
+
+          client.emit('autoplay_next', {
+            npcId,
+            lines: enriched,
+            applied: true,
+            done: next.done,
+            reason: next.reason,
+            source: next.source,
+          });
+          return;
+        }
+
+        // 含玩家句：客户端走 player_chat（升章/结局规则吃玩家台词）
         client.emit('autoplay_next', {
           npcId,
           say: next.say,
+          lines: lines.map((l) => ({
+            speaker_kind: l.speaker_kind,
+            speaker_id: l.speaker_id,
+            speaker_name:
+              l.speaker_kind === 'npc'
+                ? (this.npcService.getDefinition(l.speaker_id)?.name ??
+                  l.speaker_id)
+                : undefined,
+            text: l.text,
+          })),
+          applied: false,
           done: next.done,
           reason: next.reason,
           source: next.source,

@@ -117,6 +117,8 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
     }>>;
     rag_error: z.ZodOptional<z.ZodString>;
     working_memory_lines: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    player_notes_added: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    player_notes_injected: z.ZodOptional<z.ZodArray<z.ZodString>>;
     animation: z.ZodOptional<z.ZodString>;
     reply_flags_set: z.ZodOptional<z.ZodArray<z.ZodObject<{
         name: z.ZodString;
@@ -229,6 +231,8 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
         }>>;
         rag_error: z.ZodOptional<z.ZodString>;
         working_memory_lines: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        player_notes_added: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        player_notes_injected: z.ZodOptional<z.ZodArray<z.ZodString>>;
         animation: z.ZodOptional<z.ZodString>;
         reply_flags_set: z.ZodOptional<z.ZodArray<z.ZodObject<{
             name: z.ZodString;

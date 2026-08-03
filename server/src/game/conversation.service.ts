@@ -16,6 +16,7 @@ import {
   type NpcAsideEvent,
   type NpcExchangeEvent,
   type NpcRuntimeState,
+  type PlayerNote,
   type SceneUtterance,
   type StartNewRunPayload,
   type StoryFlagsSnapshot,
@@ -75,6 +76,9 @@ export class ConversationService {
   private readonly sceneLogs = new Map<string, SceneUtterance[]>();
   /** 已从存档灌入过 scene_log 的 runKey（避免重启后写空覆盖） */
   private readonly sceneLogHydrated = new Set<string>();
+  /** Mem-P：run 级玩家要点 */
+  private readonly playerNotes = new Map<string, PlayerNote[]>();
+  private readonly playerNotesHydrated = new Set<string>();
   /**
    * 本局出场选用：runKey → null=全部已可出场 / string[]=子集
    * 未 hydrate 前不写入，避免空覆盖档内值
@@ -133,9 +137,20 @@ export class ConversationService {
     return this.getSceneLog(playerId).filter((u) => !u.meta?.whisper);
   }
 
-  /** Mem-W / 导演：读公开场前先灌档，避免进程重启后空 log */
+  /** Mem-W / 导演 / Mem-P：读公开场与要点前先灌档 */
   async ensureSceneLogReady(playerId: string): Promise<void> {
     await this.ensureSceneLogHydrated(playerId);
+  }
+
+  getPlayerNotes(playerId: string): PlayerNote[] {
+    return [...(this.playerNotes.get(this.runKey(playerId)) ?? [])];
+  }
+
+  /** 替换本局要点（抽取合并后由 harness 调用） */
+  setPlayerNotes(playerId: string, notes: PlayerNote[]): void {
+    const rk = this.runKey(playerId);
+    this.playerNotes.set(rk, [...notes]);
+    this.playerNotesHydrated.add(rk);
   }
 
   /** 同步读取（调用方须先 ensureNpcSelectionHydrated） */
@@ -270,7 +285,9 @@ export class ConversationService {
 
     if (!filename) {
       if (!this.sceneLogs.has(rk)) this.sceneLogs.set(rk, []);
+      if (!this.playerNotes.has(rk)) this.playerNotes.set(rk, []);
       this.sceneLogHydrated.add(rk);
+      this.playerNotesHydrated.add(rk);
       return;
     }
 
@@ -300,6 +317,9 @@ export class ConversationService {
       if (!this.sceneLogs.has(rk)) {
         this.sceneLogs.set(rk, [...(migrated?.scene_log ?? [])]);
       }
+      if (!this.playerNotes.has(rk)) {
+        this.playerNotes.set(rk, [...(migrated?.player_notes ?? [])]);
+      }
     } catch (err) {
       this.logger.warn(
         `scene_log hydrate failed player=${playerId}: ${
@@ -307,8 +327,10 @@ export class ConversationService {
         }`,
       );
       if (!this.sceneLogs.has(rk)) this.sceneLogs.set(rk, []);
+      if (!this.playerNotes.has(rk)) this.playerNotes.set(rk, []);
     }
     this.sceneLogHydrated.add(rk);
+    this.playerNotesHydrated.add(rk);
   }
 
   private pushSceneUtterance(
@@ -436,6 +458,36 @@ export class ConversationService {
         aside: true,
         lab_peer: true,
         chat_npc_id: line.chatNpcId,
+      },
+    });
+  }
+
+  /**
+   * AP-1：自动演纯 NPC 拍落档（scene_log + 该 NPC recent/transcript）。
+   * 不走 player_chat / harness。
+   */
+  async appendAutoplayNpcLine(
+    playerId: string,
+    chatNpcId: string,
+    npcId: string,
+    text: string,
+  ) {
+    await this.ensureSession(playerId, npcId);
+    await this.ensureSceneLogHydrated(playerId);
+    const npcName = this.npcDisplayName(npcId);
+    await this.appendTurn(playerId, npcId, 'assistant', text);
+    this.pushSceneUtterance(playerId, {
+      kind: 'npc_to_npc',
+      speaker_id: npcId,
+      speaker_name: npcName,
+      addressee_id: chatNpcId !== npcId ? chatNpcId : undefined,
+      addressee_name:
+        chatNpcId !== npcId ? this.npcDisplayName(chatNpcId) : undefined,
+      text,
+      meta: {
+        auto_play: true,
+        autoplay_beat: true,
+        chat_npc_id: chatNpcId,
       },
     });
   }
@@ -692,6 +744,7 @@ export class ConversationService {
       npcs,
       scene_log: this.getSceneLog(playerId),
       selected_npc_ids: this.getNpcSelection(playerId),
+      player_notes: this.getPlayerNotes(playerId),
     };
 
     return {
@@ -984,6 +1037,8 @@ export class ConversationService {
       this.runArchiveFiles.set(this.runKey(playerId), safeFilename);
       this.sceneLogs.set(this.runKey(playerId), [...(v3.scene_log ?? [])]);
       this.sceneLogHydrated.add(this.runKey(playerId));
+      this.playerNotes.set(this.runKey(playerId), [...(v3.player_notes ?? [])]);
+      this.playerNotesHydrated.add(this.runKey(playerId));
       const sel =
         v3.selected_npc_ids === undefined ? null : v3.selected_npc_ids;
       this.runNpcSelections.set(this.runKey(playerId), sel);
@@ -1242,6 +1297,7 @@ export class ConversationService {
       npcs,
       scene_log: [],
       selected_npc_ids: null,
+      player_notes: [],
     };
 
     const snapshot: ConversationSnapshot = {
@@ -1265,6 +1321,8 @@ export class ConversationService {
     this.runArchiveFiles.set(this.runKey(playerId), filename);
     this.sceneLogs.set(this.runKey(playerId), []);
     this.sceneLogHydrated.add(this.runKey(playerId));
+    this.playerNotes.set(this.runKey(playerId), []);
+    this.playerNotesHydrated.add(this.runKey(playerId));
     this.runNpcSelections.set(this.runKey(playerId), null);
     this.npcSelectionHydrated.add(this.runKey(playerId));
     for (const id of this.allNpcIds()) {

@@ -263,6 +263,18 @@ export const packWorldFileSchema = z.object({
   endings: z.array(packEndingSchema).default([]),
 });
 
+/**
+ * Pack 可演出玩家位（自动演导演可点名说戏内一句）。
+ * 整段省略 = 兼容旧包，视为 enabled=true、id=player、无出场门槛。
+ */
+export const packPlayablePlayerSchema = z.object({
+  enabled: z.boolean().default(true),
+  /** 演出位稳定 id（台词 speaker_id）；建议 `player` */
+  id: packIdSchema.default('player'),
+  appear_from_chapter: packIdSchema.optional(),
+  appear_require_flags: z.array(packIdSchema).default([]),
+});
+
 export const packHeaderSchema = z.object({
   schema_version: z.number().int().positive(),
   world_id: packIdSchema,
@@ -271,6 +283,13 @@ export const packHeaderSchema = z.object({
   /** ISO 或 yyyyMMddTHHmm */
   created_at: z.string().min(1),
   notes: z.string().optional(),
+  /**
+   * 自动演默认风格 id（如 direct）；开演可覆盖、不写回 Pack。
+   * 未知 id 运行时回落 direct。
+   */
+  default_style_id: z.string().min(1).max(64).optional(),
+  /** 可演出玩家位；省略=旧包兼容（开启） */
+  playable_player: packPlayablePlayerSchema.optional(),
 });
 
 export const worldManifestSchema = z.object({
@@ -311,6 +330,7 @@ export type PackAnimationRule = z.infer<typeof packAnimationRuleSchema>;
 export type PackEnding = z.infer<typeof packEndingSchema>;
 export type PackWorldFile = z.infer<typeof packWorldFileSchema>;
 export type PackHeader = z.infer<typeof packHeaderSchema>;
+export type PackPlayablePlayer = z.infer<typeof packPlayablePlayerSchema>;
 export type WorldManifest = z.infer<typeof worldManifestSchema>;
 export type StoryPack = z.infer<typeof storyPackSchema>;
 
@@ -340,6 +360,14 @@ export function assertPackReferences(pack: StoryPack): void {
         `Pack 引用未知 NPC "${pack.world.default_npc}" @ world.default_npc`,
       );
     }
+  }
+
+  const pp = pack.header.playable_player;
+  if (pp?.appear_from_chapter) {
+    needChapter(pp.appear_from_chapter, 'header.playable_player.appear_from_chapter');
+  }
+  for (const f of pp?.appear_require_flags ?? []) {
+    needFlag(f, 'header.playable_player.appear_require_flags');
   }
 
   for (const [ch] of Object.entries(pack.prompts.chapter_constraints)) {
@@ -495,4 +523,39 @@ export function isNpcPresent(opts: {
     if (!isFlagSet(flags, name)) return false;
   }
   return true;
+}
+
+/** Pack 是否声明可演出玩家位（旧包省略字段 → true） */
+export function isPackPlayablePlayerEnabled(pack: StoryPack): boolean {
+  const pp = pack.header.playable_player;
+  if (pp === undefined) return true;
+  return pp.enabled !== false;
+}
+
+export function getPackPlayablePlayerId(pack: StoryPack): string {
+  return pack.header.playable_player?.id?.trim() || 'player';
+}
+
+/**
+ * 可演出玩家位当前是否可被导演点名（已启用且过出场门槛）。
+ * 未启用 → false；旧包省略 → 恒 true。
+ */
+export function isPackPlayablePlayerPresent(
+  pack: StoryPack,
+  opts: {
+    chapterState: string;
+    flags: StoryFlagsSnapshot;
+    rankMap?: Record<string, number>;
+  },
+): boolean {
+  if (!isPackPlayablePlayerEnabled(pack)) return false;
+  const pp = pack.header.playable_player;
+  if (pp === undefined) return true;
+  return isNpcPresent({
+    appear_from_chapter: pp.appear_from_chapter,
+    appear_require_flags: pp.appear_require_flags,
+    chapterState: opts.chapterState,
+    flags: opts.flags,
+    rankMap: opts.rankMap ?? getChapterRankMap(pack),
+  });
 }

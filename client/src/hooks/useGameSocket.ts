@@ -386,10 +386,16 @@ export function useGameSocket(
     (payload: {
       turnIndex: number;
       maxTurns: number;
+      chapterSpeakCap?: number;
       priorSays: string[];
       sawTargetExchange: boolean;
       targetChapter?: string;
       targetExchange?: string;
+      targetEnding?: string;
+      styleId?: string;
+      goalTitle?: string;
+      accelerate?: boolean;
+      nearbyNpcIds?: string[];
     }): boolean => {
       if (!socketRef.current?.connected) return false;
       socketRef.current.emit('request_autoplay_next', {

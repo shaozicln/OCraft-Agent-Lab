@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.runNpcSelectionEventSchema = exports.setRunNpcSelectionPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV3Schema = exports.conversationSnapshotV2Schema = exports.SCENE_PLAYER_DISPLAY_NAME = exports.SCENE_PLAYER_ID = exports.sceneUtteranceSchema = exports.sceneUtteranceKindSchema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.labProgressEventSchema = exports.labPeerLineEventSchema = exports.endingReachedEventSchema = exports.npcAsideEventSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.autoplayNextEventSchema = exports.requestAutoplayNextPayloadSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
+exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.runNpcSelectionEventSchema = exports.setRunNpcSelectionPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV3Schema = exports.conversationSnapshotV2Schema = exports.SCENE_PLAYER_DISPLAY_NAME = exports.SCENE_PLAYER_ID = exports.sceneUtteranceSchema = exports.sceneUtteranceKindSchema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.labProgressEventSchema = exports.labPeerLineEventSchema = exports.endingReachedEventSchema = exports.npcAsideEventSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.autoplayNextEventSchema = exports.autoplayBeatLineEventSchema = exports.requestAutoplayNextPayloadSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
 const zod_1 = require("zod");
+const player_note_schema_1 = require("./player-note.schema");
 const story_schema_1 = require("./story.schema");
 /**
  * 章节 ID：由当前 Story Pack 声明（不再写死业务枚举）。
@@ -35,20 +36,37 @@ exports.chatSuggestionsEventSchema = zod_1.z.object({
     suggestions: zod_1.z.array(zod_1.z.string().trim().min(1).max(200)).max(6),
     error: zod_1.z.string().optional(),
 });
-/** MA-A-B：请求导演侧生成下一句假玩家话 */
+/** AP-1：请求下一拍导演排场（目标与风格由本局设置传入） */
 exports.requestAutoplayNextPayloadSchema = zod_1.z.object({
     npcId: zod_1.z.string().min(1).max(64),
-    turnIndex: zod_1.z.number().int().min(0).max(32),
-    maxTurns: zod_1.z.number().int().min(1).max(16).optional(),
-    priorSays: zod_1.z.array(zod_1.z.string().trim().min(1).max(500)).max(16).optional(),
-    /** 本局是否已见目标互聊（客户端会话态） */
+    turnIndex: zod_1.z.number().int().min(0).max(10_000),
+    /** 兼容旧字段；语义=章发言软顶 */
+    maxTurns: zod_1.z.number().int().min(1).max(10_000).optional(),
+    chapterSpeakCap: zod_1.z.number().int().min(1).max(10_000).optional(),
+    priorSays: zod_1.z.array(zod_1.z.string().trim().min(1).max(500)).max(200).optional(),
     sawTargetExchange: zod_1.z.boolean().optional(),
     targetChapter: zod_1.z.string().min(1).max(64).optional(),
     targetExchange: zod_1.z.string().min(1).max(64).optional(),
+    targetEnding: zod_1.z.string().min(1).max(64).optional(),
+    styleId: zod_1.z.string().min(1).max(64).optional(),
+    goalTitle: zod_1.z.string().max(120).optional(),
+    accelerate: zod_1.z.boolean().optional(),
+    /** 附近 NPC，供导演 cast */
+    nearbyNpcIds: zod_1.z.array(zod_1.z.string().min(1).max(64)).max(32).optional(),
+});
+exports.autoplayBeatLineEventSchema = zod_1.z.object({
+    speaker_kind: zod_1.z.enum(['player', 'npc']),
+    speaker_id: zod_1.z.string().min(1).max(64),
+    speaker_name: zod_1.z.string().max(64).optional(),
+    text: zod_1.z.string().trim().min(1).max(500),
 });
 exports.autoplayNextEventSchema = zod_1.z.object({
     npcId: zod_1.z.string(),
     say: zod_1.z.string().trim().min(1).max(500).optional(),
+    /** AP-1 排场台词；纯 NPC 拍时服务端已落 scene_log */
+    lines: zod_1.z.array(exports.autoplayBeatLineEventSchema).max(6).optional(),
+    /** true=本拍已在服务端落档（无需再 player_chat） */
+    applied: zod_1.z.boolean().optional(),
     done: zod_1.z.boolean(),
     reason: zod_1.z.string().max(200).default(''),
     source: zod_1.z.enum(['agent', 'mock']).default('agent'),
@@ -217,6 +235,7 @@ exports.conversationSnapshotV2Schema = zod_1.z.object({
 /**
  * 存档快照 v3 = v2 + run 级 scene_log（整场对白时间线）
  * selected_npc_ids：null/缺省 = 全部已可出场；非空数组 = 在已可出场中筛选（至少 1 人）
+ * player_notes：Mem-P 本局玩家要点（缺省 []，旧档兼容）
  */
 exports.conversationSnapshotV3Schema = zod_1.z.object({
     schema_version: zod_1.z.literal(3),
@@ -237,6 +256,8 @@ exports.conversationSnapshotV3Schema = zod_1.z.object({
         .max(32)
         .nullable()
         .optional(),
+    /** Mem-P：本局玩家要点笔记 */
+    player_notes: zod_1.z.array(player_note_schema_1.playerNoteSchema).max(40).default([]),
 });
 exports.conversationSnapshotSummarySchema = zod_1.z.object({
     index: zod_1.z.number().int(),

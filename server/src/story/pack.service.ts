@@ -14,6 +14,8 @@ import {
   getChapterRankMap,
   getDefaultChapterId,
   getDefaultNpcId,
+  getPackPlayablePlayerId,
+  isPackPlayablePlayerEnabled,
   storyPackSchema,
   type PackNpc,
   type PackRuntime,
@@ -468,6 +470,16 @@ export class PackService implements OnModuleInit {
         appear_from_chapter: n.appear_from_chapter,
         appear_require_flags: n.appear_require_flags ?? [],
       })),
+      endings: (pack.world.endings ?? []).map((e) => ({
+        id: e.id,
+        display_name: e.display_name,
+        enabled: e.enabled !== false,
+      })),
+      world_id: pack.header.world_id,
+      display_name: pack.header.display_name,
+      default_style_id: pack.header.default_style_id,
+      playable_player_enabled: isPackPlayablePlayerEnabled(pack),
+      playable_player_id: getPackPlayablePlayerId(pack),
     };
   }
 

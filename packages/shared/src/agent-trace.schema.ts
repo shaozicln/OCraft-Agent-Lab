@@ -84,6 +84,10 @@ export const agentTraceRecordSchema = z.object({
   rag_error: z.string().optional(),
   /** Mem-W：本轮注入的公开场近期句（不含悄悄话） */
   working_memory_lines: z.array(z.string()).optional(),
+  /** Mem-P：本轮新抽取的玩家要点 id */
+  player_notes_added: z.array(z.string()).optional(),
+  /** Mem-P：本轮注入 prompt 的要点 id */
+  player_notes_injected: z.array(z.string()).optional(),
   animation: z.string().optional(),
   /** NPC 回复后置 flag（异步补记） */
   reply_flags_set: z
