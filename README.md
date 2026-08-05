@@ -1,4 +1,4 @@
-# OCraft Game
+# OCraft Agent Lab
 
 OCraft系列游戏的技术向探索，用于学习和测试 Agent 工程在 npc 上的应用，有 Api-Key 就能玩，大概玩法是有新点子填填设定就能对话
 
