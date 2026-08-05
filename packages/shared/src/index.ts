@@ -13,6 +13,7 @@ export * from './agent-trace.schema';
 export * from './pack-clarify.schema';
 export * from './pack-distill.schema';
 export * from './autoplay.schema';
+export * from './autoplay-reachability';
 export * from './autoplay-propose';
 export * from './autoplay-session';
 export * from './lab-progress';

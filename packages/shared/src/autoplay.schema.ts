@@ -1,5 +1,11 @@
 import { z } from 'zod';
+import {
+  listReachableAutoPlayEndings,
+  type AutoPlayProgressSnapshot,
+} from './autoplay-reachability';
 import { packIdSchema } from './pack.schema';
+
+export type { AutoPlayProgressSnapshot } from './autoplay-reachability';
 
 /** 自动演目标：由「当前 Pack + 用户设置」组装，禁止运行时写死 feel */
 export const autoPlayGoalSchema = z.object({
@@ -233,13 +239,19 @@ export type AutoPlayEndingOption = {
   id: string;
   display_name: string;
   enabled?: boolean;
+  /** AP-3 门控（运行时下发；缺省时仅按 enabled） */
+  chapter?: string;
+  require_flags?: string[];
+  require_any_flags?: string[];
+  forbid_flags?: string[];
+  set_flags?: Array<{ name: string; value?: string }>;
 };
 
 export type AutoPlayStopKind = 'ending' | 'chapter' | 'final_chapter' | null;
 
 /**
  * 由当前 Pack 摘要 + 用户设置组装本局目标（AP-0b）。
- * 不读取 FEEL 常量。
+ * 不读取 FEEL 常量。传入 progress 时按 AP-3 只从可达结局中抽目标。
  */
 export function buildAutoPlayGoal(opts: {
   npcId: string;
@@ -251,9 +263,14 @@ export function buildAutoPlayGoal(opts: {
     endings?: AutoPlayEndingOption[];
     chapters?: { id: string }[];
   };
+  /** AP-3：当前章 / flags / rank → 可达结局筛选 */
+  progress?: AutoPlayProgressSnapshot | null;
 }): AutoPlayGoal {
   const prefs = autoPlayPrefsSchema.parse(opts.prefs);
-  const endings = (opts.pack?.endings ?? []).filter((e) => e.enabled !== false);
+  const endings = listReachableAutoPlayEndings(
+    opts.pack?.endings ?? [],
+    opts.progress,
+  );
   const chapters = opts.pack?.chapters ?? [];
   const finalChapterId =
     chapters.length > 0 ? chapters[chapters.length - 1]!.id : undefined;
@@ -271,7 +288,13 @@ export function buildAutoPlayGoal(opts: {
 
   if (endingMode === 'specific' && prefs.target_ending_id) {
     const ok = endings.some((e) => e.id === prefs.target_ending_id);
-    if (ok) target_ending = prefs.target_ending_id;
+    if (ok) {
+      target_ending = prefs.target_ending_id;
+    } else if (endings.length > 0) {
+      // 指定结局已不可达 → 退回随机可达
+      const i = Math.floor(Math.random() * endings.length);
+      target_ending = endings[i]!.id;
+    }
   } else if (endingMode === 'random' && endings.length > 0) {
     const i = Math.floor(Math.random() * endings.length);
     target_ending = endings[i]!.id;

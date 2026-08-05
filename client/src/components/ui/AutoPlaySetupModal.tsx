@@ -6,8 +6,10 @@ import {
   DEFAULT_AUTO_PLAY_STYLE_ID,
   DEFAULT_CHAPTER_SPEAK_CAP,
   autoPlayPrefsSchema,
+  listReachableAutoPlayEndings,
   type AutoPlayEndingOption,
   type AutoPlayPrefs,
+  type AutoPlayProgressSnapshot,
 } from '@ocraft/shared';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -18,6 +20,8 @@ type Props = {
   npcName: string;
   chapters: ChapterOpt[];
   endings: AutoPlayEndingOption[];
+  /** AP-3：当前进度，用于可达结局筛选 */
+  progress?: AutoPlayProgressSnapshot | null;
   /** Pack 默认风格；本局可覆盖 */
   packDefaultStyleId?: string;
   onClose: () => void;
@@ -29,15 +33,16 @@ export function AutoPlaySetupModal({
   npcName,
   chapters,
   endings,
+  progress,
   packDefaultStyleId,
   onClose,
   onConfirm,
 }: Props) {
-  const enabledEndings = useMemo(
-    () => endings.filter((e) => e.enabled !== false),
-    [endings],
+  const reachableEndings = useMemo(
+    () => listReachableAutoPlayEndings(endings, progress),
+    [endings, progress],
   );
-  const hasEndings = enabledEndings.length > 0;
+  const hasEndings = reachableEndings.length > 0;
   const initialStyle =
     packDefaultStyleId &&
     AUTO_PLAY_STYLE_PRESETS.some((s) => s.id === packDefaultStyleId)
@@ -50,7 +55,7 @@ export function AutoPlaySetupModal({
     hasEndings ? 'random' : 'specific',
   );
   const [targetEndingId, setTargetEndingId] = useState(
-    enabledEndings[0]?.id ?? '',
+    reachableEndings[0]?.id ?? '',
   );
   const [takeoverMode, setTakeoverMode] = useState<'allow' | 'watch_only'>(
     'allow',
@@ -61,11 +66,22 @@ export function AutoPlaySetupModal({
   const [enterEpilogue, setEnterEpilogue] = useState(false);
   const [epilogueMode, setEpilogueMode] = useState<'a' | 'b' | 'c'>('a');
 
-  // 每次打开用 Pack 默认风格重置（本局可再改）
+  // 每次打开用 Pack 默认风格重置（本局可再改）；校正结局选项
   useEffect(() => {
     if (!open) return;
     setStyleId(initialStyle);
-  }, [open, initialStyle]);
+    const next = listReachableAutoPlayEndings(endings, progress);
+    if (next.length === 0) {
+      setEndingMode('specific');
+      setTargetEndingId('');
+      setEnterEpilogue(false);
+      return;
+    }
+    setEndingMode((m) => m);
+    setTargetEndingId((prev) =>
+      next.some((e) => e.id === prev) ? prev : (next[0]?.id ?? ''),
+    );
+  }, [open, initialStyle, endings, progress]);
 
   if (!open) return null;
 
@@ -163,7 +179,7 @@ export function AutoPlaySetupModal({
                     value={targetEndingId}
                     onChange={(e) => setTargetEndingId(e.target.value)}
                   >
-                    {enabledEndings.map((e) => (
+                    {reachableEndings.map((e) => (
                       <option key={e.id} value={e.id}>
                         {e.display_name}（{e.id}）
                       </option>
@@ -171,12 +187,16 @@ export function AutoPlaySetupModal({
                   </select>
                 )}
                 <p className="text-[11px] text-slate-500">
-                  列表为当前包启用结局；完整「进度可达」筛选后续对齐。
+                  仅列出当前进度仍可能走到的结局（已过章 / 禁忌 flag
+                  已置 / 已结算会剔除）。
                 </p>
               </>
             ) : (
               <p className="text-xs text-amber-200/90">
-                本包无可用结局：将演到最终章后停止（不可进杀青）。
+                当前进度下无可达结局：将演到最终章后停止（不可进杀青）。
+                {endings.some((e) => e.enabled !== false)
+                  ? '（包内有结局，但已过章 / 禁忌已置 / 已结算）'
+                  : ''}
               </p>
             )}
           </fieldset>

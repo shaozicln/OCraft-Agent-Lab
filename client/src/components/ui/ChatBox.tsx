@@ -44,6 +44,10 @@ interface ChatBoxProps {
   chapterDisplayName?: string;
   /** 当前章节 id（自动演目标核对） */
   chapterId?: string;
+  /** AP-3：世界 flags（可达结局） */
+  storyFlags?: Record<string, string>;
+  /** AP-3：章节 rank 表 */
+  chapterRankMap?: Record<string, number>;
   /** 可选停章列表 */
   chapterOptions?: Array<{ id: string; label: string }>;
   endingOptions?: AutoPlayEndingOption[];
@@ -99,6 +103,14 @@ interface ChatBoxProps {
   onClearLabProgress?: () => void;
   /** 旁听逐句时：当前开口的 NPC；结束传 null（驱动 3D talk） */
   onExchangeSpeak?: (npcId: string | null) => void;
+  /** AP-4：Esc/菜单请求打开自动演设置（消费后清） */
+  pendingAutoPlaySetup?: boolean;
+  onConsumePendingAutoPlaySetup?: () => void;
+  /** AP-4：Esc/菜单请求打开对话记录 */
+  pendingHistoryOpen?: boolean;
+  onConsumePendingHistoryOpen?: () => void;
+  /** 关聊天时迷你条 / 外部入口需要把聊天打开 */
+  onEnsureChatOpen?: () => void;
 }
 
 function labStopReasonLabel(reason?: string): string {
@@ -203,6 +215,8 @@ export function ChatBox({
   chapterLabels,
   chapterDisplayName,
   chapterId,
+  storyFlags,
+  chapterRankMap,
   chapterOptions,
   endingOptions,
   packMeta,
@@ -231,6 +245,11 @@ export function ChatBox({
   onClearLastLabPeerLine,
   onClearLabProgress,
   onExchangeSpeak,
+  pendingAutoPlaySetup,
+  onConsumePendingAutoPlaySetup,
+  pendingHistoryOpen,
+  onConsumePendingHistoryOpen,
+  onEnsureChatOpen,
 }: ChatBoxProps) {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<ChatMessage[]>([]);
@@ -311,6 +330,15 @@ export function ChatBox({
   const nearbyRef = useRef(nearbyNpcIds ?? []);
   nearbyRef.current = nearbyNpcIds ?? [];
 
+  const autoPlayProgress =
+    chapterId && chapterRankMap
+      ? {
+          chapterState: chapterId,
+          flags: storyFlags ?? {},
+          rankMap: chapterRankMap,
+        }
+      : null;
+
   const autoPlay = useAutoPlay({
     npcId,
     isBusy: isStreaming || listening,
@@ -324,6 +352,7 @@ export function ChatBox({
       endings: endingOptions,
       chapters: (chapterOptions ?? []).map((c) => ({ id: c.id })),
     },
+    progress: autoPlayProgress,
     onSendAuto: sendAutoLine,
     onApplyBeatLines: applyBeatLines,
     onRequestNext: onRequestAutoplayNext,
@@ -332,13 +361,75 @@ export function ChatBox({
     onNote: pushSystemNote,
   });
 
+  const autoPlayRef = useRef(autoPlay);
+  autoPlayRef.current = autoPlay;
+
   const inputLocked = isStreaming || listening || autoPlay.locksInput;
+
+  const autoPlayBusy =
+    autoPlay.ui.status === 'running' ||
+    autoPlay.ui.status === 'paused' ||
+    autoPlay.ui.intervening;
+
+  /** AP-4：浏览记录/存档时暂停；关栏不自动 resume */
+  const pauseForBrowse = useCallback(() => {
+    const ap = autoPlayRef.current;
+    if (ap.ui.status !== 'running' || ap.ui.intervening) return;
+    ap.pause(
+      '查看记录/存档 · 自动演已暂停，关闭后请点「继续」才会恢复',
+    );
+  }, []);
+
+  const stopAutoPlayForWorldChange = useCallback((reason: string) => {
+    const ap = autoPlayRef.current;
+    if (
+      ap.ui.status !== 'running' &&
+      ap.ui.status !== 'paused' &&
+      !ap.ui.intervening
+    ) {
+      return;
+    }
+    ap.stop(reason);
+  }, []);
+
+  // AP-4：切 NPC 须先停自动演
+  const prevNpcForAutoPlayRef = useRef(npcId);
+  useEffect(() => {
+    if (prevNpcForAutoPlayRef.current === npcId) return;
+    prevNpcForAutoPlayRef.current = npcId;
+    stopAutoPlayForWorldChange('已切换对话对象，自动演绎已停止');
+  }, [npcId, stopAutoPlayForWorldChange]);
+
+  // AP-4：Esc/菜单 → 开自动演设置
+  useEffect(() => {
+    if (!pendingAutoPlaySetup) return;
+    onEnsureChatOpen?.();
+    setAutoPlaySetupOpen(true);
+    onConsumePendingAutoPlaySetup?.();
+  }, [
+    pendingAutoPlaySetup,
+    onEnsureChatOpen,
+    onConsumePendingAutoPlaySetup,
+  ]);
+
+  // AP-4：Esc/菜单 → 开对话记录（并暂停）
+  useEffect(() => {
+    if (!pendingHistoryOpen) return;
+    onEnsureChatOpen?.();
+    pauseForBrowse();
+    setHistoryFullscreen(true);
+    onConsumePendingHistoryOpen?.();
+  }, [
+    pendingHistoryOpen,
+    onEnsureChatOpen,
+    pauseForBrowse,
+    onConsumePendingHistoryOpen,
+  ]);
 
   useEffect(() => {
     if (!open) {
       // 关聊天窗不停自动演（观察箱）；仅收起面板。stopOnClose 为 no-op。
       autoPlay.stopOnClose();
-      setAutoPlaySetupOpen(false);
       setInput('');
       setHistoryFullscreen(false);
       setLoadPanelOpen(false);
@@ -356,6 +447,7 @@ export function ChatBox({
 
   useEffect(() => {
     if (!loadedConversation) return;
+    stopAutoPlayForWorldChange('已读档，自动演绎已停止');
     const filename = loadedConversation.filename;
     setActiveSlotFilename(filename);
     const fromList = archivesList?.find((a) => a.filename === filename);
@@ -384,6 +476,7 @@ export function ChatBox({
     chapterLabels,
     chapterDisplayName,
     onClearLoadedConversation,
+    stopAutoPlayForWorldChange,
   ]);
 
   useEffect(() => {
@@ -413,6 +506,7 @@ export function ChatBox({
 
   useEffect(() => {
     if (!lastNewRun) return;
+    stopAutoPlayForWorldChange('已新开局，自动演绎已停止');
     const title = lastNewRun.display_name || lastNewRun.filename;
     setActiveSlotFilename(lastNewRun.filename);
     setActiveSlotTitle(title);
@@ -424,7 +518,7 @@ export function ChatBox({
     ]);
     lastStreamRef.current = '';
     onClearLastNewRun?.();
-  }, [lastNewRun, onClearLastNewRun]);
+  }, [lastNewRun, onClearLastNewRun, stopAutoPlayForWorldChange]);
 
   // 列表刷新后补全当前槽显示名
   useEffect(() => {
@@ -690,19 +784,31 @@ export function ChatBox({
       ]);
       return;
     }
+    pauseForBrowse();
     setLoadPanelOpen(true);
     setArchivesLoading(true);
     onListArchives();
-  }, [connected, onListArchives]);
+  }, [connected, onListArchives, pauseForBrowse]);
+
+  const handleOpenHistory = useCallback(() => {
+    pauseForBrowse();
+    setHistoryFullscreen(true);
+  }, [pauseForBrowse]);
 
   const handleLoad = useCallback(
     (filename: string, snapshotIndex: number) => {
+      stopAutoPlayForWorldChange('即将读档，自动演绎已停止');
       const ok = onLoadArchive(filename, snapshotIndex);
       if (!ok) return;
       setLoadPanelOpen(false);
     },
-    [onLoadArchive],
+    [onLoadArchive, stopAutoPlayForWorldChange],
   );
+
+  const handleNewRunFromStart = useCallback(() => {
+    stopAutoPlayForWorldChange('即将新开局，自动演绎已停止');
+    onNewRunFromStart?.();
+  }, [onNewRunFromStart, stopAutoPlayForWorldChange]);
 
   const handleViewSuggestions = useCallback(() => {
     if (!connected || inputLocked || suggestionsLoading) return;
@@ -722,7 +828,103 @@ export function ChatBox({
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
 
-  if (!open) return null;
+  if (!open) {
+    const showDock =
+      autoPlay.ui.status === 'running' ||
+      autoPlay.ui.status === 'paused' ||
+      autoPlay.ui.status === 'done' ||
+      autoPlay.ui.status === 'abort' ||
+      autoPlaySetupOpen;
+
+    return (
+      <>
+        <AutoPlaySetupModal
+          open={autoPlaySetupOpen}
+          npcName={npcName}
+          chapters={
+            chapterOptions ??
+            Object.entries(chapterLabels ?? {}).map(([id, label]) => ({
+              id,
+              label,
+            }))
+          }
+          endings={endingOptions ?? []}
+          progress={autoPlayProgress}
+          packDefaultStyleId={packMeta?.default_style_id}
+          onClose={() => setAutoPlaySetupOpen(false)}
+          onConfirm={(prefs) => {
+            if (getLabPeerAgentsEnabled()) {
+              pushSystemNote(
+                '请先关闭设置页「实验室 · 平级多 Agent」，再开自动演绎（二者互斥）。',
+              );
+              return;
+            }
+            setAutoPlaySetupOpen(false);
+            autoPlay.startWithPrefs(prefs);
+          }}
+        />
+        {showDock && (
+          <div className="absolute bottom-4 left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-4 pointer-events-auto">
+            <div className="rounded-xl border border-slate-600 bg-slate-900/95 px-3 py-2 shadow-xl">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-[11px] text-amber-200/90">
+                  {autoPlay.ui.intervening
+                    ? `已接管 · ${autoPlay.ui.progressLabel}`
+                    : autoPlay.ui.status === 'running'
+                      ? `自动演绎中 ${autoPlay.ui.progressLabel}${autoPlay.ui.accelerate ? ' · 加速' : ''}`
+                      : autoPlay.ui.status === 'paused'
+                        ? `已暂停 ${autoPlay.ui.progressLabel}`
+                        : autoPlay.ui.status === 'done'
+                          ? '自动演绎已完成'
+                          : autoPlay.ui.status === 'abort'
+                            ? `已中断${autoPlay.ui.failReason ? ` · ${autoPlay.ui.failReason}` : ''}`
+                            : '自动演绎设置'}
+                </span>
+                <div className="flex shrink-0 items-center gap-1">
+                  {autoPlay.ui.status === 'running' &&
+                    !autoPlay.ui.intervening && (
+                      <button
+                        type="button"
+                        onClick={() => autoPlay.pause()}
+                        className="rounded px-2 py-0.5 text-[11px] text-slate-300 hover:bg-slate-800"
+                      >
+                        暂停
+                      </button>
+                    )}
+                  {autoPlay.ui.status === 'paused' &&
+                    !autoPlay.ui.intervening && (
+                      <button
+                        type="button"
+                        onClick={autoPlay.resume}
+                        className="rounded px-2 py-0.5 text-[11px] text-sky-300 hover:bg-slate-800"
+                      >
+                        继续
+                      </button>
+                    )}
+                  {autoPlayBusy && (
+                    <button
+                      type="button"
+                      onClick={() => autoPlay.stop()}
+                      className="rounded px-2 py-0.5 text-[11px] text-rose-300 hover:bg-slate-800"
+                    >
+                      停止
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onEnsureChatOpen?.()}
+                    className="rounded px-2 py-0.5 text-[11px] text-slate-200 hover:bg-slate-800"
+                  >
+                    打开对话
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <>
@@ -745,7 +947,33 @@ export function ChatBox({
         onClose={() => setLoadPanelOpen(false)}
         onLoad={handleLoad}
         onRename={onRenameArchive}
-        onNewRunFromStart={onNewRunFromStart}
+        onNewRunFromStart={handleNewRunFromStart}
+      />
+
+      <AutoPlaySetupModal
+        open={autoPlaySetupOpen}
+        npcName={npcName}
+        chapters={
+          chapterOptions ??
+          Object.entries(chapterLabels ?? {}).map(([id, label]) => ({
+            id,
+            label,
+          }))
+        }
+        endings={endingOptions ?? []}
+        progress={autoPlayProgress}
+        packDefaultStyleId={packMeta?.default_style_id}
+        onClose={() => setAutoPlaySetupOpen(false)}
+        onConfirm={(prefs) => {
+          if (getLabPeerAgentsEnabled()) {
+            pushSystemNote(
+              '请先关闭设置页「实验室 · 平级多 Agent」，再开自动演绎（二者互斥）。',
+            );
+            return;
+          }
+          setAutoPlaySetupOpen(false);
+          autoPlay.startWithPrefs(prefs);
+        }}
       />
 
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4 pointer-events-auto">
@@ -754,7 +982,7 @@ export function ChatBox({
             <div className="flex items-center gap-1.5 min-w-0">
               <button
                 type="button"
-                onClick={() => setHistoryFullscreen(true)}
+                onClick={handleOpenHistory}
                 aria-label="查看对话记录"
                 title="对话记录"
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
@@ -1154,31 +1382,6 @@ export function ChatBox({
           </form>
         </div>
       </div>
-
-      <AutoPlaySetupModal
-        open={autoPlaySetupOpen}
-        npcName={npcName}
-        chapters={
-          chapterOptions ??
-          Object.entries(chapterLabels ?? {}).map(([id, label]) => ({
-            id,
-            label,
-          }))
-        }
-        endings={endingOptions ?? []}
-        packDefaultStyleId={packMeta?.default_style_id}
-        onClose={() => setAutoPlaySetupOpen(false)}
-        onConfirm={(prefs) => {
-          if (getLabPeerAgentsEnabled()) {
-            pushSystemNote(
-              '请先关闭设置页「实验室 · 平级多 Agent」，再开自动演绎（二者互斥）。',
-            );
-            return;
-          }
-          setAutoPlaySetupOpen(false);
-          autoPlay.startWithPrefs(prefs);
-        }}
-      />
     </>
   );
 }

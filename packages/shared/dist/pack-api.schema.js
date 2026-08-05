@@ -77,12 +77,22 @@ exports.packRuntimeSchema = zod_1.z.object({
     /** chapterId → 展示名（display_name 优先） */
     chapter_labels: zod_1.z.record(zod_1.z.string(), zod_1.z.string()),
     npcs: zod_1.z.array(exports.packRuntimeNpcSchema),
-    /** 自动演结局选择器用 */
+    /** 自动演结局选择器用（含 AP-3 可达性门控字段） */
     endings: zod_1.z
         .array(zod_1.z.object({
         id: pack_schema_1.packIdSchema,
         display_name: zod_1.z.string(),
         enabled: zod_1.z.boolean().default(true),
+        chapter: pack_schema_1.packIdSchema.optional(),
+        require_flags: zod_1.z.array(zod_1.z.string()).default([]),
+        require_any_flags: zod_1.z.array(zod_1.z.string()).default([]),
+        forbid_flags: zod_1.z.array(zod_1.z.string()).default([]),
+        set_flags: zod_1.z
+            .array(zod_1.z.object({
+            name: zod_1.z.string(),
+            value: zod_1.z.string().optional(),
+        }))
+            .default([]),
     }))
         .default([]),
     world_id: pack_schema_1.packIdSchema.optional(),

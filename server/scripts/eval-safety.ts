@@ -114,6 +114,51 @@ const cases: Case[] = [
       return { ok, detail: r.reasons.map((x) => x.code).join(',') };
     },
   },
+  {
+    name: 'AP-1：自动演放宽推进向升章禁忌，仍拦剧透',
+    run: () => {
+      const withForbid = {
+        ...pack,
+        npcs: pack.npcs.map((n) =>
+          n.npc_id === npcId
+            ? {
+                ...n,
+                forbidden_behaviors: ['宣布升章或结局', '自称AI'],
+              }
+            : n,
+        ),
+      };
+      const progress = scanNpcReplySafety('好，现在升章。', {
+        pack: withForbid,
+        chapterState: 'ch1_daily',
+        npcId,
+        autoPlay: true,
+      });
+      const spoil = scanNpcReplySafety('其实世界是假的，别告诉别人。', {
+        pack: withForbid,
+        chapterState: 'ch1_daily',
+        npcId,
+        autoPlay: true,
+      });
+      const ai = scanNpcReplySafety('作为AI我不能剧透。', {
+        pack: withForbid,
+        chapterState: 'ch1_daily',
+        npcId,
+        autoPlay: true,
+      });
+      // 升章禁忌放行；meta 剧透仍拦；自称 AI 的 forbidden 仍拦（非推进指纹）
+      const ok =
+        progress.ok &&
+        !spoil.ok &&
+        spoil.reasons.some((x) => x.code === 'meta_spoil') &&
+        !ai.ok &&
+        ai.reasons.some((x) => x.code === 'forbidden_behavior');
+      return {
+        ok,
+        detail: `progress=${progress.ok} spoil=${spoil.reasons.map((x) => x.code).join('|')} ai=${ai.reasons.map((x) => x.code).join('|')}`,
+      };
+    },
+  },
 ];
 
 let failed = 0;

@@ -7,6 +7,7 @@ exports.normalizeAutoPlayBeatLines = normalizeAutoPlayBeatLines;
 exports.buildAutoPlayGoal = buildAutoPlayGoal;
 exports.resolveAutoPlayStopKind = resolveAutoPlayStopKind;
 const zod_1 = require("zod");
+const autoplay_reachability_1 = require("./autoplay-reachability");
 const pack_schema_1 = require("./pack.schema");
 /** 自动演目标：由「当前 Pack + 用户设置」组装，禁止运行时写死 feel */
 exports.autoPlayGoalSchema = zod_1.z.object({
@@ -216,11 +217,11 @@ exports.autoPlayPrefsSchema = zod_1.z.object({
 });
 /**
  * 由当前 Pack 摘要 + 用户设置组装本局目标（AP-0b）。
- * 不读取 FEEL 常量。
+ * 不读取 FEEL 常量。传入 progress 时按 AP-3 只从可达结局中抽目标。
  */
 function buildAutoPlayGoal(opts) {
     const prefs = exports.autoPlayPrefsSchema.parse(opts.prefs);
-    const endings = (opts.pack?.endings ?? []).filter((e) => e.enabled !== false);
+    const endings = (0, autoplay_reachability_1.listReachableAutoPlayEndings)(opts.pack?.endings ?? [], opts.progress);
     const chapters = opts.pack?.chapters ?? [];
     const finalChapterId = chapters.length > 0 ? chapters[chapters.length - 1].id : undefined;
     let target_ending;
@@ -235,8 +236,14 @@ function buildAutoPlayGoal(opts) {
     }
     if (endingMode === 'specific' && prefs.target_ending_id) {
         const ok = endings.some((e) => e.id === prefs.target_ending_id);
-        if (ok)
+        if (ok) {
             target_ending = prefs.target_ending_id;
+        }
+        else if (endings.length > 0) {
+            // 指定结局已不可达 → 退回随机可达
+            const i = Math.floor(Math.random() * endings.length);
+            target_ending = endings[i].id;
+        }
     }
     else if (endingMode === 'random' && endings.length > 0) {
         const i = Math.floor(Math.random() * endings.length);

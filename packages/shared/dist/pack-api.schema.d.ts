@@ -90,6 +90,14 @@ export declare const packRuntimeSchema: z.ZodObject<{
         id: z.ZodString;
         display_name: z.ZodString;
         enabled: z.ZodDefault<z.ZodBoolean>;
+        chapter: z.ZodOptional<z.ZodString>;
+        require_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        require_any_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        forbid_flags: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        set_flags: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            value: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>>;
     }, z.core.$strip>>>;
     world_id: z.ZodOptional<z.ZodString>;
     display_name: z.ZodOptional<z.ZodString>;

@@ -70,6 +70,10 @@ interface EscMenuProps {
     viaRuleId?: string;
     displayName?: string;
   }) => void;
+  /** AP-4：全场自动演入口 */
+  onRequestAutoPlay?: () => void;
+  /** AP-4：左侧历史入口 */
+  onRequestHistory?: () => void;
 }
 
 export function EscMenu({
@@ -89,6 +93,8 @@ export function EscMenu({
   onSessionUpdate,
   onRequestStoryMap,
   onStartNewRun,
+  onRequestAutoPlay,
+  onRequestHistory,
 }: EscMenuProps) {
   const { theme, setTheme } = useTheme();
   const [account, setAccount] = useState<PlayerAccount | null>(null);
@@ -548,12 +554,51 @@ export function EscMenu({
         </div>
 
         <div className="esc-rail__foot space-y-2">
+          {onRequestAutoPlay && (
+            <button
+              type="button"
+              onClick={() => {
+                onRequestAutoPlay();
+                onClose();
+              }}
+              className="w-full rounded-lg px-3 py-2 text-sm font-medium"
+              style={{
+                background: 'var(--ui-accent)',
+                color: 'var(--ui-accent-fg)',
+              }}
+            >
+              自动演绎
+            </button>
+          )}
+          {onRequestHistory && (
+            <button
+              type="button"
+              onClick={() => {
+                onRequestHistory();
+                onClose();
+              }}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{
+                borderColor: 'var(--ui-border)',
+                color: 'var(--ui-fg)',
+              }}
+            >
+              对话记录
+            </button>
+          )}
           <Link
             href="/settings"
             className="block w-full rounded-lg px-3 py-2 text-center text-sm font-medium"
             style={{
-              background: 'var(--ui-accent)',
-              color: 'var(--ui-accent-fg)',
+              background: onRequestAutoPlay
+                ? 'var(--ui-bg-elevated)'
+                : 'var(--ui-accent)',
+              color: onRequestAutoPlay
+                ? 'var(--ui-fg)'
+                : 'var(--ui-accent-fg)',
+              border: onRequestAutoPlay
+                ? '1px solid var(--ui-border)'
+                : undefined,
             }}
             onClick={onClose}
           >

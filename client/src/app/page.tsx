@@ -86,6 +86,8 @@ function GamePageInner({
   const [nearbyNpcs, setNearbyNpcs] = useState<NearbyNpc[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pendingAutoPlaySetup, setPendingAutoPlaySetup] = useState(false);
+  const [pendingHistoryOpen, setPendingHistoryOpen] = useState(false);
   const [pointerLocked, setPointerLocked] = useState(false);
   const prevStateRef = useRef({ affinity: 0, fatigue: 0 });
   const [deltas, setDeltas] = useState<{ affinity?: number; fatigue?: number }>(
@@ -322,6 +324,23 @@ function GamePageInner({
     document.exitPointerLock();
     setChatOpen(false);
   }, []);
+
+  const ensureChatOpen = useCallback(() => {
+    document.exitPointerLock();
+    setMenuOpen(false);
+    setChatOpen(true);
+    if (activeNpcId) requestNpcState(activeNpcId);
+  }, [activeNpcId, requestNpcState]);
+
+  const handleRequestAutoPlay = useCallback(() => {
+    ensureChatOpen();
+    setPendingAutoPlaySetup(true);
+  }, [ensureChatOpen]);
+
+  const handleRequestHistory = useCallback(() => {
+    ensureChatOpen();
+    setPendingHistoryOpen(true);
+  }, [ensureChatOpen]);
 
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
@@ -569,6 +588,8 @@ function GamePageInner({
         chapterLabels={chapterLabels}
         chapterDisplayName={chapterDisplayName}
         chapterId={worldChapter}
+        storyFlags={progressFlags}
+        chapterRankMap={rankMap}
         chapterOptions={(runtime?.chapters ?? []).map((c) => ({
           id: c.id,
           label: c.hud_label || c.display_name || c.id,
@@ -609,6 +630,11 @@ function GamePageInner({
         onClearLastLabPeerLine={clearLastLabPeerLine}
         onClearLabProgress={clearLabProgress}
         onExchangeSpeak={handleExchangeSpeak}
+        pendingAutoPlaySetup={pendingAutoPlaySetup}
+        onConsumePendingAutoPlaySetup={() => setPendingAutoPlaySetup(false)}
+        pendingHistoryOpen={pendingHistoryOpen}
+        onConsumePendingHistoryOpen={() => setPendingHistoryOpen(false)}
+        onEnsureChatOpen={ensureChatOpen}
       />
 
       <EscMenu
@@ -627,6 +653,8 @@ function GamePageInner({
         onSessionUpdate={updateSession}
         onRequestStoryMap={handleRequestStoryMap}
         onStartNewRun={handleStartNewRun}
+        onRequestAutoPlay={handleRequestAutoPlay}
+        onRequestHistory={handleRequestHistory}
       />
 
       <ChapterTransition cue={chapterCue} onDone={clearChapterCue} />

@@ -277,11 +277,12 @@ export class GameGateway implements OnGatewayConnection {
               pack,
               chapterState,
               npcId: line.speaker_id,
+              autoPlay: true,
             });
             if (!safety.ok) {
               text = pickSafetyFallback();
               this.logger.warn(
-                `autoplay beat safety rewrite npc=${line.speaker_id}`,
+                `autoplay beat safety rewrite npc=${line.speaker_id} reasons=${safety.reasons.map((r) => r.code).join(',')}`,
               );
             }
             await this.conversationService.appendAutoplayNpcLine(
@@ -439,12 +440,13 @@ export class GameGateway implements OnGatewayConnection {
           pack: this.packService.getPack(),
           chapterState,
           npcId,
+          autoPlay: isAutoPlay,
         });
         let safetyRewritten = false;
         if (!safety.ok) {
           const safeText = pickSafetyFallback();
           this.logger.warn(
-            `safety rewrite player=${playerId} npc=${npcId} reasons=${safety.reasons.map((r) => r.code).join(',')}`,
+            `safety rewrite player=${playerId} npc=${npcId}${isAutoPlay ? ' autoPlay' : ''} reasons=${safety.reasons.map((r) => r.code).join(',')}`,
           );
           fullReply = safeText;
           safetyRewritten = true;

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { type AutoPlayProgressSnapshot } from './autoplay-reachability';
+export type { AutoPlayProgressSnapshot } from './autoplay-reachability';
 /** 自动演目标：由「当前 Pack + 用户设置」组装，禁止运行时写死 feel */
 export declare const autoPlayGoalSchema: z.ZodObject<{
     id: z.ZodString;
@@ -264,11 +266,20 @@ export type AutoPlayEndingOption = {
     id: string;
     display_name: string;
     enabled?: boolean;
+    /** AP-3 门控（运行时下发；缺省时仅按 enabled） */
+    chapter?: string;
+    require_flags?: string[];
+    require_any_flags?: string[];
+    forbid_flags?: string[];
+    set_flags?: Array<{
+        name: string;
+        value?: string;
+    }>;
 };
 export type AutoPlayStopKind = 'ending' | 'chapter' | 'final_chapter' | null;
 /**
  * 由当前 Pack 摘要 + 用户设置组装本局目标（AP-0b）。
- * 不读取 FEEL 常量。
+ * 不读取 FEEL 常量。传入 progress 时按 AP-3 只从可达结局中抽目标。
  */
 export declare function buildAutoPlayGoal(opts: {
     npcId: string;
@@ -282,6 +293,8 @@ export declare function buildAutoPlayGoal(opts: {
             id: string;
         }[];
     };
+    /** AP-3：当前章 / flags / rank → 可达结局筛选 */
+    progress?: AutoPlayProgressSnapshot | null;
 }): AutoPlayGoal;
 /** 完成时属于哪种停因（杀青仅 ending） */
 export declare function resolveAutoPlayStopKind(goal: AutoPlayGoal, actual: {

@@ -85,13 +85,25 @@ export const packRuntimeSchema = z.object({
   /** chapterId → 展示名（display_name 优先） */
   chapter_labels: z.record(z.string(), z.string()),
   npcs: z.array(packRuntimeNpcSchema),
-  /** 自动演结局选择器用 */
+  /** 自动演结局选择器用（含 AP-3 可达性门控字段） */
   endings: z
     .array(
       z.object({
         id: packIdSchema,
         display_name: z.string(),
         enabled: z.boolean().default(true),
+        chapter: packIdSchema.optional(),
+        require_flags: z.array(z.string()).default([]),
+        require_any_flags: z.array(z.string()).default([]),
+        forbid_flags: z.array(z.string()).default([]),
+        set_flags: z
+          .array(
+            z.object({
+              name: z.string(),
+              value: z.string().optional(),
+            }),
+          )
+          .default([]),
       }),
     )
     .default([]),

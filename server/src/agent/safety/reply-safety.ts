@@ -23,7 +23,37 @@ export type ReplySafetyContext = {
   pack: StoryPack;
   chapterState: ChapterState;
   npcId: string;
+  /**
+   * AP-1：自动演推进向放宽一层——忽略软性 AI 腔，以及「宣布升章/结局」类禁忌指纹；
+   * 仍硬拦剧透（meta / 未解锁记忆 / 后章约束）与其它人设禁忌。
+   */
+  autoPlay?: boolean;
 };
+
+/** 自动演推进口吻常撞上的「勿宣布升章/结局」扩写指纹 */
+const AUTOPLAY_PROGRESS_FORBIDDEN_FPS = [
+  '升章',
+  '进入下一章',
+  '结局是',
+  '本章结束',
+  '触发结局',
+] as const;
+
+/** 该 reason 在自动演下可放行（空回复不放行） */
+export function isAutoPlayRelaxedSafetyReason(reason: {
+  code: SafetyReasonCode;
+  detail: string;
+}): boolean {
+  if (reason.code === 'ai_slop') {
+    return reason.detail !== 'empty';
+  }
+  if (reason.code === 'forbidden_behavior') {
+    return AUTOPLAY_PROGRESS_FORBIDDEN_FPS.some((fp) =>
+      reason.detail.includes(fp),
+    );
+  }
+  return false;
+}
 
 /** 主回复安全扫描：薄 AI 腔 + 元叙事 + 未解锁记忆/后章约束 + CD-B 人设禁忌指纹 */
 export function scanNpcReplySafety(
@@ -86,6 +116,11 @@ export function scanNpcReplySafety(
         });
       }
     }
+  }
+
+  if (ctx.autoPlay) {
+    const hard = reasons.filter((r) => !isAutoPlayRelaxedSafetyReason(r));
+    return { ok: hard.length === 0, reasons: hard };
   }
 
   return { ok: reasons.length === 0, reasons };

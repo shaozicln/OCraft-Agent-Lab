@@ -12,8 +12,10 @@ import {
   buildAutoPlayGoal,
   DEFAULT_AUTO_PLAY_STYLE_ID,
   isAutoPlayGoalReached,
+  listReachableAutoPlayEndings,
   mockProposeAutoPlayNext,
   parseAutoPlayNextJson,
+  resolveAutoPlayStopKind,
 } from '@ocraft/shared';
 
 type Case = {
@@ -90,6 +92,7 @@ const cases: Case[] = [
         priorSays: [],
         focusNpcName: '索伦森',
         sawTargetExchange: false,
+        requirePlayerLine: true,
       });
       return {
         ok: !p.done && Boolean(p.say?.includes('球场')),
@@ -111,10 +114,39 @@ const cases: Case[] = [
         priorSays: ['放学一起去球场吗'],
         focusNpcName: '索伦森',
         sawTargetExchange: false,
+        requirePlayerLine: true,
       });
       return {
         ok: !p.done && Boolean(p.say?.includes('希尔薇')),
         detail: `${p.say}`,
+      };
+    },
+  },
+  {
+    name: 'MOCK：AP-1 无门槛纯 NPC 拍',
+    run: () => {
+      const p = mockProposeAutoPlayNext({
+        goal: FEEL_DEMO_AUTO_GOAL,
+        turnIndex: 0,
+        chapterId: 'ch1_daily',
+        chapterLabel: '日常',
+        flagNames: [],
+        availableEvents: [],
+        recentLines: [],
+        priorSays: [],
+        focusNpcName: '索伦森',
+        sawTargetExchange: false,
+        requirePlayerLine: false,
+      });
+      const npc = p.lines?.[0];
+      const ok =
+        !p.done &&
+        !p.say &&
+        npc?.speaker_kind === 'npc' &&
+        Boolean(npc.text);
+      return {
+        ok,
+        detail: `${p.source}:${npc?.speaker_kind}:${npc?.text ?? '-'}`,
       };
     },
   },
@@ -273,6 +305,137 @@ const cases: Case[] = [
         ok,
         detail: `ch=${g.target_chapter} stopFinal=${g.stop_at_final_chapter}`,
       };
+    },
+  },
+  {
+    name: 'AP-3：进度可达结局 — 过章剔除',
+    run: () => {
+      const endings = [
+        {
+          id: 'ending_jia',
+          display_name: '甲',
+          chapter: 'ch2',
+          set_flags: [{ name: 'ending_jia', value: 'true' }],
+          forbid_flags: [] as string[],
+        },
+        {
+          id: 'ending_yi',
+          display_name: '乙',
+          chapter: 'ch4',
+          set_flags: [{ name: 'ending_yi', value: 'true' }],
+          forbid_flags: [] as string[],
+        },
+      ];
+      const rankMap = { ch1: 0, ch2: 1, ch3: 2, ch4: 3 };
+      const list = listReachableAutoPlayEndings(endings, {
+        chapterState: 'ch3',
+        flags: {},
+        rankMap,
+      });
+      const ok =
+        list.length === 1 && list[0]!.id === 'ending_yi';
+      return {
+        ok,
+        detail: list.map((e) => e.id).join(',') || '(empty)',
+      };
+    },
+  },
+  {
+    name: 'AP-3：forbid / 已结算 → 不可达',
+    run: () => {
+      const endings = [
+        {
+          id: 'ending_jia',
+          display_name: '甲',
+          chapter: 'ch4',
+          set_flags: [{ name: 'ending_jia', value: 'true' }],
+          forbid_flags: ['path_blocked'],
+        },
+        {
+          id: 'ending_yi',
+          display_name: '乙',
+          chapter: 'ch4',
+          set_flags: [{ name: 'ending_yi', value: 'true' }],
+          forbid_flags: ['ending_jia', 'ending_yi'],
+        },
+      ];
+      const rankMap = { ch4: 3 };
+      const blocked = listReachableAutoPlayEndings(endings, {
+        chapterState: 'ch4',
+        flags: { path_blocked: 'true' },
+        rankMap,
+      });
+      const settled = listReachableAutoPlayEndings(endings, {
+        chapterState: 'ch4',
+        flags: { ending_jia: 'true' },
+        rankMap,
+      });
+      const g = buildAutoPlayGoal({
+        npcId: 'n',
+        prefs: {
+          style_id: 'direct',
+          ending_mode: 'specific',
+          target_ending_id: 'ending_jia',
+          takeover_mode: 'allow',
+          wait_ms: 800,
+          chapter_speak_cap: 100,
+          enter_epilogue: false,
+        },
+        pack: {
+          chapters: [{ id: 'ch4' }],
+          endings,
+        },
+        progress: {
+          chapterState: 'ch4',
+          flags: { path_blocked: 'true' },
+          rankMap,
+        },
+      });
+      const ok =
+        blocked.length === 1 &&
+        blocked[0]!.id === 'ending_yi' &&
+        settled.length === 0 &&
+        g.target_ending === 'ending_yi' &&
+        g.stop_at_final_chapter !== true;
+      return {
+        ok,
+        detail: `blocked=${blocked.map((e) => e.id).join('|')} settled=${settled.length} goal=${g.target_ending ?? '-'}`,
+      };
+    },
+  },
+  {
+    name: 'AP-3：章停先到 → stop kind=chapter',
+    run: () => {
+      const g = buildAutoPlayGoal({
+        npcId: 'n',
+        prefs: {
+          style_id: 'direct',
+          ending_mode: 'specific',
+          target_ending_id: 'ending_a',
+          stop_at_chapter: 'ch2',
+          takeover_mode: 'allow',
+          wait_ms: 800,
+          chapter_speak_cap: 100,
+          enter_epilogue: true,
+        },
+        pack: {
+          chapters: [{ id: 'ch1' }, { id: 'ch2' }, { id: 'ch3' }],
+          endings: [
+            {
+              id: 'ending_a',
+              display_name: 'A',
+              set_flags: [{ name: 'ending_a', value: 'true' }],
+            },
+          ],
+        },
+      });
+      const kind = resolveAutoPlayStopKind(g, { chapter: 'ch2' });
+      const endingKind = resolveAutoPlayStopKind(g, {
+        chapter: 'ch3',
+        endingId: 'ending_a',
+      });
+      const ok = kind === 'chapter' && endingKind === 'ending';
+      return { ok, detail: `ch=${kind} end=${endingKind}` };
     },
   },
 ];

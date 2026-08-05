@@ -7,6 +7,7 @@ import {
   type AutoPlayEndingOption,
   type AutoPlayGoal,
   type AutoPlayPrefs,
+  type AutoPlayProgressSnapshot,
   type AutoPlayStatus,
   type AutoplayNextEvent,
 } from '@ocraft/shared';
@@ -131,6 +132,8 @@ export function useAutoPlay(opts: {
     endings?: AutoPlayEndingOption[];
     chapters?: { id: string }[];
   };
+  /** AP-3：开演时按进度筛可达结局 */
+  progress?: AutoPlayProgressSnapshot | null;
   onSendAuto: (message: string) => boolean;
   /** AP-1：纯 NPC 拍已服务端落档，客户端只刷 UI */
   onApplyBeatLines?: (
@@ -167,6 +170,7 @@ export function useAutoPlay(opts: {
   const onApplyBeatLinesRef = useRef(opts.onApplyBeatLines);
   const onRequestNextRef = useRef(opts.onRequestNext);
   const getNearbyNpcIdsRef = useRef(opts.getNearbyNpcIds);
+  const progressRef = useRef(opts.progress);
   const subscribeNextRef = useRef(opts.subscribeNext);
   const onNoteRef = useRef(opts.onNote);
   const priorSaysRef = useRef<string[]>([]);
@@ -180,6 +184,7 @@ export function useAutoPlay(opts: {
   onApplyBeatLinesRef.current = opts.onApplyBeatLines;
   onRequestNextRef.current = opts.onRequestNext;
   getNearbyNpcIdsRef.current = opts.getNearbyNpcIds;
+  progressRef.current = opts.progress;
   subscribeNextRef.current = opts.subscribeNext;
   onNoteRef.current = opts.onNote;
 
@@ -476,6 +481,7 @@ export function useAutoPlay(opts: {
         npcId: opts.npcId,
         prefs,
         pack: opts.packMeta,
+        progress: progressRef.current,
       });
       stopRunner();
       goalRef.current = goal;
@@ -489,10 +495,10 @@ export function useAutoPlay(opts: {
     [opts.connected, opts.npcId, opts.packMeta, runLoop, stopRunner, syncUi],
   );
 
-  const pause = useCallback(() => {
+  const pause = useCallback((note?: string) => {
     if (sessionRef.current?.pause()) {
       syncUi();
-      onNoteRef.current('自动演绎已暂停');
+      onNoteRef.current(note ?? '自动演绎已暂停');
     }
   }, [syncUi]);
 
@@ -559,12 +565,12 @@ export function useAutoPlay(opts: {
     }
   }, [runLoop, syncUi]);
 
-  const stop = useCallback(() => {
+  const stop = useCallback((note?: string) => {
     stopRunner();
     if (sessionRef.current?.isActive()) {
       sessionRef.current.stop('停止');
       syncUi();
-      onNoteRef.current('自动演绎已停止');
+      onNoteRef.current(note ?? '自动演绎已停止');
     }
   }, [stopRunner, syncUi]);
 
