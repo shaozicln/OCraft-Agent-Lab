@@ -6,6 +6,8 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Humanoid, type HumanoidAnimation } from './Humanoid';
+import { SpeechBubbleHtml } from './SpeechBubbleHtml';
+import { useSpeechBubble } from '@/lib/useSpeechBubble';
 
 /** 进场：从 spawn 外侧固定偏移走进来（Q4=A） */
 const ENTER_OFFSET: [number, number, number] = [0, 0, 3.2];
@@ -147,6 +149,9 @@ export function NpcActor({
   onLeaveDoneRef.current = onLeaveDone;
   phaseRef.current = phase;
 
+  const bubbleText = useSpeechBubble(npcId);
+  const showSpeakingFallback = speaking && !bubbleText && phase !== 'leaving';
+
   const enterFrom = useMemo(
     (): [number, number, number] => [
       spawn[0] + ENTER_OFFSET[0],
@@ -238,7 +243,10 @@ export function NpcActor({
         opacity={opacity}
         rotationY={faceYaw}
       />
-      {speaking && phase !== 'leaving' && (
+      <SpeechBubbleHtml
+        text={phase === 'leaving' ? null : bubbleText}
+      />
+      {showSpeakingFallback && (
         <Html
           position={[0, 1.55, 0]}
           center

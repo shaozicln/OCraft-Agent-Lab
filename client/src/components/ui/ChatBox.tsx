@@ -21,6 +21,10 @@ import type {
 import { useAutoPlay } from '@/lib/autoplay/useAutoPlay';
 import { AutoPlaySetupModal } from './AutoPlaySetupModal';
 import { getLabPeerAgentsEnabled } from '@/lib/lab-settings';
+import {
+  SPEECH_BUBBLE_PLAYER_ID,
+  setSpeechBubble,
+} from '@/lib/speechBubbles';
 
 interface ChatBoxProps {
   open: boolean;
@@ -276,8 +280,11 @@ export function ChatBox({
   const pendingWhisperRef = useRef(false);
   const historyFullscreenRef = useRef(historyFullscreen);
   const loadPanelOpenRef = useRef(loadPanelOpen);
+  const beatBubbleTimersRef = useRef<number[]>([]);
+  const onExchangeSpeakRef = useRef(onExchangeSpeak);
   historyFullscreenRef.current = historyFullscreen;
   loadPanelOpenRef.current = loadPanelOpen;
+  onExchangeSpeakRef.current = onExchangeSpeak;
 
   const pushSystemNote = useCallback((text: string) => {
     setHistory((prev) => [...prev, { role: 'system', text }]);
@@ -290,6 +297,11 @@ export function ChatBox({
         ...prev,
         { role: 'player', text: message, autoPlay: true },
       ]);
+      setSpeechBubble({
+        speakerId: SPEECH_BUBBLE_PLAYER_ID,
+        text: message,
+        ttlMs: 2800,
+      });
       lastStreamRef.current = '';
       const ok = onSend(message, { autoPlay: true });
       if (!ok) {
@@ -323,6 +335,28 @@ export function ChatBox({
               },
         ),
       ]);
+      // AP-4b：历史一次落盘，头顶气泡按句错开（观察箱观感）
+      for (const t of beatBubbleTimersRef.current) window.clearTimeout(t);
+      beatBubbleTimersRef.current = [];
+      lines.forEach((l, i) => {
+        const speakerId =
+          l.speaker_kind === 'player'
+            ? SPEECH_BUBBLE_PLAYER_ID
+            : l.speaker_id;
+        const delay = i * 1300;
+        const tid = window.setTimeout(() => {
+          setSpeechBubble({
+            speakerId,
+            text: l.text,
+            ttlMs: 1600,
+          });
+          if (l.speaker_kind === 'npc') {
+            onExchangeSpeakRef.current?.(l.speaker_id);
+            window.setTimeout(() => onExchangeSpeakRef.current?.(null), 900);
+          }
+        }, delay);
+        beatBubbleTimersRef.current.push(tid);
+      });
     },
     [],
   );
@@ -551,6 +585,11 @@ export function ChatBox({
         if (cancelled) return;
         const line = event.lines[i]!;
         onExchangeSpeak?.(line.npcId);
+        setSpeechBubble({
+          speakerId: line.npcId,
+          text: line.text,
+          ttlMs: 2200,
+        });
         setHistory((prev) => {
           const next = [...prev];
           if (i === 0) {
@@ -585,6 +624,11 @@ export function ChatBox({
     const aside = lastAside;
     onClearLastAside?.();
     onExchangeSpeak?.(aside.npcId);
+    setSpeechBubble({
+      speakerId: aside.npcId,
+      text: aside.text,
+      ttlMs: 3200,
+    });
     setHistory((prev) => [
       ...prev,
       {
@@ -603,6 +647,11 @@ export function ChatBox({
     const line = lastLabPeerLine;
     onClearLastLabPeerLine?.();
     onExchangeSpeak?.(line.npcId);
+    setSpeechBubble({
+      speakerId: line.npcId,
+      text: line.text,
+      ttlMs: 3200,
+    });
     setHistory((prev) => [
       ...prev,
       {
@@ -653,6 +702,8 @@ export function ChatBox({
   useEffect(() => {
     return () => {
       onExchangeSpeak?.(null);
+      for (const t of beatBubbleTimersRef.current) window.clearTimeout(t);
+      beatBubbleTimersRef.current = [];
     };
   }, [onExchangeSpeak]);
 
@@ -698,6 +749,12 @@ export function ChatBox({
     if (streamText === lastStreamRef.current) return;
     lastStreamRef.current = streamText;
     if (!streamText) return;
+
+    setSpeechBubble({
+      speakerId: npcId,
+      text: streamText,
+      ttlMs: isStreaming ? 12_000 : 2800,
+    });
 
     setHistory((prev) => {
       const last = prev[prev.length - 1];
@@ -762,6 +819,11 @@ export function ChatBox({
 
     pendingWhisperRef.current = whisper;
     setHistory((prev) => [...prev, { role: 'player', text: msg, whisper }]);
+    setSpeechBubble({
+      speakerId: SPEECH_BUBBLE_PLAYER_ID,
+      text: msg,
+      ttlMs: 2800,
+    });
     const ok = onSend(msg, whisper ? { whisper: true } : undefined);
     if (!ok) {
       pendingWhisperRef.current = false;

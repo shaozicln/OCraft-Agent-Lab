@@ -4,6 +4,9 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Humanoid } from './Humanoid';
+import { SpeechBubbleHtml } from './SpeechBubbleHtml';
+import { useSpeechBubble } from '@/lib/useSpeechBubble';
+import { SPEECH_BUBBLE_PLAYER_ID } from '@/lib/speechBubbles';
 import {
   CAMERA_DISTANCE_DEFAULT,
   CAMERA_DISTANCE_MAX,
@@ -69,6 +72,8 @@ export function Player({
   lookEnabledRef.current = lookEnabled;
   npcSpawnsRef.current = npcSpawns;
   onMoveRef.current = onMove;
+
+  const bubbleText = useSpeechBubble(SPEECH_BUBBLE_PLAYER_ID);
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -247,6 +252,7 @@ export function Player({
       <group ref={modelRef}>
         <Humanoid color="#E5E7EB" headColor="#F9FAFB" animation="idle" />
       </group>
+      <SpeechBubbleHtml text={bubbleText} />
     </group>
   );
 }

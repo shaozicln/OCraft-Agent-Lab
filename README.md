@@ -1,6 +1,6 @@
 # OCraft Game
 
-测试 Agent 回复，根据npc状态变化走可自定义剧情的一小段网页端剧情，有 Api-Key 就能玩，大概玩法是有新点子填填设定就能对话
+OCraft系列游戏的技术向探索，用于学习和测试 Agent 工程在 npc 上的应用，有 Api-Key 就能玩，大概玩法是有新点子填填设定就能对话
 
 - **前端**：Next.js + React Three Fiber（3D）+ Socket.io  
 - **后端**：NestJS（HTTP + WebSocket）+  LLM  
