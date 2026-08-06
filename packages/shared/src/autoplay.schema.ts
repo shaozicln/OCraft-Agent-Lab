@@ -36,12 +36,29 @@ export const autoPlayGoalSchema = z.object({
   style_id: z.string().min(1).max(64).default('direct'),
   /** allow=可接管；watch_only=只旁观 */
   takeover_mode: z.enum(['allow', 'watch_only']).default('allow'),
-  /** 正片以 ending_reached 结束后是否进杀青（占位） */
+  /** 正片以 ending_reached 结束后是否进杀青 */
   enter_epilogue: z.boolean().default(false),
+  /** 杀青台面：a 演员局 / b 无玩家位向 / c 创世神梗 */
+  epilogue_mode: z.enum(['a', 'b', 'c']).optional(),
   /** 运行时加速：五句内冲升章/终章撞结局 */
   accelerate: z.boolean().default(false),
 });
 export type AutoPlayGoal = z.infer<typeof autoPlayGoalSchema>;
+
+export const autoPlayEpilogueModeSchema = z.enum(['a', 'b', 'c']);
+export type AutoPlayEpilogueMode = z.infer<typeof autoPlayEpilogueModeSchema>;
+
+export const AUTO_PLAY_EPILOGUE_MODE_LABELS: Record<
+  AutoPlayEpilogueMode,
+  string
+> = {
+  a: 'A 演员局',
+  b: 'B 无玩家位向',
+  c: 'C 创世神梗',
+};
+
+/** 正片 / 杀青 */
+export type AutoPlayPhase = 'main' | 'epilogue';
 
 export const autoPlayStatusSchema = z.enum([
   'idle',
@@ -228,10 +245,10 @@ export const autoPlayPrefsSchema = z.object({
     .min(1)
     .max(10_000)
     .default(DEFAULT_CHAPTER_SPEAK_CAP),
-  /** 打到结局后进杀青（逻辑可后置；本局记下偏好） */
+  /** 打到结局后进杀青 */
   enter_epilogue: z.boolean().default(false),
-  /** 杀青台面占位 */
-  epilogue_mode: z.enum(['a', 'b', 'c']).optional(),
+  /** 杀青台面 */
+  epilogue_mode: autoPlayEpilogueModeSchema.optional(),
 });
 export type AutoPlayPrefs = z.infer<typeof autoPlayPrefsSchema>;
 
@@ -338,6 +355,10 @@ export function buildAutoPlayGoal(opts: {
     style_id: style.id,
     takeover_mode: prefs.takeover_mode,
     enter_epilogue: prefs.enter_epilogue && Boolean(target_ending),
+    epilogue_mode:
+      prefs.enter_epilogue && target_ending
+        ? (prefs.epilogue_mode ?? 'a')
+        : undefined,
     accelerate: false,
   });
 }

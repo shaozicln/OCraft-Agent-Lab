@@ -70,6 +70,8 @@ export class AgentHarnessService {
       autoPlay?: boolean;
       /** MA-Lab：禁写章（跳过 Pack chapter transition） */
       labPeer?: boolean;
+      /** AP-5：杀青态禁写章（同 labPeer 冻结剧情进度） */
+      epilogue?: boolean;
     },
   ): Promise<AgentRunResult> {
     const pack = this.packService.getPack();
@@ -170,8 +172,9 @@ export class AgentHarnessService {
     let postToolState = this.npcService.getRuntimeState(playerId, npcId);
 
     const flags = this.worldProgress.getFlags(playerId);
-    // MA-Lab：平级模式禁止 Pack 升章 / 规则写 flag（仍允许软数值 tool）
-    const transition = opts?.labPeer
+    // MA-Lab / 杀青：禁止 Pack 升章 / 规则写 flag（仍允许软数值 tool）
+    const freezePlot = Boolean(opts?.labPeer || opts?.epilogue);
+    const transition = freezePlot
       ? {
           chapterState,
           flagsToSet: [] as Array<{ name: string; value: string }>,
@@ -290,6 +293,7 @@ export class AgentHarnessService {
         ? { whisper_source: opts.whisperSource }
         : {}),
       ...(opts?.autoPlay ? { auto_play: true } : {}),
+      ...(opts?.epilogue ? { epilogue: true } : {}),
       ...(opts?.labPeer
         ? {
             lab: {
@@ -421,7 +425,7 @@ export class AgentHarnessService {
     npcId: string,
     userMessage: string,
     assistantReply: string,
-    opts?: { whisper?: boolean; autoPlay?: boolean },
+    opts?: { whisper?: boolean; autoPlay?: boolean; epilogue?: boolean },
   ) {
     await this.conversationService.appendTurn(playerId, npcId, 'user', userMessage);
     await this.conversationService.appendTurn(
@@ -437,6 +441,9 @@ export class AgentHarnessService {
       assistantReply,
       { whisper: opts?.whisper, autoPlay: opts?.autoPlay },
     );
+
+    // AP-5：杀青禁写 reply flags（正片进度冻结）
+    if (opts?.epilogue) return;
 
     const chapterState = this.worldProgress.getChapter(playerId);
     const flags = this.worldProgress.getFlags(playerId);

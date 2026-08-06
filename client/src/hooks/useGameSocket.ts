@@ -348,6 +348,7 @@ export function useGameSocket(
         nearbyNpcIds?: string[];
         whisper?: boolean;
         autoPlay?: boolean;
+        epilogue?: boolean;
       },
     ): boolean => {
       if (!socketRef.current?.connected) {
@@ -364,6 +365,7 @@ export function useGameSocket(
         nearbyNpcIds: chatOpts?.nearbyNpcIds,
         whisper: chatOpts?.whisper === true ? true : undefined,
         autoPlay: chatOpts?.autoPlay === true ? true : undefined,
+        epilogue: chatOpts?.epilogue === true ? true : undefined,
         labPeerAgents: getLabPeerAgentsEnabled() ? true : undefined,
       });
       return true;
@@ -395,6 +397,8 @@ export function useGameSocket(
       styleId?: string;
       goalTitle?: string;
       accelerate?: boolean;
+      epilogue?: boolean;
+      epilogueMode?: 'a' | 'b' | 'c';
       nearbyNpcIds?: string[];
     }): boolean => {
       if (!socketRef.current?.connected) return false;

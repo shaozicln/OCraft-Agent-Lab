@@ -272,14 +272,14 @@ export function AutoPlaySetupModal({
             <span>
               <span className="text-sm">演完进杀青梗</span>
               <span className="mt-0.5 block text-[11px] text-slate-500">
-                仅打到结局后进入；章停不会进杀青。杀青演出逻辑后续版本落地。
+                仅打到结局后进入；章停不会进杀青。杀青轻松向，不改正片进度。
               </span>
             </span>
           </label>
 
           {enterEpilogue && hasEndings ? (
             <fieldset className="space-y-1 rounded border border-slate-700 p-2">
-              <legend className="px-1 text-xs text-slate-400">杀青台面（占位）</legend>
+              <legend className="px-1 text-xs text-slate-400">杀青台面</legend>
               <label className="flex items-center gap-2">
                 <input
                   type="radio"

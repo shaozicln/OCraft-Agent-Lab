@@ -12,6 +12,7 @@ export declare const playerChatPayloadSchema: z.ZodObject<{
     nearbyNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
     whisper: z.ZodOptional<z.ZodBoolean>;
     autoPlay: z.ZodOptional<z.ZodBoolean>;
+    epilogue: z.ZodOptional<z.ZodBoolean>;
     labPeerAgents: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
 export declare const requestNpcStatePayloadSchema: z.ZodObject<{
@@ -40,6 +41,12 @@ export declare const requestAutoplayNextPayloadSchema: z.ZodObject<{
     styleId: z.ZodOptional<z.ZodString>;
     goalTitle: z.ZodOptional<z.ZodString>;
     accelerate: z.ZodOptional<z.ZodBoolean>;
+    epilogue: z.ZodOptional<z.ZodBoolean>;
+    epilogueMode: z.ZodOptional<z.ZodEnum<{
+        a: "a";
+        b: "b";
+        c: "c";
+    }>>;
     nearbyNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 export declare const autoplayBeatLineEventSchema: z.ZodObject<{

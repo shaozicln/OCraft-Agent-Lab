@@ -1,9 +1,15 @@
-import type { AutoPlayGoal, AutoPlayStatus } from './autoplay.schema';
+import type {
+  AutoPlayGoal,
+  AutoPlayPhase,
+  AutoPlayStatus,
+} from './autoplay.schema';
 import { isAutoPlayGoalReached } from './autoplay-propose';
 
 /** 自动演会话游标（目标驱动，无写死拍脚本） */
 export class AutoPlaySession {
   status: AutoPlayStatus = 'idle';
+  /** 正片 main；达结局且勾选后 epilogue（杀青） */
+  phase: AutoPlayPhase = 'main';
   /** 已完成的拍数（即将执行的是 turnIndex） */
   turnIndex = 0;
   /** 当前章内已发言次数（换章清零） */
@@ -24,12 +30,14 @@ export class AutoPlaySession {
 
   get progressLabel(): string {
     const cap = this.goal.chapter_speak_cap;
-    return `章内 ${this.chapterSpeakCount}/${cap} · 总 ${this.turnIndex}`;
+    const prefix = this.phase === 'epilogue' ? '杀青 · ' : '';
+    return `${prefix}章内 ${this.chapterSpeakCount}/${cap} · 总 ${this.turnIndex}`;
   }
 
   start(): boolean {
     if (this.status === 'running' || this.status === 'paused') return false;
     this.status = 'running';
+    this.phase = 'main';
     this.turnIndex = 0;
     this.chapterSpeakCount = 0;
     this.chapterIdForCap = undefined;
@@ -38,6 +46,19 @@ export class AutoPlaySession {
     this.accelerate = this.goal.accelerate === true;
     this.failReason = undefined;
     this.sawTargetExchange = false;
+    return true;
+  }
+
+  /** 正片达结局后进入杀青；保持 running，不再用 goalReached 收束 */
+  enterEpilogue(): boolean {
+    if (this.phase === 'epilogue') return false;
+    if (this.status !== 'running' && this.status !== 'paused') return false;
+    if (!this.goal.enter_epilogue) return false;
+    this.phase = 'epilogue';
+    this.status = 'running';
+    this.intervening = false;
+    this.accelerate = false;
+    this.needsAcceleratePrompt = false;
     return true;
   }
 
@@ -130,6 +151,7 @@ export class AutoPlaySession {
   }
 
   goalReached(chapter?: string, endingId?: string | null): boolean {
+    if (this.phase === 'epilogue') return false;
     return isAutoPlayGoalReached(this.goal, {
       chapter,
       sawTargetExchange: this.sawTargetExchange,

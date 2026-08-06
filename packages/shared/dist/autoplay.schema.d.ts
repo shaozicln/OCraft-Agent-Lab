@@ -22,9 +22,23 @@ export declare const autoPlayGoalSchema: z.ZodObject<{
         watch_only: "watch_only";
     }>>;
     enter_epilogue: z.ZodDefault<z.ZodBoolean>;
+    epilogue_mode: z.ZodOptional<z.ZodEnum<{
+        a: "a";
+        b: "b";
+        c: "c";
+    }>>;
     accelerate: z.ZodDefault<z.ZodBoolean>;
 }, z.core.$strip>;
 export type AutoPlayGoal = z.infer<typeof autoPlayGoalSchema>;
+export declare const autoPlayEpilogueModeSchema: z.ZodEnum<{
+    a: "a";
+    b: "b";
+    c: "c";
+}>;
+export type AutoPlayEpilogueMode = z.infer<typeof autoPlayEpilogueModeSchema>;
+export declare const AUTO_PLAY_EPILOGUE_MODE_LABELS: Record<AutoPlayEpilogueMode, string>;
+/** 正片 / 杀青 */
+export type AutoPlayPhase = 'main' | 'epilogue';
 export declare const autoPlayStatusSchema: z.ZodEnum<{
     abort: "abort";
     done: "done";

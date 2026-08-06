@@ -153,6 +153,7 @@ export declare const agentTraceRecordSchema: z.ZodObject<{
         auto: "auto";
     }>>;
     auto_play: z.ZodOptional<z.ZodBoolean>;
+    epilogue: z.ZodOptional<z.ZodBoolean>;
     lab: z.ZodOptional<z.ZodObject<{
         peer_agents: z.ZodLiteral<true>;
         stop_reason: z.ZodOptional<z.ZodString>;
@@ -267,6 +268,7 @@ export declare const agentTraceListResponseSchema: z.ZodObject<{
             auto: "auto";
         }>>;
         auto_play: z.ZodOptional<z.ZodBoolean>;
+        epilogue: z.ZodOptional<z.ZodBoolean>;
         lab: z.ZodOptional<z.ZodObject<{
             peer_agents: z.ZodLiteral<true>;
             stop_reason: z.ZodOptional<z.ZodString>;

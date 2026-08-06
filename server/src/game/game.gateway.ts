@@ -224,6 +224,8 @@ export class GameGateway implements OnGatewayConnection {
       styleId,
       goalTitle,
       accelerate,
+      epilogue,
+      epilogueMode,
       nearbyNpcIds,
     } = parsed.data;
 
@@ -240,6 +242,7 @@ export class GameGateway implements OnGatewayConnection {
           });
           return;
         }
+        const isEpilogue = epilogue === true;
         const next = await this.autoPlayAgent.proposeNext({
           playerId,
           npcId,
@@ -253,7 +256,9 @@ export class GameGateway implements OnGatewayConnection {
           targetEnding,
           styleId,
           goalTitle,
-          accelerate,
+          accelerate: isEpilogue ? false : accelerate,
+          epilogue: isEpilogue,
+          epilogueMode,
           nearbyNpcIds,
         });
 
@@ -291,14 +296,17 @@ export class GameGateway implements OnGatewayConnection {
               line.speaker_id,
               text,
             );
-            const flagSets = evaluateNpcReplyFlags(
-              this.worldProgress.getChapter(playerId),
-              text,
-              this.worldProgress.getFlags(playerId),
-              pack.triggers,
-            );
-            if (flagSets.length > 0) {
-              await this.worldProgress.setFlags(playerId, flagSets);
+            // AP-5：杀青禁写 flag / 结局相关规则副作用
+            if (!isEpilogue) {
+              const flagSets = evaluateNpcReplyFlags(
+                this.worldProgress.getChapter(playerId),
+                text,
+                this.worldProgress.getFlags(playerId),
+                pack.triggers,
+              );
+              if (flagSets.length > 0) {
+                await this.worldProgress.setFlags(playerId, flagSets);
+              }
             }
             const name =
               this.npcService.getDefinition(line.speaker_id)?.name ??
@@ -377,8 +385,15 @@ export class GameGateway implements OnGatewayConnection {
     }
 
     const playerId = this.requirePlayerId(client);
-    const { npcId, message, nearbyNpcIds, whisper, autoPlay, labPeerAgents } =
-      parsed.data;
+    const {
+      npcId,
+      message,
+      nearbyNpcIds,
+      whisper,
+      autoPlay,
+      epilogue,
+      labPeerAgents,
+    } = parsed.data;
     const clientWhisper = whisper === true;
     const autoWhisper = !clientWhisper && detectWhisperIntent(message);
     const isWhisper = clientWhisper || autoWhisper;
@@ -388,16 +403,17 @@ export class GameGateway implements OnGatewayConnection {
         ? 'auto'
         : undefined;
     const isAutoPlay = autoPlay === true;
+    const isEpilogue = epilogue === true;
     const isLabPeer = labPeerAgents === true && !isWhisper;
 
     return this.packService.runWithPlayerAsync(playerId, async () => {
       await this.conversationService.ensureSession(playerId, npcId);
       this.logger.log(
-        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper}${whisperSource ? `(${whisperSource})` : ''}${isAutoPlay ? ' autoPlay' : ''}${isLabPeer ? ' labPeer' : ''} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
+        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper}${whisperSource ? `(${whisperSource})` : ''}${isAutoPlay ? ' autoPlay' : ''}${isEpilogue ? ' epilogue' : ''}${isLabPeer ? ' labPeer' : ''} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
       );
 
       try {
-        // 导演：whisper / MA-Lab 跳过 LLM；否则真决策
+        // 导演：whisper / MA-Lab / 杀青跳过 LLM 排场外的复杂调度；杀青仍走主回复
         const directorDecision = isWhisper
           ? this.director.skippedWhisperDecision(npcId)
           : isLabPeer
@@ -412,6 +428,7 @@ export class GameGateway implements OnGatewayConnection {
               );
         const shouldTryExchange =
           !isLabPeer &&
+          !isEpilogue &&
           (directorDecision.fallback !== false ||
             directorDecision.mode === 'reply_then_exchange');
         this.logger.log(
@@ -423,6 +440,7 @@ export class GameGateway implements OnGatewayConnection {
           whisperSource,
           autoPlay: isAutoPlay,
           labPeer: isLabPeer,
+          epilogue: isEpilogue,
         });
 
         let fullReply = '';
@@ -469,7 +487,7 @@ export class GameGateway implements OnGatewayConnection {
           npcId,
           message,
           fullReply,
-          { whisper: isWhisper, autoPlay: isAutoPlay },
+          { whisper: isWhisper, autoPlay: isAutoPlay, epilogue: isEpilogue },
         );
 
         client.emit('npc_state_update', {
@@ -570,51 +588,53 @@ export class GameGateway implements OnGatewayConnection {
           }
         }
 
-        // G：Pack endings 运行时结算（在 reply flags / 升章之后）
-        const endingHit = evaluateEndingSettlement({
-          pack: this.packService.getPack(),
-          chapterState: this.worldProgress.getChapter(playerId),
-          flags: this.worldProgress.getFlags(playerId),
-          playerMessage: message,
-        });
-        if (endingHit) {
-          const cleared = await this.worldProgress.clearFlags(
-            playerId,
-            endingHit.clearFlags,
-          );
-          const setNames = await this.worldProgress.setFlags(
-            playerId,
-            endingHit.setFlags,
-          );
-          this.agentTrace.appendEnding(playerId, npcId, {
-            ending_id: endingHit.endingId,
-            display_name: endingHit.displayName,
-            flags_set: endingHit.setFlags.filter((f) =>
-              setNames.includes(f.name),
-            ),
-            flags_cleared: cleared,
-            traceId: result.traceId,
+        // G：Pack endings 运行时结算（杀青禁写）
+        if (!isEpilogue) {
+          const endingHit = evaluateEndingSettlement({
+            pack: this.packService.getPack(),
+            chapterState: this.worldProgress.getChapter(playerId),
+            flags: this.worldProgress.getFlags(playerId),
+            playerMessage: message,
           });
-          client.emit('ending_reached', {
-            endingId: endingHit.endingId,
-            displayName: endingHit.displayName,
-            notes: endingHit.notes,
-            flagsSet: setNames,
-            flagsCleared: cleared,
-          });
-          client.emit(
-            'npc_state_update',
-            this.buildStatePayload(playerId, progressNpcId),
-          );
-          if (progressNpcId !== npcId) {
+          if (endingHit) {
+            const cleared = await this.worldProgress.clearFlags(
+              playerId,
+              endingHit.clearFlags,
+            );
+            const setNames = await this.worldProgress.setFlags(
+              playerId,
+              endingHit.setFlags,
+            );
+            this.agentTrace.appendEnding(playerId, npcId, {
+              ending_id: endingHit.endingId,
+              display_name: endingHit.displayName,
+              flags_set: endingHit.setFlags.filter((f) =>
+                setNames.includes(f.name),
+              ),
+              flags_cleared: cleared,
+              traceId: result.traceId,
+            });
+            client.emit('ending_reached', {
+              endingId: endingHit.endingId,
+              displayName: endingHit.displayName,
+              notes: endingHit.notes,
+              flagsSet: setNames,
+              flagsCleared: cleared,
+            });
             client.emit(
               'npc_state_update',
-              this.buildStatePayload(playerId, npcId),
+              this.buildStatePayload(playerId, progressNpcId),
+            );
+            if (progressNpcId !== npcId) {
+              client.emit(
+                'npc_state_update',
+                this.buildStatePayload(playerId, npcId),
+              );
+            }
+            this.logger.log(
+              `ending_reached player=${playerId} ${endingHit.endingId}`,
             );
           }
-          this.logger.log(
-            `ending_reached player=${playerId} ${endingHit.endingId}`,
-          );
         }
 
         try {

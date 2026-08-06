@@ -1,8 +1,10 @@
-import type { AutoPlayGoal, AutoPlayStatus } from './autoplay.schema';
+import type { AutoPlayGoal, AutoPlayPhase, AutoPlayStatus } from './autoplay.schema';
 /** 自动演会话游标（目标驱动，无写死拍脚本） */
 export declare class AutoPlaySession {
     readonly goal: AutoPlayGoal;
     status: AutoPlayStatus;
+    /** 正片 main；达结局且勾选后 epilogue（杀青） */
+    phase: AutoPlayPhase;
     /** 已完成的拍数（即将执行的是 turnIndex） */
     turnIndex: number;
     /** 当前章内已发言次数（换章清零） */
@@ -19,6 +21,8 @@ export declare class AutoPlaySession {
     constructor(goal: AutoPlayGoal);
     get progressLabel(): string;
     start(): boolean;
+    /** 正片达结局后进入杀青；保持 running，不再用 goalReached 收束 */
+    enterEpilogue(): boolean;
     pause(): boolean;
     resume(): boolean;
     /** 接管：暂停自动拍，解锁输入 */

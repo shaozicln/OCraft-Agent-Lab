@@ -117,6 +117,8 @@ export const agentTraceRecordSchema = z.object({
   whisper_source: z.enum(['client', 'auto']).optional(),
   /** 自动演：本轮是否代发玩家句（MA-A-B 为 Agent/MOCK 生成） */
   auto_play: z.boolean().optional(),
+  /** AP-5：杀青态（禁写章 / 禁结局） */
+  epilogue: z.boolean().optional(),
   /** MA-Lab：平级多 Agent 标记与本轮进度 */
   lab: z
     .object({

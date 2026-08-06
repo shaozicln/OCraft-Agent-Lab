@@ -438,6 +438,95 @@ const cases: Case[] = [
       return { ok, detail: `ch=${kind} end=${endingKind}` };
     },
   },
+  {
+    name: 'AP-5：buildAutoPlayGoal 写入 epilogue_mode',
+    run: () => {
+      const g = buildAutoPlayGoal({
+        npcId: 'n',
+        prefs: {
+          style_id: 'direct',
+          ending_mode: 'specific',
+          target_ending_id: 'ending_a',
+          takeover_mode: 'allow',
+          wait_ms: 800,
+          chapter_speak_cap: 100,
+          enter_epilogue: true,
+          epilogue_mode: 'c',
+        },
+        pack: {
+          endings: [
+            {
+              id: 'ending_a',
+              display_name: 'A',
+              set_flags: [{ name: 'ending_a', value: 'true' }],
+            },
+          ],
+        },
+      });
+      const ok =
+        g.enter_epilogue === true &&
+        g.epilogue_mode === 'c' &&
+        g.target_ending === 'ending_a';
+      return { ok, detail: `epi=${g.enter_epilogue} mode=${g.epilogue_mode}` };
+    },
+  },
+  {
+    name: 'AP-5：进杀青后 goalReached 不再收束',
+    run: () => {
+      const g = buildAutoPlayGoal({
+        npcId: 'n',
+        prefs: {
+          style_id: 'direct',
+          ending_mode: 'specific',
+          target_ending_id: 'ending_a',
+          takeover_mode: 'allow',
+          wait_ms: 800,
+          chapter_speak_cap: 100,
+          enter_epilogue: true,
+          epilogue_mode: 'a',
+        },
+        pack: {
+          endings: [{ id: 'ending_a', display_name: 'A' }],
+        },
+      });
+      const s = new AutoPlaySession(g);
+      s.start();
+      const before = s.goalReached('ch9', 'ending_a');
+      const entered = s.enterEpilogue();
+      const after = s.goalReached('ch9', 'ending_a');
+      const ok = before === true && entered === true && after === false && s.phase === 'epilogue';
+      return {
+        ok,
+        detail: `before=${before} enter=${entered} after=${after} phase=${s.phase}`,
+      };
+    },
+  },
+  {
+    name: 'AP-5：章停不因 enter_epilogue 变成 ending',
+    run: () => {
+      const g = buildAutoPlayGoal({
+        npcId: 'n',
+        prefs: {
+          style_id: 'direct',
+          ending_mode: 'specific',
+          target_ending_id: 'ending_a',
+          stop_at_chapter: 'ch2',
+          takeover_mode: 'allow',
+          wait_ms: 800,
+          chapter_speak_cap: 100,
+          enter_epilogue: true,
+          epilogue_mode: 'a',
+        },
+        pack: {
+          chapters: [{ id: 'ch1' }, { id: 'ch2' }, { id: 'ch3' }],
+          endings: [{ id: 'ending_a', display_name: 'A' }],
+        },
+      });
+      const kind = resolveAutoPlayStopKind(g, { chapter: 'ch2' });
+      const ok = kind === 'chapter' && g.enter_epilogue === true;
+      return { ok, detail: `kind=${kind} epi=${g.enter_epilogue}` };
+    },
+  },
 ];
 
 let failed = 0;

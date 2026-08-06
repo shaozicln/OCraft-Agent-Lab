@@ -279,13 +279,17 @@ function GamePageInner({
   }, []);
 
   const handleSendChat = useCallback(
-    (message: string, opts?: { whisper?: boolean; autoPlay?: boolean }) => {
+    (
+      message: string,
+      opts?: { whisper?: boolean; autoPlay?: boolean; epilogue?: boolean },
+    ) => {
       // 同场短接话：交互圈内 + 当前场景已出场的其他人（spawn 相距常 > 交互距离）
       // 悄悄话不传 nearby（服务端也会跳过 aside/exchange）
       if (opts?.whisper) {
         return sendChat(message, {
           whisper: true,
           autoPlay: opts.autoPlay,
+          epilogue: opts.epilogue,
         });
       }
       const ids = [
@@ -297,6 +301,7 @@ function GamePageInner({
       return sendChat(message, {
         nearbyNpcIds: ids,
         autoPlay: opts?.autoPlay,
+        epilogue: opts?.epilogue,
       });
     },
     [sendChat, nearbyNpcs, visibleNpcs],

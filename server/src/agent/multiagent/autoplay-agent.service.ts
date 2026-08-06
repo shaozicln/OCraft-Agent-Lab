@@ -136,6 +136,9 @@ export class AutoPlayAgentService {
     styleId?: string;
     goalTitle?: string;
     accelerate?: boolean;
+    /** AP-5 杀青 */
+    epilogue?: boolean;
+    epilogueMode?: 'a' | 'b' | 'c';
     nearbyNpcIds?: string[];
   }): Promise<AutoPlayNextProposal> {
     if (!this.isAvailable()) {
@@ -146,6 +149,8 @@ export class AutoPlayAgentService {
     await this.worldProgress.ensureHydrated(opts.playerId);
     await this.conversationService.ensureSceneLogReady(opts.playerId);
 
+    const isEpilogue = opts.epilogue === true;
+    const epilogueMode = opts.epilogueMode ?? 'a';
     const cap = opts.chapterSpeakCap ?? opts.maxTurns ?? 100;
     const goal: AutoPlayGoal = autoPlayGoalSchema.parse({
       id: 'session',
@@ -153,15 +158,17 @@ export class AutoPlayAgentService {
       world_id: pack.header.world_id,
       pack_version_id: pack.version_dir,
       npc_id: opts.npcId,
-      target_chapter: opts.targetChapter,
-      target_exchange: opts.targetExchange,
-      target_ending: opts.targetEnding,
+      target_chapter: isEpilogue ? undefined : opts.targetChapter,
+      target_exchange: isEpilogue ? undefined : opts.targetExchange,
+      target_ending: isEpilogue ? undefined : opts.targetEnding,
       chapter_speak_cap: cap,
       max_turns: cap,
       wait_ms: 800,
-      style_id: opts.styleId ?? 'direct',
+      style_id: isEpilogue ? 'funny' : (opts.styleId ?? 'direct'),
       takeover_mode: 'allow',
-      accelerate: opts.accelerate === true,
+      enter_epilogue: false,
+      epilogue_mode: isEpilogue ? epilogueMode : undefined,
+      accelerate: false,
     });
 
     const chapterId = this.worldProgress.getChapter(opts.playerId);
@@ -171,11 +178,9 @@ export class AutoPlayAgentService {
     const flags = this.worldProgress.getFlags(opts.playerId);
     const flagNames = Object.keys(flags);
     const runtime = this.npcService.getRuntimeState(opts.playerId, opts.npcId);
-    const availableEvents = listAvailableExchangeEventIds(
-      chapterId,
-      flags,
-      pack.triggers,
-    );
+    const availableEvents = isEpilogue
+      ? []
+      : listAvailableExchangeEventIds(chapterId, flags, pack.triggers);
     const recentLines = formatSceneUtteranceLines(
       this.conversationService
         .getPublicSceneLog(opts.playerId)
@@ -193,20 +198,24 @@ export class AutoPlayAgentService {
     );
     const castIds = cast.map((c) => c.npc_id);
 
-    const readyAdvances = listReadyChapterAdvances({
-      chapterState: chapterId,
-      runtimeState: runtime,
-      flags,
-      triggers: pack.triggers,
-    });
-    const readyEndings = listReadyEndingHints({
-      pack,
-      chapterState: chapterId,
-      flags,
-      targetEndingId: goal.target_ending,
-    });
+    const readyAdvances = isEpilogue
+      ? []
+      : listReadyChapterAdvances({
+          chapterState: chapterId,
+          runtimeState: runtime,
+          flags,
+          triggers: pack.triggers,
+        });
+    const readyEndings = isEpilogue
+      ? []
+      : listReadyEndingHints({
+          pack,
+          chapterState: chapterId,
+          flags,
+          targetEndingId: goal.target_ending,
+        });
 
-    const accelerate = opts.accelerate === true;
+    const accelerate = !isEpilogue && opts.accelerate === true;
     const acceleratePlan = this.pickAcceleratePlan({
       accelerate,
       readyAdvances,
@@ -216,19 +225,35 @@ export class AutoPlayAgentService {
     });
 
     const rankMap = getChapterRankMap(pack);
-    const playablePresent = isPackPlayablePlayerPresent(pack, {
+    const playablePresentRaw = isPackPlayablePlayerPresent(pack, {
       chapterState: chapterId,
       flags,
       rankMap,
     });
     const playableId = getPackPlayablePlayerId(pack);
 
+    // 杀青台面：A/C 允许玩家句；B 强制纯 NPC
+    let playablePresent = playablePresentRaw;
+    if (isEpilogue) {
+      if (epilogueMode === 'b') playablePresent = false;
+      else playablePresent = true; // A/C：杀青里可点玩家（创世神或演员）
+    }
+
     // AP-2：仅当可演出玩家位已出场，且有升章/结局门槛（或加速）时，本拍才强制玩家句
+    // 杀青：永不强制冲结局玩家句
     const requirePlayerLine =
+      !isEpilogue &&
       playablePresent &&
       (accelerate ||
         readyAdvances.length > 0 ||
         readyEndings.length > 0);
+
+    const epilogueStyleHint =
+      epilogueMode === 'c'
+        ? '风格：杀青·创世神梗。轻松搞笑；NPC 可知道玩家是创造者；禁止推进正片剧情/升章/结局。'
+        : epilogueMode === 'b'
+          ? '风格：杀青·演员互撕。轻松向；以在场 NPC 互聊为主；禁止升章/结局/改 Pack 真相。'
+          : '风格：杀青·演员局。大家都知道在演戏，可轻度出戏互撕演技；轻松向；禁止升章/结局/改 Pack 真相。';
 
     const input = {
       goal,
@@ -241,9 +266,11 @@ export class AutoPlayAgentService {
       priorSays: opts.priorSays ?? [],
       focusNpcName,
       sawTargetExchange: opts.sawTargetExchange === true,
-      styleHint: accelerate
-        ? '风格：直给推进（加速中，少铺垫）。'
-        : style.prompt_hint,
+      styleHint: isEpilogue
+        ? epilogueStyleHint
+        : accelerate
+          ? '风格：直给推进（加速中，少铺垫）。'
+          : style.prompt_hint,
       accelerate,
       acceleratePlan,
       cast,
@@ -252,13 +279,15 @@ export class AutoPlayAgentService {
       requirePlayerLine,
       playablePresent,
       playableId,
+      epilogue: isEpilogue,
+      epilogueMode,
     };
 
     let proposal: AutoPlayNextProposal;
     try {
       const messages = this.buildPrompt(input);
       const raw = await this.llmService.complete(messages, {
-        temperature: accelerate ? 0.35 : 0.55,
+        temperature: isEpilogue ? 0.7 : accelerate ? 0.35 : 0.55,
         maxTokens: 420,
         json: true,
       });
@@ -285,7 +314,13 @@ export class AutoPlayAgentService {
 
     proposal = withSyncedSay(proposal);
 
+    // 杀青：忽略模型 done（由玩家点「结束杀青」）
+    if (isEpilogue && proposal.done) {
+      proposal = { ...proposal, done: false };
+    }
+
     if (
+      !isEpilogue &&
       playablePresent &&
       accelerate &&
       acceleratePlan.mustInclude.length > 0 &&
@@ -315,7 +350,7 @@ export class AutoPlayAgentService {
       });
     }
 
-    // 无可演出玩家位 / 未出场：剥掉玩家句，改走纯 NPC
+    // 无可演出玩家位 / 未出场 / 杀青 B：剥掉玩家句，改走纯 NPC
     if (!playablePresent && !proposal.done) {
       const onlyNpc = normalizeAutoPlayBeatLines(proposal).filter(
         (l) => l.speaker_kind === 'npc',
@@ -324,20 +359,22 @@ export class AutoPlayAgentService {
         onlyNpc.push({
           speaker_kind: 'npc',
           speaker_id: opts.npcId,
-          text: '……刚才那事，你们怎么看？',
+          text: isEpilogue
+            ? '哎，刚才那场……你们自己怎么看？'
+            : '……刚才那事，你们怎么看？',
         });
       }
       proposal = withSyncedSay({
         ...proposal,
         lines: onlyNpc,
         say: undefined,
-        reason: `${proposal.reason || '排场'}·无玩家演出位`,
+        reason: `${proposal.reason || '排场'}·${isEpilogue ? '杀青无玩家位向' : '无玩家演出位'}`,
       });
     }
 
     const lines = normalizeAutoPlayBeatLines(proposal);
     this.logger.log(
-      `autoplay next player=${opts.playerId} turn=${opts.turnIndex} accel=${accelerate} plan=${acceleratePlan.kind} done=${proposal.done} lines=${lines.length} say="${proposal.say ?? ''}" reason="${proposal.reason}"`,
+      `autoplay next player=${opts.playerId} turn=${opts.turnIndex} epi=${isEpilogue}:${epilogueMode} accel=${accelerate} plan=${acceleratePlan.kind} done=${proposal.done} lines=${lines.length} say="${proposal.say ?? ''}" reason="${proposal.reason}"`,
     );
     return withSyncedSay(proposal);
   }
@@ -459,20 +496,24 @@ export class AutoPlayAgentService {
     requirePlayerLine: boolean;
     playablePresent: boolean;
     playableId: string;
+    epilogue?: boolean;
+    epilogueMode?: 'a' | 'b' | 'c';
   }): LlmMessage[] {
-    const goalBits = [
-      input.goal.target_chapter
-        ? `章停/途经 ${input.goal.target_chapter}`
-        : null,
-      input.goal.target_exchange
-        ? `目标互聊 ${input.goal.target_exchange}`
-        : null,
-      input.goal.target_ending
-        ? `目标结局 ${input.goal.target_ending}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join('；');
+    const goalBits = input.epilogue
+      ? '杀青后日谈（正片已结束；轻松互撕，不改正片）'
+      : [
+          input.goal.target_chapter
+            ? `章停/途经 ${input.goal.target_chapter}`
+            : null,
+          input.goal.target_exchange
+            ? `目标互聊 ${input.goal.target_exchange}`
+            : null,
+          input.goal.target_ending
+            ? `目标结局 ${input.goal.target_ending}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join('；');
 
     const castBlock =
       input.cast
@@ -480,7 +521,7 @@ export class AutoPlayAgentService {
         .join('\n') || '（空）';
 
     const accelLines: string[] = [];
-    if (input.accelerate) {
+    if (input.accelerate && !input.epilogue) {
       accelLines.push(
         '【加速模式】少闲聊，本拍就要推动进度。加速优先于风格铺垫。',
       );
@@ -511,22 +552,38 @@ export class AutoPlayAgentService {
 
     const playerRule = !input.playablePresent
       ? '【无可演出玩家位或未出场】禁止输出 player 句；只点 cast 里的 NPC。'
-      : input.requirePlayerLine
-        ? `【本拍必须含玩家句】lines 里至少一句 speaker_kind=player、speaker_id=${input.playableId}（Pack 升章/结局吃玩家台词）。`
-        : `【本拍可不含玩家】可点玩家位 id=${input.playableId}，也可纯 NPC；不必先有玩家句。`;
+      : input.epilogue && input.epilogueMode === 'c'
+        ? `【杀青·创世神】可点玩家句 speaker_kind=player、speaker_id=${input.playableId}，口吻像创造者/观众；NPC 可破墙。`
+        : input.requirePlayerLine
+          ? `【本拍必须含玩家句】lines 里至少一句 speaker_kind=player、speaker_id=${input.playableId}（Pack 升章/结局吃玩家台词）。`
+          : `【本拍可不含玩家】可点玩家位 id=${input.playableId}，也可纯 NPC；不必先有玩家句。`;
+
+    const epilogueRules = input.epilogue
+      ? [
+          '【杀青模式】正片已结束。禁止推动升章、结局、改 Pack 真相；禁止说「进入下一章/触发结局」。',
+          '【结束权】不要设 done=true（由玩家点「结束杀青」）；持续轻松排场即可。',
+        ]
+      : [];
 
     return [
       {
         role: 'system',
         content: [
-          '你是自动演「场景导演 + 台词助理」，不是假玩家硬代打。',
+          input.epilogue
+            ? '你是杀青「后日谈导演 + 台词助理」。'
+            : '你是自动演「场景导演 + 台词助理」，不是假玩家硬代打。',
           '职责：从 cast 与可选玩家演出位中点 1～N 个说话人，写出本拍台词（顺序演出）。',
           '禁止：改章节、发明 Pack 外事件、剧透未解锁、自称 AI、对系统说话。',
+          ...epilogueRules,
           `每拍最多 ${input.maxSpeakers} 句（风格上限）。`,
           `NPC 的 speaker_id 必须是 cast 中的 npc_id；玩家句 speaker_kind=player、speaker_id=${input.playableId}。`,
           playerRule,
-          '若目标已达成或无需再演，设 done=true 且 lines 可空。',
-          '否则 done=false 且 lines 非空；每句 ≤40 字，口语。',
+          input.epilogue
+            ? 'done 必须为 false；lines 非空；每句 ≤40 字，口语轻松。'
+            : '若目标已达成或无需再演，设 done=true 且 lines 可空。',
+          input.epilogue
+            ? null
+            : '否则 done=false 且 lines 非空；每句 ≤40 字，口语。',
           input.styleHint,
           ...accelLines,
           '只输出 JSON：{"lines":[{"speaker_kind":"npc|player","speaker_id":"...","text":"..."}],"done":false,"reason":"..."}',
@@ -541,11 +598,17 @@ export class AutoPlayAgentService {
           `【焦点 NPC】${input.focusNpcName}（${input.goal.npc_id}）`,
           `【当前章节】${input.chapterLabel}（${input.chapterId}）`,
           `【旗标】${input.flagNames.join(', ') || '（无）'}`,
-          `【可尝试戏码 id】${input.availableEvents.join(', ') || '（无）'}`,
+          input.epilogue
+            ? '【可尝试戏码 id】（杀青关闭）'
+            : `【可尝试戏码 id】${input.availableEvents.join(', ') || '（无）'}`,
           `【自动演目标】${goalBits || '推进到结局（或最终章）'}`,
-          `【目标互聊已见】${input.sawTargetExchange ? '是' : '否'}`,
-          `【加速】${input.accelerate ? `开 · ${input.acceleratePlan.kind}:${input.acceleratePlan.label || '-'}` : '关'}`,
-          `【可演出玩家位】${input.playablePresent ? `已出场（${input.playableId}）` : '无/未出场'}`,
+          input.epilogue
+            ? `【杀青台面】${input.epilogueMode ?? 'a'}`
+            : `【目标互聊已见】${input.sawTargetExchange ? '是' : '否'}`,
+          input.epilogue
+            ? '【加速】关（杀青）'
+            : `【加速】${input.accelerate ? `开 · ${input.acceleratePlan.kind}:${input.acceleratePlan.label || '-'}` : '关'}`,
+          `【可演出玩家位】${input.playablePresent ? `可用（${input.playableId}）` : '无/未出场'}`,
           `【必须玩家句】${input.requirePlayerLine ? '是' : '否'}`,
           `【拍序】总第 ${input.turnIndex + 1} 拍（章发言软顶 ${input.goal.chapter_speak_cap}）`,
           `【上场 cast】\n${castBlock}`,

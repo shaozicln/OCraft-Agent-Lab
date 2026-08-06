@@ -69,7 +69,7 @@ interface ChatBoxProps {
   onClose: () => void;
   onSend: (
     message: string,
-    opts?: { whisper?: boolean; autoPlay?: boolean },
+    opts?: { whisper?: boolean; autoPlay?: boolean; epilogue?: boolean },
   ) => boolean;
   onRequestAutoplayNext: (payload: {
     turnIndex: number;
@@ -83,6 +83,8 @@ interface ChatBoxProps {
     styleId?: string;
     goalTitle?: string;
     accelerate?: boolean;
+    epilogue?: boolean;
+    epilogueMode?: 'a' | 'b' | 'c';
     nearbyNpcIds?: string[];
   }) => boolean;
   /** 导演 cast 用附近 NPC */
@@ -291,7 +293,7 @@ export function ChatBox({
   }, []);
 
   const sendAutoLine = useCallback(
-    (message: string) => {
+    (message: string, sendOpts?: { epilogue?: boolean }) => {
       if (!connected) return false;
       setHistory((prev) => [
         ...prev,
@@ -303,7 +305,10 @@ export function ChatBox({
         ttlMs: 2800,
       });
       lastStreamRef.current = '';
-      const ok = onSend(message, { autoPlay: true });
+      const ok = onSend(message, {
+        autoPlay: true,
+        epilogue: sendOpts?.epilogue === true ? true : undefined,
+      });
       if (!ok) {
         setHistory((prev) => [
           ...prev,
@@ -824,7 +829,13 @@ export function ChatBox({
       text: msg,
       ttlMs: 2800,
     });
-    const ok = onSend(msg, whisper ? { whisper: true } : undefined);
+    const inEpilogue =
+      autoPlayRef.current.ui.phase === 'epilogue' &&
+      autoPlayRef.current.ui.intervening;
+    const ok = onSend(msg, {
+      ...(whisper ? { whisper: true } : {}),
+      ...(inEpilogue ? { epilogue: true } : {}),
+    });
     if (!ok) {
       pendingWhisperRef.current = false;
       setHistory((prev) => [
@@ -932,15 +943,21 @@ export function ChatBox({
                 <span className="truncate text-[11px] text-amber-200/90">
                   {autoPlay.ui.intervening
                     ? `已接管 · ${autoPlay.ui.progressLabel}`
-                    : autoPlay.ui.status === 'running'
-                      ? `自动演绎中 ${autoPlay.ui.progressLabel}${autoPlay.ui.accelerate ? ' · 加速' : ''}`
-                      : autoPlay.ui.status === 'paused'
-                        ? `已暂停 ${autoPlay.ui.progressLabel}`
-                        : autoPlay.ui.status === 'done'
-                          ? '自动演绎已完成'
-                          : autoPlay.ui.status === 'abort'
-                            ? `已中断${autoPlay.ui.failReason ? ` · ${autoPlay.ui.failReason}` : ''}`
-                            : '自动演绎设置'}
+                    : autoPlay.ui.phase === 'epilogue' &&
+                        (autoPlay.ui.status === 'running' ||
+                          autoPlay.ui.status === 'paused')
+                      ? `${autoPlay.ui.status === 'paused' ? '杀青暂停' : '杀青中'} ${autoPlay.ui.progressLabel}`
+                      : autoPlay.ui.status === 'running'
+                        ? `自动演绎中 ${autoPlay.ui.progressLabel}${autoPlay.ui.accelerate ? ' · 加速' : ''}`
+                        : autoPlay.ui.status === 'paused'
+                          ? `已暂停 ${autoPlay.ui.progressLabel}`
+                          : autoPlay.ui.status === 'done'
+                            ? autoPlay.ui.phase === 'epilogue'
+                              ? '杀青已结束'
+                              : '自动演绎已完成'
+                            : autoPlay.ui.status === 'abort'
+                              ? `已中断${autoPlay.ui.failReason ? ` · ${autoPlay.ui.failReason}` : ''}`
+                              : '自动演绎设置'}
                 </span>
                 <div className="flex shrink-0 items-center gap-1">
                   {autoPlay.ui.status === 'running' &&
@@ -961,6 +978,17 @@ export function ChatBox({
                         className="rounded px-2 py-0.5 text-[11px] text-sky-300 hover:bg-slate-800"
                       >
                         继续
+                      </button>
+                    )}
+                  {autoPlay.ui.phase === 'epilogue' &&
+                    (autoPlay.ui.status === 'running' ||
+                      autoPlay.ui.status === 'paused') && (
+                      <button
+                        type="button"
+                        onClick={autoPlay.endEpilogue}
+                        className="rounded px-2 py-0.5 text-[11px] text-amber-100 hover:bg-amber-900/40"
+                      >
+                        结束杀青
                       </button>
                     )}
                   {autoPlayBusy && (
@@ -1143,19 +1171,25 @@ export function ChatBox({
                 <span className="text-[11px] text-amber-200/90 truncate">
                   {autoPlay.ui.intervening
                     ? `已接管 · ${autoPlay.ui.progressLabel}`
-                    : autoPlay.ui.status === 'running'
-                      ? `自动演绎 ${autoPlay.ui.progressLabel}${autoPlay.ui.accelerate ? ' · 加速' : ''}`
-                      : autoPlay.ui.status === 'paused'
-                        ? `已暂停 ${autoPlay.ui.progressLabel}`
-                        : autoPlay.ui.status === 'done'
-                          ? '自动演绎已完成'
-                          : `已中断${autoPlay.ui.failReason ? ` · ${autoPlay.ui.failReason}` : ''}`}
+                    : autoPlay.ui.phase === 'epilogue' &&
+                        (autoPlay.ui.status === 'running' ||
+                          autoPlay.ui.status === 'paused')
+                      ? `${autoPlay.ui.status === 'paused' ? '杀青暂停' : '杀青中'} ${autoPlay.ui.progressLabel}`
+                      : autoPlay.ui.status === 'running'
+                        ? `自动演绎 ${autoPlay.ui.progressLabel}${autoPlay.ui.accelerate ? ' · 加速' : ''}`
+                        : autoPlay.ui.status === 'paused'
+                          ? `已暂停 ${autoPlay.ui.progressLabel}`
+                          : autoPlay.ui.status === 'done'
+                            ? autoPlay.ui.phase === 'epilogue'
+                              ? '杀青已结束'
+                              : '自动演绎已完成'
+                            : `已中断${autoPlay.ui.failReason ? ` · ${autoPlay.ui.failReason}` : ''}`}
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
                   {autoPlay.ui.status === 'running' && !autoPlay.ui.intervening && (
                     <button
                       type="button"
-                      onClick={autoPlay.pause}
+                      onClick={() => autoPlay.pause()}
                       className="text-[11px] px-2 py-0.5 rounded text-slate-300 hover:bg-slate-800"
                     >
                       暂停
@@ -1174,7 +1208,8 @@ export function ChatBox({
                     )}
                   {(autoPlay.ui.status === 'running' ||
                     autoPlay.ui.status === 'paused') &&
-                    !autoPlay.ui.intervening && (
+                    !autoPlay.ui.intervening &&
+                    autoPlay.ui.phase !== 'epilogue' && (
                       <button
                         type="button"
                         onClick={() =>
@@ -1192,7 +1227,8 @@ export function ChatBox({
                     )}
                   {(autoPlay.ui.status === 'running' ||
                     autoPlay.ui.status === 'paused') &&
-                    autoPlay.ui.takeoverMode === 'allow' &&
+                    (autoPlay.ui.takeoverMode === 'allow' ||
+                      autoPlay.ui.phase === 'epilogue') &&
                     !autoPlay.ui.intervening && (
                       <button
                         type="button"
@@ -1211,11 +1247,22 @@ export function ChatBox({
                       交回
                     </button>
                   )}
+                  {autoPlay.ui.phase === 'epilogue' &&
+                    (autoPlay.ui.status === 'running' ||
+                      autoPlay.ui.status === 'paused') && (
+                      <button
+                        type="button"
+                        onClick={autoPlay.endEpilogue}
+                        className="text-[11px] px-2 py-0.5 rounded text-amber-100 hover:bg-amber-900/40"
+                      >
+                        结束杀青
+                      </button>
+                    )}
                   {(autoPlay.ui.status === 'running' ||
                     autoPlay.ui.status === 'paused') && (
                     <button
                       type="button"
-                      onClick={autoPlay.stop}
+                      onClick={() => autoPlay.stop()}
                       className="text-[11px] px-2 py-0.5 rounded text-slate-300 hover:bg-slate-800"
                     >
                       停止
@@ -1235,7 +1282,8 @@ export function ChatBox({
               </div>
               {autoPlay.ui.needsAcceleratePrompt &&
                 autoPlay.ui.status === 'paused' &&
-                !autoPlay.ui.intervening && (
+                !autoPlay.ui.intervening &&
+                autoPlay.ui.phase !== 'epilogue' && (
                   <div className="flex items-center gap-2 text-[11px]">
                     <span className="text-amber-200/80">本章发言已达上限</span>
                     <button

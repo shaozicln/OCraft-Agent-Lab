@@ -21,6 +21,8 @@ exports.playerChatPayloadSchema = zod_1.z.object({
     whisper: zod_1.z.boolean().optional(),
     /** 自动演代发：scene_log / Trace 标 meta.auto_play */
     autoPlay: zod_1.z.boolean().optional(),
+    /** AP-5：杀青态（禁写章 / 禁结局结算） */
+    epilogue: zod_1.z.boolean().optional(),
     /** MA-Lab：平级多 Agent（跳过导演 LLM；受限 peer tick；禁写章） */
     labPeerAgents: zod_1.z.boolean().optional(),
 });
@@ -51,6 +53,9 @@ exports.requestAutoplayNextPayloadSchema = zod_1.z.object({
     styleId: zod_1.z.string().min(1).max(64).optional(),
     goalTitle: zod_1.z.string().max(120).optional(),
     accelerate: zod_1.z.boolean().optional(),
+    /** AP-5：杀青态排场（轻松向；禁冲结局） */
+    epilogue: zod_1.z.boolean().optional(),
+    epilogueMode: zod_1.z.enum(['a', 'b', 'c']).optional(),
     /** 附近 NPC，供导演 cast */
     nearbyNpcIds: zod_1.z.array(zod_1.z.string().min(1).max(64)).max(32).optional(),
 });

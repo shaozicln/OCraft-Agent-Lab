@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FEEL_DEMO_AUTO_GOAL = exports.autoPlayPrefsSchema = exports.CHAPTER_SPEAK_CAP_COST_WARN = exports.DEFAULT_CHAPTER_SPEAK_CAP = exports.DEFAULT_AUTO_PLAY_STYLE_ID = exports.autoPlayStyleIdSchema = exports.AUTO_PLAY_STYLE_PRESETS = exports.autoPlayNextProposalSchema = exports.autoPlayBeatLineSchema = exports.autoPlayStatusSchema = exports.autoPlayGoalSchema = void 0;
+exports.FEEL_DEMO_AUTO_GOAL = exports.autoPlayPrefsSchema = exports.CHAPTER_SPEAK_CAP_COST_WARN = exports.DEFAULT_CHAPTER_SPEAK_CAP = exports.DEFAULT_AUTO_PLAY_STYLE_ID = exports.autoPlayStyleIdSchema = exports.AUTO_PLAY_STYLE_PRESETS = exports.autoPlayNextProposalSchema = exports.autoPlayBeatLineSchema = exports.autoPlayStatusSchema = exports.AUTO_PLAY_EPILOGUE_MODE_LABELS = exports.autoPlayEpilogueModeSchema = exports.autoPlayGoalSchema = void 0;
 exports.getAutoPlayStylePreset = getAutoPlayStylePreset;
 exports.getAutoPlayStyleMaxSpeakers = getAutoPlayStyleMaxSpeakers;
 exports.normalizeAutoPlayBeatLines = normalizeAutoPlayBeatLines;
@@ -38,11 +38,19 @@ exports.autoPlayGoalSchema = zod_1.z.object({
     style_id: zod_1.z.string().min(1).max(64).default('direct'),
     /** allow=可接管；watch_only=只旁观 */
     takeover_mode: zod_1.z.enum(['allow', 'watch_only']).default('allow'),
-    /** 正片以 ending_reached 结束后是否进杀青（占位） */
+    /** 正片以 ending_reached 结束后是否进杀青 */
     enter_epilogue: zod_1.z.boolean().default(false),
+    /** 杀青台面：a 演员局 / b 无玩家位向 / c 创世神梗 */
+    epilogue_mode: zod_1.z.enum(['a', 'b', 'c']).optional(),
     /** 运行时加速：五句内冲升章/终章撞结局 */
     accelerate: zod_1.z.boolean().default(false),
 });
+exports.autoPlayEpilogueModeSchema = zod_1.z.enum(['a', 'b', 'c']);
+exports.AUTO_PLAY_EPILOGUE_MODE_LABELS = {
+    a: 'A 演员局',
+    b: 'B 无玩家位向',
+    c: 'C 创世神梗',
+};
 exports.autoPlayStatusSchema = zod_1.z.enum([
     'idle',
     'running',
@@ -210,10 +218,10 @@ exports.autoPlayPrefsSchema = zod_1.z.object({
         .min(1)
         .max(10_000)
         .default(exports.DEFAULT_CHAPTER_SPEAK_CAP),
-    /** 打到结局后进杀青（逻辑可后置；本局记下偏好） */
+    /** 打到结局后进杀青 */
     enter_epilogue: zod_1.z.boolean().default(false),
-    /** 杀青台面占位 */
-    epilogue_mode: zod_1.z.enum(['a', 'b', 'c']).optional(),
+    /** 杀青台面 */
+    epilogue_mode: exports.autoPlayEpilogueModeSchema.optional(),
 });
 /**
  * 由当前 Pack 摘要 + 用户设置组装本局目标（AP-0b）。
@@ -284,6 +292,9 @@ function buildAutoPlayGoal(opts) {
         style_id: style.id,
         takeover_mode: prefs.takeover_mode,
         enter_epilogue: prefs.enter_epilogue && Boolean(target_ending),
+        epilogue_mode: prefs.enter_epilogue && target_ending
+            ? (prefs.epilogue_mode ?? 'a')
+            : undefined,
         accelerate: false,
     });
 }
