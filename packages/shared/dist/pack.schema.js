@@ -14,6 +14,7 @@ exports.isPackPlayablePlayerPresent = isPackPlayablePlayerPresent;
 const zod_1 = require("zod");
 const chapter_util_1 = require("./chapter.util");
 const story_schema_1 = require("./story.schema");
+const pack_voice_1 = require("./pack-voice");
 /** 包内 ID：章节 / flag / NPC 等，由 Pack 声明，代码不写死业务枚举 */
 exports.packIdSchema = zod_1.z
     .string()
@@ -167,10 +168,8 @@ exports.packPromptsFileSchema = zod_1.z.object({
     /** chapterId → 约束正文 */
     chapter_constraints: zod_1.z.record(zod_1.z.string(), zod_1.z.string()),
     flag_constraints: zod_1.z.array(exports.packFlagConstraintSchema).default([]),
-    /** 拼在记忆后的通用回复要求 */
-    reply_instruction: zod_1.z
-        .string()
-        .default('请用中文、口语化、符合人设地回复玩家。回复控制在 2-4 句话。'),
+    /** 拼在记忆后的通用回复要求（默认含【台词规矩·游戏内】） */
+    reply_instruction: zod_1.z.string().default(pack_voice_1.DEFAULT_REPLY_INSTRUCTION),
 });
 exports.packNumericToolsSchema = zod_1.z.object({
     fatigue_increase: zod_1.z.object({

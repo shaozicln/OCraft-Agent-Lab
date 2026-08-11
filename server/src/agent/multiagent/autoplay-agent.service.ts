@@ -9,6 +9,7 @@ import {
   mockProposeAutoPlayNext,
   normalizeAutoPlayBeatLines,
   parseAutoPlayNextJson,
+  resolveEpilogueAddress,
   type AutoPlayBeatLine,
   type AutoPlayGoal,
   type AutoPlayNextProposal,
@@ -139,6 +140,10 @@ export class AutoPlayAgentService {
     /** AP-5 杀青 */
     epilogue?: boolean;
     epilogueMode?: 'a' | 'b' | 'c';
+    epiloguePlayerRole?: 'creator' | 'inworld';
+    epilogueAddressAs?: string;
+    breakWallNpcIds?: string[];
+    mainBreakWallNpcIds?: string[];
     nearbyNpcIds?: string[];
   }): Promise<AutoPlayNextProposal> {
     if (!this.isAvailable()) {
@@ -151,6 +156,13 @@ export class AutoPlayAgentService {
 
     const isEpilogue = opts.epilogue === true;
     const epilogueMode = opts.epilogueMode ?? 'a';
+    const epiloguePlayerRole =
+      opts.epiloguePlayerRole ??
+      (epilogueMode === 'c' ? 'creator' : epilogueMode === 'a' ? 'creator' : undefined);
+    const addressAs = resolveEpilogueAddress(opts.epilogueAddressAs);
+    const breakWallIds = new Set(
+      (isEpilogue ? opts.breakWallNpcIds : opts.mainBreakWallNpcIds) ?? [],
+    );
     const cap = opts.chapterSpeakCap ?? opts.maxTurns ?? 100;
     const goal: AutoPlayGoal = autoPlayGoalSchema.parse({
       id: 'session',
@@ -168,6 +180,12 @@ export class AutoPlayAgentService {
       takeover_mode: 'allow',
       enter_epilogue: false,
       epilogue_mode: isEpilogue ? epilogueMode : undefined,
+      epilogue_player_role: isEpilogue ? epiloguePlayerRole : undefined,
+      epilogue_address_as: isEpilogue ? opts.epilogueAddressAs : undefined,
+      break_wall_npc_ids: isEpilogue ? opts.breakWallNpcIds : undefined,
+      main_break_wall_npc_ids: isEpilogue
+        ? undefined
+        : opts.mainBreakWallNpcIds,
       accelerate: false,
     });
 
@@ -248,12 +266,25 @@ export class AutoPlayAgentService {
         readyAdvances.length > 0 ||
         readyEndings.length > 0);
 
+    const wallNames = cast
+      .filter((c) => breakWallIds.has(c.npc_id))
+      .map((c) => `${c.display_name}（${c.npc_id}）`);
+    const wallHint =
+      wallNames.length > 0
+        ? `破墙知情仅限：${wallNames.join('、')}；可称玩家「${addressAs}」。其余 NPC 不当场破墙。`
+        : '本局无人破墙知情：NPC 勿以创造者/观众口吻对玩家说话。';
+
     const epilogueStyleHint =
       epilogueMode === 'c'
-        ? '风格：杀青·创世神梗。轻松搞笑；NPC 可知道玩家是创造者；禁止推进正片剧情/升章/结局。'
+        ? `风格：杀青·创世神梗。轻松搞笑；${wallHint}禁止推进正片剧情/升章/结局。`
         : epilogueMode === 'b'
           ? '风格：杀青·演员互撕。轻松向；以在场 NPC 互聊为主；禁止升章/结局/改 Pack 真相。'
-          : '风格：杀青·演员局。大家都知道在演戏，可轻度出戏互撕演技；轻松向；禁止升章/结局/改 Pack 真相。';
+          : epiloguePlayerRole === 'inworld'
+            ? `风格：杀青·演员局②。玩家用本世界人设说话；可轻度出戏互撕演技；${wallHint}禁止升章/结局/改 Pack 真相。`
+            : `风格：杀青·演员局①创世神视角。玩家近创造者口吻；${wallHint}禁止升章/结局/改 Pack 真相。`;
+
+    const mainWallHint =
+      !isEpilogue && breakWallIds.size > 0 ? `【正片破墙】${wallHint}` : null;
 
     const input = {
       goal,
@@ -281,6 +312,10 @@ export class AutoPlayAgentService {
       playableId,
       epilogue: isEpilogue,
       epilogueMode,
+      epiloguePlayerRole,
+      addressAs,
+      breakWallIds: [...breakWallIds],
+      mainWallHint,
     };
 
     let proposal: AutoPlayNextProposal;
@@ -498,6 +533,10 @@ export class AutoPlayAgentService {
     playableId: string;
     epilogue?: boolean;
     epilogueMode?: 'a' | 'b' | 'c';
+    epiloguePlayerRole?: 'creator' | 'inworld';
+    addressAs?: string;
+    breakWallIds?: string[];
+    mainWallHint?: string | null;
   }): LlmMessage[] {
     const goalBits = input.epilogue
       ? '杀青后日谈（正片已结束；轻松互撕，不改正片）'
@@ -552,16 +591,23 @@ export class AutoPlayAgentService {
 
     const playerRule = !input.playablePresent
       ? '【无可演出玩家位或未出场】禁止输出 player 句；只点 cast 里的 NPC。'
-      : input.epilogue && input.epilogueMode === 'c'
-        ? `【杀青·创世神】可点玩家句 speaker_kind=player、speaker_id=${input.playableId}，口吻像创造者/观众；NPC 可破墙。`
-        : input.requirePlayerLine
-          ? `【本拍必须含玩家句】lines 里至少一句 speaker_kind=player、speaker_id=${input.playableId}（Pack 升章/结局吃玩家台词）。`
-          : `【本拍可不含玩家】可点玩家位 id=${input.playableId}，也可纯 NPC；不必先有玩家句。`;
+      : input.epilogue &&
+          (input.epilogueMode === 'c' ||
+            input.epiloguePlayerRole === 'creator')
+        ? `【杀青·创世神】可点玩家句 speaker_kind=player、speaker_id=${input.playableId}，口吻像创造者/观众（称呼期望「${input.addressAs ?? '创世神'}」）；仅 break_wall 名单内 NPC 可破墙。`
+        : input.epilogue && input.epiloguePlayerRole === 'inworld'
+          ? `【杀青·本世界人设】可点玩家句 speaker_kind=player、speaker_id=${input.playableId}，口吻贴本世界玩家人设，不当创世神；破墙仅名单内。`
+          : input.requirePlayerLine
+            ? `【本拍必须含玩家句】lines 里至少一句 speaker_kind=player、speaker_id=${input.playableId}（Pack 升章/结局吃玩家台词）。`
+            : `【本拍可不含玩家】可点玩家位 id=${input.playableId}，也可纯 NPC；不必先有玩家句。`;
 
     const epilogueRules = input.epilogue
       ? [
           '【杀青模式】正片已结束。禁止推动升章、结局、改 Pack 真相；禁止说「进入下一章/触发结局」。',
           '【结束权】不要设 done=true（由玩家点「结束杀青」）；持续轻松排场即可。',
+          input.breakWallIds && input.breakWallIds.length > 0
+            ? `【破墙名单】仅这些 npc_id 可破墙/知创世：${input.breakWallIds.join(', ')}；称呼「${input.addressAs ?? '创世神'}」。`
+            : '【破墙名单】空：全员勿以创造者知情口吻说话。',
         ]
       : [];
 
@@ -575,6 +621,7 @@ export class AutoPlayAgentService {
           '职责：从 cast 与可选玩家演出位中点 1～N 个说话人，写出本拍台词（顺序演出）。',
           '禁止：改章节、发明 Pack 外事件、剧透未解锁、自称 AI、对系统说话。',
           ...epilogueRules,
+          input.mainWallHint,
           `每拍最多 ${input.maxSpeakers} 句（风格上限）。`,
           `NPC 的 speaker_id 必须是 cast 中的 npc_id；玩家句 speaker_kind=player、speaker_id=${input.playableId}。`,
           playerRule,
@@ -603,7 +650,7 @@ export class AutoPlayAgentService {
             : `【可尝试戏码 id】${input.availableEvents.join(', ') || '（无）'}`,
           `【自动演目标】${goalBits || '推进到结局（或最终章）'}`,
           input.epilogue
-            ? `【杀青台面】${input.epilogueMode ?? 'a'}`
+            ? `【杀青台面】${input.epilogueMode ?? 'a'} · 身份=${input.epiloguePlayerRole ?? '-'} · 称呼=${input.addressAs ?? '创世神'}`
             : `【目标互聊已见】${input.sawTargetExchange ? '是' : '否'}`,
           input.epilogue
             ? '【加速】关（杀青）'

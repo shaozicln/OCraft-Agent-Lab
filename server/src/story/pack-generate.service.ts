@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   assertPackReferences,
   DEFAULT_PACK_GENERATE_SECTIONS,
+  ensureNpcLineVoiceRules,
   PACK_GENERATE_OUTLINE_MAX,
   PACK_GENERATE_PROMPT_MAX,
   PACK_GENERATE_SECTION_LABELS,
@@ -34,7 +35,8 @@ set_flags 必须是对象数组，例如 [{"name":"flag_id","value":"true"}]，�
 require_flags 才是字符串 id 数组。无置位时 set_flags 用 []。`,
   npc_reply_flags: `只输出：{ "npc_reply_flag_rules": [ { id, enabled, when_chapter_in, set_flag, value, triggers } ] }；可不需要时给 []。
 value 必须是字符串（如 "true" / "false" / 枚举字面量），禁止用布尔 true/false。`,
-  prompt_common: `只输出：{ "reply_instruction": "..." }`,
+  prompt_common: `只输出：{ "reply_instruction": "..." }。
+reply_instruction 必须以固定块「【台词规矩·游戏内】」开头（短句、口语、禁旁白/升章口吻等游戏冒泡规矩），其后可再写本包通用设定。禁止省略该块。`,
   affinity_tiers: `只输出：{ "affinity_tiers": [ { max_exclusive, text } ] }；最后一档 max_exclusive 用大数如 999。`,
   fatigue_hints: `只输出：{ "fatigue_hints": [ { min, text } ] }`,
   chapter_constraints: `只输出：{ "chapter_constraints": { "章id": "约束正文" } }；须覆盖摘要中每一章。`,
@@ -406,7 +408,9 @@ export class PackGenerateService {
         if (typeof fragment.reply_instruction !== 'string') {
           throw new Error('缺少 reply_instruction');
         }
-        next.prompts.reply_instruction = fragment.reply_instruction;
+        next.prompts.reply_instruction = ensureNpcLineVoiceRules(
+          fragment.reply_instruction,
+        );
         break;
       }
       case 'affinity_tiers': {
@@ -585,9 +589,11 @@ export class PackGenerateService {
     };
 
     const prompts = {
-      reply_instruction: sections.prompt_common
-        ? generated.prompts.reply_instruction
-        : base.prompts.reply_instruction,
+      reply_instruction: ensureNpcLineVoiceRules(
+        sections.prompt_common
+          ? generated.prompts.reply_instruction
+          : base.prompts.reply_instruction,
+      ),
       affinity_tiers: sections.affinity_tiers
         ? generated.prompts.affinity_tiers
         : base.prompts.affinity_tiers,
@@ -754,8 +760,9 @@ export class PackGenerateService {
         npc_reply_flag_rules: [],
       },
       prompts: {
-        reply_instruction:
+        reply_instruction: ensureNpcLineVoiceRules(
           '用口语短句回复；不要一次性说完所有真相；贴合当前章节约束。',
+        ),
         affinity_tiers: [
           { max_exclusive: 40, text: '关系尚浅，说话客气、保留。' },
           { max_exclusive: 999, text: '关系较近，可以流露更多情绪。' },

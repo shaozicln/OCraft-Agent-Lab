@@ -1,6 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { StoryPack } from '@ocraft/shared';
+import {
+  DEFAULT_NPC_LINE_VOICE_RULES,
+  DEFAULT_REPLY_INSTRUCTION,
+  type StoryPack,
+} from '@ocraft/shared';
 import {
   loadStoryPackFromDir,
   loadWorldManifest,
@@ -189,7 +193,7 @@ export function blankifyStoryPack(
         ...f,
         text: '',
       })),
-      reply_instruction: '',
+      reply_instruction: DEFAULT_NPC_LINE_VOICE_RULES,
     },
     npcs: pack.npcs.map((n) => ({
       ...n,
@@ -308,7 +312,7 @@ export function createMinimalBlankPack(opts: {
       exchange_events: [],
     },
     prompts: {
-      reply_instruction: '',
+      reply_instruction: DEFAULT_REPLY_INSTRUCTION,
       affinity_tiers: [{ max_exclusive: 999, text: '' }],
       fatigue_hints: [{ min: 60, text: '' }],
       chapter_constraints: { [ch0]: '' },

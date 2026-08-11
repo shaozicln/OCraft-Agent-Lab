@@ -72,6 +72,9 @@ export class AgentHarnessService {
       labPeer?: boolean;
       /** AP-5：杀青态禁写章（同 labPeer 冻结剧情进度） */
       epilogue?: boolean;
+      /** 破墙知情：本 NPC 知道玩家是创造者/观众 */
+      breakWall?: boolean;
+      breakWallAddress?: string;
     },
   ): Promise<AgentRunResult> {
     const pack = this.packService.getPack();
@@ -130,7 +133,11 @@ export class AgentHarnessService {
       '不要在回复正文里伪造工具 JSON；需要时请发起 tool call。',
       '禁止用工具改章节、写记忆或发明事件；无关闲聊可不调用。',
     ].join('');
-    const systemContent = `${systemPrompt}\n\n${workingMemoryBlock}\n\n${playerNotesBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}\n\n${toolPolicy}`;
+    const breakWallBlock =
+      opts?.breakWall === true
+        ? `\n\n【破墙知情】你知道玩家是创造者/观众（非普通剧内路人）。可称其为「${(opts.breakWallAddress?.trim() || '创世神').slice(0, 32)}」。可轻度出戏，勿宣布升章/结局，勿改 Pack 真相。`
+        : '';
+    const systemContent = `${systemPrompt}\n\n${workingMemoryBlock}\n\n${playerNotesBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}${breakWallBlock}\n\n${toolPolicy}`;
 
     const dialogMessages = this.conversationService.buildDialogMessages(
       playerId,
@@ -216,7 +223,7 @@ export class AgentHarnessService {
       toolCalls.length > 0
         ? `\n\n【本轮已执行工具】\n${toolCalls.map((t) => `- ${t.tool}: ${t.observation}`).join('\n')}`
         : '';
-    const replySystem = `${systemAfter}\n\n${workingMemoryBlock}\n\n${playerNotesBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}${toolObs}\n\n请用角色口吻直接回复玩家，不要再输出工具调用。\n禁止自称 AI/助手/语言模型；不要总结剧情或宣布升章。`;
+    const replySystem = `${systemAfter}\n\n${workingMemoryBlock}\n\n${playerNotesBlock}\n\n【相关长期记忆】\n${memoryContext}\n\n${pack.prompts.reply_instruction}${breakWallBlock}${toolObs}\n\n请用角色口吻直接回复玩家，不要再输出工具调用。\n禁止自称 AI/助手/语言模型；不要总结剧情或宣布升章。`;
 
     const replyMessages = this.conversationService.buildDialogMessages(
       playerId,

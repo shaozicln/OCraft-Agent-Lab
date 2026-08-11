@@ -1,5 +1,9 @@
 import {
+  buildDistillVoiceBlock,
   distillCardSchema,
+  distillVoiceBlockEnd,
+  distillVoiceBlockStart,
+  ensureNpcLineVoiceRules,
   type DistillCard,
   type PackMemory,
   type PackNpc,
@@ -9,7 +13,6 @@ import {
 const MUSTACHE_RE = /\{\{[^{}]+\}\}/g;
 const DISTILL_BLOCK_START = '【人设·蒸馏】';
 const DISTILL_BLOCK_END = '【/人设·蒸馏】';
-const STYLE_BLOCK_PREFIX = '【蒸馏话风·';
 
 /** 抽出模板中的 {{…}} 插值，apply 后必须仍在 system_prompt_template 里。 */
 export function extractMustacheTokens(template: string): string[] {
@@ -79,15 +82,15 @@ function escapeRegExp(s: string): string {
 
 /**
  * CD-B：正面话风写入 pack.prompts.reply_instruction（按 npc_id 可替换块）。
- * 无 speech_patterns 时移除该 NPC 旧块。
+ * 无 speech_patterns 时移除该 NPC 旧块；结果兜底含【台词规矩·游戏内】。
  */
 export function mergeDistillStyleIntoReplyInstruction(
   existing: string,
   npcId: string,
   card: DistillCard,
 ): { text: string; changed: boolean } {
-  const start = `${STYLE_BLOCK_PREFIX}${npcId}】`;
-  const end = `【/蒸馏话风·${npcId}】`;
+  const start = distillVoiceBlockStart(npcId);
+  const end = distillVoiceBlockEnd(npcId);
   const re = new RegExp(
     `${escapeRegExp(start)}[\\s\\S]*?${escapeRegExp(end)}\\n?`,
     'g',
@@ -95,16 +98,23 @@ export function mergeDistillStyleIntoReplyInstruction(
   const stripped = existing.replace(re, '').trimEnd();
 
   if (!card.speech_patterns.length) {
-    const changed = stripped !== existing.trimEnd();
-    return { text: stripped, changed };
+    const text = ensureNpcLineVoiceRules(stripped);
+    const changed = text !== existing;
+    return { text, changed };
   }
 
-  const styleLine = [
-    `${card.name}（${npcId}）正面话风：${card.speech_patterns.join('；')}。`,
-    '仅在扮演该角色时参考；勿宣布升章/结局。',
-  ].join('');
-  const block = `${start}\n${styleLine}\n${end}`;
-  const text = stripped ? `${stripped}\n\n${block}` : block;
+  const block = buildDistillVoiceBlock({
+    npcId,
+    name: card.name,
+    speechPatterns: card.speech_patterns,
+  });
+  // speech_patterns 可能全是空白，或 npcId 无效 → build 返回 null；勿把 null 拼进字符串变成 "null"
+  if (!block) {
+    const text = ensureNpcLineVoiceRules(stripped);
+    return { text, changed: text !== existing };
+  }
+  const merged = stripped ? `${stripped}\n\n${block}` : block;
+  const text = ensureNpcLineVoiceRules(merged);
   return { text, changed: text !== existing };
 }
 

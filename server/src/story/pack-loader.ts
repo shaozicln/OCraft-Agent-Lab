@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   assertPackReferences,
+  ensureNpcLineVoiceRules,
   packHeaderSchema,
   packNpcSchema,
   packPromptsFileSchema,
@@ -56,9 +57,15 @@ export function loadStoryPackFromDir(versionDirPath: string): StoryPack {
   const triggers = packTriggersFileSchema.parse(
     readJson(path.join(versionDirPath, 'triggers.json')),
   );
-  const prompts = packPromptsFileSchema.parse(
+  const promptsRaw = packPromptsFileSchema.parse(
     readJson(path.join(versionDirPath, 'prompts.json')),
   );
+  const prompts = {
+    ...promptsRaw,
+    reply_instruction: ensureNpcLineVoiceRules(
+      promptsRaw.reply_instruction,
+    ),
+  };
 
   const npcsDir = path.join(versionDirPath, 'npcs');
   const npcFiles = fs

@@ -69,7 +69,13 @@ interface ChatBoxProps {
   onClose: () => void;
   onSend: (
     message: string,
-    opts?: { whisper?: boolean; autoPlay?: boolean; epilogue?: boolean },
+    opts?: {
+      whisper?: boolean;
+      autoPlay?: boolean;
+      epilogue?: boolean;
+      breakWall?: boolean;
+      breakWallAddress?: string;
+    },
   ) => boolean;
   onRequestAutoplayNext: (payload: {
     turnIndex: number;
@@ -85,10 +91,16 @@ interface ChatBoxProps {
     accelerate?: boolean;
     epilogue?: boolean;
     epilogueMode?: 'a' | 'b' | 'c';
+    epiloguePlayerRole?: 'creator' | 'inworld';
+    epilogueAddressAs?: string;
+    breakWallNpcIds?: string[];
+    mainBreakWallNpcIds?: string[];
     nearbyNpcIds?: string[];
   }) => boolean;
   /** 导演 cast 用附近 NPC */
   nearbyNpcIds?: string[];
+  /** 破墙多选：在场 NPC */
+  presentNpcs?: { id: string; name: string }[];
   onSubscribeAutoplayNext: (
     handler: (ev: AutoplayNextEvent) => void,
   ) => () => void;
@@ -234,6 +246,7 @@ export function ChatBox({
   onSend,
   onRequestAutoplayNext,
   nearbyNpcIds,
+  presentNpcs,
   onSubscribeAutoplayNext,
   onRequestSuggestions,
   onClearSuggestions,
@@ -293,7 +306,14 @@ export function ChatBox({
   }, []);
 
   const sendAutoLine = useCallback(
-    (message: string, sendOpts?: { epilogue?: boolean }) => {
+    (
+      message: string,
+      sendOpts?: {
+        epilogue?: boolean;
+        breakWall?: boolean;
+        breakWallAddress?: string;
+      },
+    ) => {
       if (!connected) return false;
       setHistory((prev) => [
         ...prev,
@@ -308,6 +328,8 @@ export function ChatBox({
       const ok = onSend(message, {
         autoPlay: true,
         epilogue: sendOpts?.epilogue === true ? true : undefined,
+        breakWall: sendOpts?.breakWall === true ? true : undefined,
+        breakWallAddress: sendOpts?.breakWallAddress,
       });
       if (!ok) {
         setHistory((prev) => [
@@ -829,12 +851,13 @@ export function ChatBox({
       text: msg,
       ttlMs: 2800,
     });
-    const inEpilogue =
-      autoPlayRef.current.ui.phase === 'epilogue' &&
-      autoPlayRef.current.ui.intervening;
+    const ap = autoPlayRef.current;
+    const wall = ap.prepareManualSend(npcId, msg);
+    const inEpilogue = ap.ui.phase === 'epilogue';
     const ok = onSend(msg, {
       ...(whisper ? { whisper: true } : {}),
       ...(inEpilogue ? { epilogue: true } : {}),
+      ...wall,
     });
     if (!ok) {
       pendingWhisperRef.current = false;
@@ -847,7 +870,7 @@ export function ChatBox({
     setSuggestionsOpen(false);
     lastStreamRef.current = '';
     window.setTimeout(() => inputRef.current?.focus(), 0);
-  }, [connected, input, inputLocked, onSend, whisperMode]);
+  }, [connected, input, inputLocked, npcId, onSend, whisperMode]);
 
   const handleOpenLoad = useCallback(() => {
     if (!connected) {
@@ -922,6 +945,7 @@ export function ChatBox({
             }))
           }
           endings={endingOptions ?? []}
+          presentNpcs={presentNpcs}
           progress={autoPlayProgress}
           packDefaultStyleId={packMeta?.default_style_id}
           onClose={() => setAutoPlaySetupOpen(false)}
@@ -1051,6 +1075,7 @@ export function ChatBox({
           }))
         }
         endings={endingOptions ?? []}
+        presentNpcs={presentNpcs}
         progress={autoPlayProgress}
         packDefaultStyleId={packMeta?.default_style_id}
         onClose={() => setAutoPlaySetupOpen(false)}

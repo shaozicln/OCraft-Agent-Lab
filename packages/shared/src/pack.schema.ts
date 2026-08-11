@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isChapterAtLeast } from './chapter.util';
 import { isFlagSet, type StoryFlagsSnapshot } from './story.schema';
+import { DEFAULT_REPLY_INSTRUCTION } from './pack-voice';
 
 /** 包内 ID：章节 / flag / NPC 等，由 Pack 声明，代码不写死业务枚举 */
 export const packIdSchema = z
@@ -169,12 +170,8 @@ export const packPromptsFileSchema = z.object({
   /** chapterId → 约束正文 */
   chapter_constraints: z.record(z.string(), z.string()),
   flag_constraints: z.array(packFlagConstraintSchema).default([]),
-  /** 拼在记忆后的通用回复要求 */
-  reply_instruction: z
-    .string()
-    .default(
-      '请用中文、口语化、符合人设地回复玩家。回复控制在 2-4 句话。',
-    ),
+  /** 拼在记忆后的通用回复要求（默认含【台词规矩·游戏内】） */
+  reply_instruction: z.string().default(DEFAULT_REPLY_INSTRUCTION),
 });
 
 export const packNumericToolsSchema = z.object({

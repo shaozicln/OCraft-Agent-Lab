@@ -1,6 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FEEL_DEMO_AUTO_GOAL = exports.autoPlayPrefsSchema = exports.CHAPTER_SPEAK_CAP_COST_WARN = exports.DEFAULT_CHAPTER_SPEAK_CAP = exports.DEFAULT_AUTO_PLAY_STYLE_ID = exports.autoPlayStyleIdSchema = exports.AUTO_PLAY_STYLE_PRESETS = exports.autoPlayNextProposalSchema = exports.autoPlayBeatLineSchema = exports.autoPlayStatusSchema = exports.AUTO_PLAY_EPILOGUE_MODE_LABELS = exports.autoPlayEpilogueModeSchema = exports.autoPlayGoalSchema = void 0;
+exports.FEEL_DEMO_AUTO_GOAL = exports.autoPlayPrefsSchema = exports.CHAPTER_SPEAK_CAP_COST_WARN = exports.DEFAULT_CHAPTER_SPEAK_CAP = exports.DEFAULT_AUTO_PLAY_STYLE_ID = exports.autoPlayStyleIdSchema = exports.AUTO_PLAY_STYLE_PRESETS = exports.autoPlayNextProposalSchema = exports.autoPlayBeatLineSchema = exports.autoPlayStatusSchema = exports.AUTO_PLAY_EPILOGUE_MODE_LABELS = exports.autoPlayEpiloguePlayerRoleSchema = exports.autoPlayEpilogueModeSchema = exports.autoPlayGoalSchema = void 0;
+exports.resolveEpilogueAddress = resolveEpilogueAddress;
+exports.tryParseEpilogueAddressRename = tryParseEpilogueAddressRename;
+exports.isBreakWallNpc = isBreakWallNpc;
 exports.getAutoPlayStylePreset = getAutoPlayStylePreset;
 exports.getAutoPlayStyleMaxSpeakers = getAutoPlayStyleMaxSpeakers;
 exports.normalizeAutoPlayBeatLines = normalizeAutoPlayBeatLines;
@@ -42,10 +45,57 @@ exports.autoPlayGoalSchema = zod_1.z.object({
     enter_epilogue: zod_1.z.boolean().default(false),
     /** 杀青台面：a 演员局 / b 无玩家位向 / c 创世神梗 */
     epilogue_mode: zod_1.z.enum(['a', 'b', 'c']).optional(),
+    /**
+     * A 台玩家身份：creator=创世神视角（近 C）；inworld=本世界玩家名+人设。
+     * C 台固定按创世神；B 台忽略。
+     */
+    epilogue_player_role: zod_1.z.enum(['creator', 'inworld']).optional(),
+    /** C / A① 希望 NPC 怎么称呼你；空则默认「创世神」 */
+    epilogue_address_as: zod_1.z.string().trim().max(32).optional(),
+    /** 杀青破墙知情：勾选的在场 NPC id */
+    break_wall_npc_ids: zod_1.z.array(zod_1.z.string().min(1).max(64)).max(32).optional(),
+    /** 正片破墙知情：勾选的在场 NPC id（与杀青独立） */
+    main_break_wall_npc_ids: zod_1.z
+        .array(zod_1.z.string().min(1).max(64))
+        .max(32)
+        .optional(),
     /** 运行时加速：五句内冲升章/终章撞结局 */
     accelerate: zod_1.z.boolean().default(false),
 });
 exports.autoPlayEpilogueModeSchema = zod_1.z.enum(['a', 'b', 'c']);
+exports.autoPlayEpiloguePlayerRoleSchema = zod_1.z.enum(['creator', 'inworld']);
+/** 空称呼 → 默认「创世神」 */
+function resolveEpilogueAddress(addressAs) {
+    const t = addressAs?.trim();
+    return t || '创世神';
+}
+/**
+ * 杀青中自然语言改称呼（补充填表）。
+ * 例：「叫我阿灯」「别叫创世神，叫我导演」
+ */
+function tryParseEpilogueAddressRename(message) {
+    const raw = message.trim();
+    if (!raw)
+        return null;
+    const patterns = [
+        /(?:别叫[^，,。！!？?\s]{0,12}[，,]?\s*)?(?:请)?(?:叫我|称呼我(?:为)?)\s*[「『""']?([^」』""'。！!？?\s，,]{1,16})/,
+        /(?:改称|改叫)\s*[「『""']?([^」』""'。！!？?\s，,]{1,16})/,
+    ];
+    for (const re of patterns) {
+        const m = raw.match(re);
+        const name = m?.[1]?.trim();
+        if (name && name !== '你' && name !== '我')
+            return name.slice(0, 32);
+    }
+    return null;
+}
+/** 当前相位下该 NPC 是否破墙知情 */
+function isBreakWallNpc(npcId, opts) {
+    const ids = opts.phase === 'epilogue'
+        ? opts.break_wall_npc_ids
+        : opts.main_break_wall_npc_ids;
+    return Boolean(npcId && (ids ?? []).includes(npcId));
+}
 exports.AUTO_PLAY_EPILOGUE_MODE_LABELS = {
     a: 'A 演员局',
     b: 'B 无玩家位向',
@@ -222,6 +272,17 @@ exports.autoPlayPrefsSchema = zod_1.z.object({
     enter_epilogue: zod_1.z.boolean().default(false),
     /** 杀青台面 */
     epilogue_mode: exports.autoPlayEpilogueModeSchema.optional(),
+    /** A 台：创世神视角 / 本世界人设 */
+    epilogue_player_role: exports.autoPlayEpiloguePlayerRoleSchema.optional(),
+    /** C / A① 称呼；可空 */
+    epilogue_address_as: zod_1.z.string().trim().max(32).optional(),
+    /** 杀青破墙 NPC */
+    break_wall_npc_ids: zod_1.z.array(zod_1.z.string().min(1).max(64)).max(32).optional(),
+    /** 正片破墙 NPC */
+    main_break_wall_npc_ids: zod_1.z
+        .array(zod_1.z.string().min(1).max(64))
+        .max(32)
+        .optional(),
 });
 /**
  * 由当前 Pack 摘要 + 用户设置组装本局目标（AP-0b）。
@@ -295,6 +356,20 @@ function buildAutoPlayGoal(opts) {
         epilogue_mode: prefs.enter_epilogue && target_ending
             ? (prefs.epilogue_mode ?? 'a')
             : undefined,
+        epilogue_player_role: prefs.enter_epilogue && target_ending
+            ? prefs.epilogue_mode === 'c'
+                ? 'creator'
+                : prefs.epilogue_mode === 'b'
+                    ? undefined
+                    : (prefs.epilogue_player_role ?? 'creator')
+            : undefined,
+        epilogue_address_as: prefs.enter_epilogue && target_ending
+            ? prefs.epilogue_address_as?.trim() || undefined
+            : undefined,
+        break_wall_npc_ids: prefs.enter_epilogue && target_ending
+            ? prefs.break_wall_npc_ids
+            : undefined,
+        main_break_wall_npc_ids: prefs.main_break_wall_npc_ids,
         accelerate: false,
     });
 }

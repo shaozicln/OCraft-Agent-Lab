@@ -281,7 +281,13 @@ function GamePageInner({
   const handleSendChat = useCallback(
     (
       message: string,
-      opts?: { whisper?: boolean; autoPlay?: boolean; epilogue?: boolean },
+      opts?: {
+        whisper?: boolean;
+        autoPlay?: boolean;
+        epilogue?: boolean;
+        breakWall?: boolean;
+        breakWallAddress?: string;
+      },
     ) => {
       // 同场短接话：交互圈内 + 当前场景已出场的其他人（spawn 相距常 > 交互距离）
       // 悄悄话不传 nearby（服务端也会跳过 aside/exchange）
@@ -290,6 +296,8 @@ function GamePageInner({
           whisper: true,
           autoPlay: opts.autoPlay,
           epilogue: opts.epilogue,
+          breakWall: opts.breakWall,
+          breakWallAddress: opts.breakWallAddress,
         });
       }
       const ids = [
@@ -302,6 +310,8 @@ function GamePageInner({
         nearbyNpcIds: ids,
         autoPlay: opts?.autoPlay,
         epilogue: opts?.epilogue,
+        breakWall: opts?.breakWall,
+        breakWallAddress: opts?.breakWallAddress,
       });
     },
     [sendChat, nearbyNpcs, visibleNpcs],
@@ -618,6 +628,10 @@ function GamePageInner({
           ...nearbyNpcs.map((n) => n.npcId),
           ...visibleNpcs.map((n) => n.npc_id),
         ]}
+        presentNpcs={visibleNpcs.map((n) => ({
+          id: n.npc_id,
+          name: n.name,
+        }))}
         onSubscribeAutoplayNext={subscribeAutoplayNext}
         onRequestSuggestions={requestSuggestions}
         onClearSuggestions={clearSuggestions}

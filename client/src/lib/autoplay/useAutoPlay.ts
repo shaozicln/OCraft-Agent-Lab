@@ -4,7 +4,10 @@ import {
   AutoPlaySession,
   AUTO_PLAY_EPILOGUE_MODE_LABELS,
   buildAutoPlayGoal,
+  isBreakWallNpc,
   resolveAutoPlayStopKind,
+  resolveEpilogueAddress,
+  tryParseEpilogueAddressRename,
   type AutoPlayEndingOption,
   type AutoPlayEpilogueMode,
   type AutoPlayGoal,
@@ -30,6 +33,7 @@ export type AutoPlayUiState = {
   needsAcceleratePrompt: boolean;
   enterEpilogue: boolean;
   epilogueMode?: AutoPlayEpilogueMode;
+  epilogueAddressAs?: string;
 };
 
 const SETTLE_MS = 600;
@@ -142,7 +146,11 @@ export function useAutoPlay(opts: {
   progress?: AutoPlayProgressSnapshot | null;
   onSendAuto: (
     message: string,
-    sendOpts?: { epilogue?: boolean },
+    sendOpts?: {
+      epilogue?: boolean;
+      breakWall?: boolean;
+      breakWallAddress?: string;
+    },
   ) => boolean;
   /** AP-1：纯 NPC 拍已服务端落档，客户端只刷 UI */
   onApplyBeatLines?: (
@@ -162,6 +170,10 @@ export function useAutoPlay(opts: {
     accelerate?: boolean;
     epilogue?: boolean;
     epilogueMode?: AutoPlayEpilogueMode;
+    epiloguePlayerRole?: 'creator' | 'inworld';
+    epilogueAddressAs?: string;
+    breakWallNpcIds?: string[];
+    mainBreakWallNpcIds?: string[];
     nearbyNpcIds?: string[];
   }) => boolean;
   getNearbyNpcIds?: () => string[];
@@ -222,7 +234,40 @@ export function useAutoPlay(opts: {
       needsAcceleratePrompt: s.needsAcceleratePrompt,
       enterEpilogue: g.enter_epilogue,
       epilogueMode: g.epilogue_mode,
+      epilogueAddressAs: resolveEpilogueAddress(g.epilogue_address_as),
     });
+  }, []);
+
+  const applyAddressRename = useCallback(
+    (message: string) => {
+      const g = goalRef.current;
+      const s = sessionRef.current;
+      if (!g || !s || s.phase !== 'epilogue') return;
+      const next = tryParseEpilogueAddressRename(message);
+      if (!next || next === resolveEpilogueAddress(g.epilogue_address_as)) {
+        return;
+      }
+      g.epilogue_address_as = next;
+      onNoteRef.current(`杀青称呼已改为「${next}」`);
+      syncUi();
+    },
+    [syncUi],
+  );
+
+  const breakWallOptsForNpc = useCallback((npcId: string) => {
+    const g = goalRef.current;
+    const s = sessionRef.current;
+    if (!g || !s) return {};
+    const wall = isBreakWallNpc(npcId, {
+      phase: s.phase,
+      break_wall_npc_ids: g.break_wall_npc_ids,
+      main_break_wall_npc_ids: g.main_break_wall_npc_ids,
+    });
+    if (!wall) return {};
+    return {
+      breakWall: true as const,
+      breakWallAddress: resolveEpilogueAddress(g.epilogue_address_as),
+    };
   }, []);
 
   const stopRunner = useCallback(() => {
@@ -383,6 +428,18 @@ export function useAutoPlay(opts: {
             epilogueMode: inEpilogue
               ? (goal.epilogue_mode ?? 'a')
               : undefined,
+            epiloguePlayerRole: inEpilogue
+              ? goal.epilogue_player_role
+              : undefined,
+            epilogueAddressAs: inEpilogue
+              ? resolveEpilogueAddress(goal.epilogue_address_as)
+              : undefined,
+            breakWallNpcIds: inEpilogue
+              ? goal.break_wall_npc_ids
+              : undefined,
+            mainBreakWallNpcIds: inEpilogue
+              ? undefined
+              : goal.main_break_wall_npc_ids,
             nearbyNpcIds: getNearbyNpcIdsRef.current?.() ?? [],
           });
           if (!reqOk) {
@@ -480,6 +537,7 @@ export function useAutoPlay(opts: {
           const exchangeBefore = exchangeRef.current ?? null;
           const ok = onSendAutoRef.current(playerSay, {
             epilogue: inEpilogue || undefined,
+            ...breakWallOptsForNpc(opts.npcId),
           });
           if (!ok) {
             session.fail('发送失败');
@@ -487,6 +545,7 @@ export function useAutoPlay(opts: {
             syncUi();
             break;
           }
+          if (inEpilogue) applyAddressRename(playerSay);
           priorSaysRef.current = [...priorSaysRef.current, playerSay];
 
           await waitTurnComplete(
@@ -536,7 +595,7 @@ export function useAutoPlay(opts: {
         if (abortRef.current === ac) abortRef.current = null;
       }
     },
-    [opts.npcId, settleGoal, syncUi, waitForNext],
+    [opts.npcId, settleGoal, syncUi, waitForNext, applyAddressRename, breakWallOptsForNpc],
   );
 
   const startWithPrefs = useCallback(
@@ -696,5 +755,10 @@ export function useAutoPlay(opts: {
     stop,
     dismiss,
     stopOnClose,
+    /** 手动发言时附带破墙；杀青中可解析改称呼 */
+    prepareManualSend: (npcId: string, message: string) => {
+      applyAddressRename(message);
+      return breakWallOptsForNpc(npcId);
+    },
   };
 }

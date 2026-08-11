@@ -28,6 +28,7 @@ __exportStar(require("./mock-reply"), exports);
 __exportStar(require("./agent-trace.schema"), exports);
 __exportStar(require("./pack-clarify.schema"), exports);
 __exportStar(require("./pack-distill.schema"), exports);
+__exportStar(require("./pack-voice"), exports);
 __exportStar(require("./autoplay.schema"), exports);
 __exportStar(require("./autoplay-reachability"), exports);
 __exportStar(require("./autoplay-propose"), exports);

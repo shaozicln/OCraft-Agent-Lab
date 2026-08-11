@@ -226,6 +226,10 @@ export class GameGateway implements OnGatewayConnection {
       accelerate,
       epilogue,
       epilogueMode,
+      epiloguePlayerRole,
+      epilogueAddressAs,
+      breakWallNpcIds,
+      mainBreakWallNpcIds,
       nearbyNpcIds,
     } = parsed.data;
 
@@ -259,6 +263,10 @@ export class GameGateway implements OnGatewayConnection {
           accelerate: isEpilogue ? false : accelerate,
           epilogue: isEpilogue,
           epilogueMode,
+          epiloguePlayerRole,
+          epilogueAddressAs,
+          breakWallNpcIds,
+          mainBreakWallNpcIds,
           nearbyNpcIds,
         });
 
@@ -392,6 +400,8 @@ export class GameGateway implements OnGatewayConnection {
       whisper,
       autoPlay,
       epilogue,
+      breakWall,
+      breakWallAddress,
       labPeerAgents,
     } = parsed.data;
     const clientWhisper = whisper === true;
@@ -441,6 +451,8 @@ export class GameGateway implements OnGatewayConnection {
           autoPlay: isAutoPlay,
           labPeer: isLabPeer,
           epilogue: isEpilogue,
+          breakWall: breakWall === true,
+          breakWallAddress: breakWallAddress?.trim() || undefined,
         });
 
         let fullReply = '';

@@ -13,6 +13,8 @@ export declare const playerChatPayloadSchema: z.ZodObject<{
     whisper: z.ZodOptional<z.ZodBoolean>;
     autoPlay: z.ZodOptional<z.ZodBoolean>;
     epilogue: z.ZodOptional<z.ZodBoolean>;
+    breakWall: z.ZodOptional<z.ZodBoolean>;
+    breakWallAddress: z.ZodOptional<z.ZodString>;
     labPeerAgents: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
 export declare const requestNpcStatePayloadSchema: z.ZodObject<{
@@ -47,6 +49,13 @@ export declare const requestAutoplayNextPayloadSchema: z.ZodObject<{
         b: "b";
         c: "c";
     }>>;
+    epiloguePlayerRole: z.ZodOptional<z.ZodEnum<{
+        creator: "creator";
+        inworld: "inworld";
+    }>>;
+    epilogueAddressAs: z.ZodOptional<z.ZodString>;
+    breakWallNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    mainBreakWallNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
     nearbyNpcIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 export declare const autoplayBeatLineEventSchema: z.ZodObject<{

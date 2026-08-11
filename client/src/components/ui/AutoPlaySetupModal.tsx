@@ -8,18 +8,22 @@ import {
   autoPlayPrefsSchema,
   listReachableAutoPlayEndings,
   type AutoPlayEndingOption,
+  type AutoPlayEpiloguePlayerRole,
   type AutoPlayPrefs,
   type AutoPlayProgressSnapshot,
 } from '@ocraft/shared';
 import { useEffect, useMemo, useState } from 'react';
 
 type ChapterOpt = { id: string; label: string };
+type NpcOpt = { id: string; name: string };
 
 type Props = {
   open: boolean;
   npcName: string;
   chapters: ChapterOpt[];
   endings: AutoPlayEndingOption[];
+  /** 在场 / 可见 NPC，供破墙多选 */
+  presentNpcs?: NpcOpt[];
   /** AP-3：当前进度，用于可达结局筛选 */
   progress?: AutoPlayProgressSnapshot | null;
   /** Pack 默认风格；本局可覆盖 */
@@ -28,11 +32,16 @@ type Props = {
   onConfirm: (prefs: AutoPlayPrefs) => void;
 };
 
+function toggleId(list: string[], id: string): string[] {
+  return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+}
+
 export function AutoPlaySetupModal({
   open,
   npcName,
   chapters,
   endings,
+  presentNpcs = [],
   progress,
   packDefaultStyleId,
   onClose,
@@ -65,11 +74,23 @@ export function AutoPlaySetupModal({
   );
   const [enterEpilogue, setEnterEpilogue] = useState(false);
   const [epilogueMode, setEpilogueMode] = useState<'a' | 'b' | 'c'>('a');
+  const [epiloguePlayerRole, setEpiloguePlayerRole] =
+    useState<AutoPlayEpiloguePlayerRole>('creator');
+  const [epilogueAddressAs, setEpilogueAddressAs] = useState('');
+  const [breakWallNpcIds, setBreakWallNpcIds] = useState<string[]>([]);
+  const [mainBreakWallNpcIds, setMainBreakWallNpcIds] = useState<string[]>(
+    [],
+  );
 
   // 每次打开用 Pack 默认风格重置（本局可再改）；校正结局选项
   useEffect(() => {
     if (!open) return;
     setStyleId(initialStyle);
+    setMainBreakWallNpcIds([]);
+    setBreakWallNpcIds([]);
+    setEpilogueAddressAs('');
+    setEpiloguePlayerRole('creator');
+    setEpilogueMode('a');
     const next = listReachableAutoPlayEndings(endings, progress);
     if (next.length === 0) {
       setEndingMode('specific');
@@ -83,9 +104,28 @@ export function AutoPlaySetupModal({
     );
   }, [open, initialStyle, endings, progress]);
 
+  // 切到 C 或 A①：默认勾满在场 NPC 破墙（可再取消）
+  useEffect(() => {
+    if (!enterEpilogue) return;
+    const wantCreator =
+      epilogueMode === 'c' ||
+      (epilogueMode === 'a' && epiloguePlayerRole === 'creator');
+    if (!wantCreator) return;
+    if (presentNpcs.length === 0) return;
+    setBreakWallNpcIds((prev) =>
+      prev.length > 0 ? prev : presentNpcs.map((n) => n.id),
+    );
+  }, [enterEpilogue, epilogueMode, epiloguePlayerRole, presentNpcs]);
+
   if (!open) return null;
 
   const capWarn = chapterSpeakCap > CHAPTER_SPEAK_CAP_COST_WARN;
+  const showAddress =
+    enterEpilogue &&
+    (epilogueMode === 'c' ||
+      (epilogueMode === 'a' && epiloguePlayerRole === 'creator'));
+  const showEpilogueBreakWall =
+    enterEpilogue && epilogueMode !== 'b';
 
   const submit = () => {
     if (hasEndings) {
@@ -104,6 +144,21 @@ export function AutoPlaySetupModal({
       chapter_speak_cap: chapterSpeakCap,
       enter_epilogue: hasEndings ? enterEpilogue : false,
       epilogue_mode: enterEpilogue ? epilogueMode : undefined,
+      epilogue_player_role:
+        enterEpilogue && epilogueMode === 'a'
+          ? epiloguePlayerRole
+          : enterEpilogue && epilogueMode === 'c'
+            ? 'creator'
+            : undefined,
+      epilogue_address_as: showAddress
+        ? epilogueAddressAs.trim() || undefined
+        : undefined,
+      break_wall_npc_ids:
+        enterEpilogue && showEpilogueBreakWall
+          ? breakWallNpcIds
+          : undefined,
+      main_break_wall_npc_ids:
+        mainBreakWallNpcIds.length > 0 ? mainBreakWallNpcIds : undefined,
     });
     onConfirm(prefs);
   };
@@ -230,7 +285,9 @@ export function AutoPlaySetupModal({
               className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
               value={chapterSpeakCap}
               onChange={(e) =>
-                setChapterSpeakCap(Number(e.target.value) || DEFAULT_CHAPTER_SPEAK_CAP)
+                setChapterSpeakCap(
+                  Number(e.target.value) || DEFAULT_CHAPTER_SPEAK_CAP,
+                )
               }
             />
             {capWarn ? (
@@ -261,6 +318,31 @@ export function AutoPlaySetupModal({
             </label>
           </fieldset>
 
+          <fieldset className="space-y-1 rounded border border-slate-700 p-2">
+            <legend className="px-1 text-xs text-slate-400">
+              正片破墙（部分知情）
+            </legend>
+            <p className="text-[11px] text-slate-500">
+              仅勾选的在场 NPC 知道你是创造者/观众；与杀青知情独立。
+            </p>
+            {presentNpcs.length === 0 ? (
+              <p className="text-[11px] text-slate-500">暂无在场 NPC</p>
+            ) : (
+              presentNpcs.map((n) => (
+                <label key={n.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={mainBreakWallNpcIds.includes(n.id)}
+                    onChange={() =>
+                      setMainBreakWallNpcIds((prev) => toggleId(prev, n.id))
+                    }
+                  />
+                  {n.name}
+                </label>
+              ))
+            )}
+          </fieldset>
+
           <label className="flex items-start gap-2 border-t border-slate-700 pt-3">
             <input
               type="checkbox"
@@ -278,33 +360,107 @@ export function AutoPlaySetupModal({
           </label>
 
           {enterEpilogue && hasEndings ? (
-            <fieldset className="space-y-1 rounded border border-slate-700 p-2">
-              <legend className="px-1 text-xs text-slate-400">杀青台面</legend>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={epilogueMode === 'a'}
-                  onChange={() => setEpilogueMode('a')}
-                />
-                A 演员局
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={epilogueMode === 'b'}
-                  onChange={() => setEpilogueMode('b')}
-                />
-                B 无玩家位向
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={epilogueMode === 'c'}
-                  onChange={() => setEpilogueMode('c')}
-                />
-                C 创世神梗
-              </label>
-            </fieldset>
+            <div className="space-y-2 rounded border border-slate-700 p-2">
+              <fieldset className="space-y-1">
+                <legend className="text-xs text-slate-400">杀青台面</legend>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    checked={epilogueMode === 'a'}
+                    onChange={() => setEpilogueMode('a')}
+                  />
+                  A 演员局
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    checked={epilogueMode === 'b'}
+                    onChange={() => setEpilogueMode('b')}
+                  />
+                  B 无玩家位向
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    checked={epilogueMode === 'c'}
+                    onChange={() => setEpilogueMode('c')}
+                  />
+                  C 创世神梗
+                </label>
+              </fieldset>
+
+              {epilogueMode === 'a' ? (
+                <fieldset className="space-y-1 border-t border-slate-700 pt-2">
+                  <legend className="text-xs text-slate-400">
+                    A · 玩家身份
+                  </legend>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={epiloguePlayerRole === 'creator'}
+                      onChange={() => setEpiloguePlayerRole('creator')}
+                    />
+                    ① 创世神视角
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={epiloguePlayerRole === 'inworld'}
+                      onChange={() => setEpiloguePlayerRole('inworld')}
+                    />
+                    ② 本世界玩家名 + 人设
+                  </label>
+                </fieldset>
+              ) : null}
+
+              {showAddress ? (
+                <label className="block border-t border-slate-700 pt-2">
+                  <span className="text-xs text-slate-400">
+                    希望他们怎么称呼你？（可空，默认「创世神」）
+                  </span>
+                  <input
+                    type="text"
+                    maxLength={32}
+                    className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
+                    placeholder="创世神"
+                    value={epilogueAddressAs}
+                    onChange={(e) => setEpilogueAddressAs(e.target.value)}
+                  />
+                  <span className="mt-0.5 block text-[11px] text-slate-500">
+                    杀青里也可说「叫我××」临时改称呼。
+                  </span>
+                </label>
+              ) : null}
+
+              {showEpilogueBreakWall ? (
+                <fieldset className="space-y-1 border-t border-slate-700 pt-2">
+                  <legend className="text-xs text-slate-400">
+                    杀青破墙知情（多选在场）
+                  </legend>
+                  <p className="text-[11px] text-slate-500">
+                    仅勾选者在杀青里知情破墙；与正片破墙不互相覆盖。
+                  </p>
+                  {presentNpcs.length === 0 ? (
+                    <p className="text-[11px] text-slate-500">暂无在场 NPC</p>
+                  ) : (
+                    presentNpcs.map((n) => (
+                      <label key={n.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={breakWallNpcIds.includes(n.id)}
+                          onChange={() =>
+                            setBreakWallNpcIds((prev) =>
+                              toggleId(prev, n.id),
+                            )
+                          }
+                        />
+                        {n.name}
+                      </label>
+                    ))
+                  )}
+                </fieldset>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

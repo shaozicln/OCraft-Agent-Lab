@@ -23,6 +23,10 @@ exports.playerChatPayloadSchema = zod_1.z.object({
     autoPlay: zod_1.z.boolean().optional(),
     /** AP-5：杀青态（禁写章 / 禁结局结算） */
     epilogue: zod_1.z.boolean().optional(),
+    /** 破墙知情：本句对话的目标 NPC 知道玩家是创造者/观众 */
+    breakWall: zod_1.z.boolean().optional(),
+    /** 破墙时 NPC 对玩家的称呼 */
+    breakWallAddress: zod_1.z.string().trim().max(32).optional(),
     /** MA-Lab：平级多 Agent（跳过导演 LLM；受限 peer tick；禁写章） */
     labPeerAgents: zod_1.z.boolean().optional(),
 });
@@ -56,6 +60,14 @@ exports.requestAutoplayNextPayloadSchema = zod_1.z.object({
     /** AP-5：杀青态排场（轻松向；禁冲结局） */
     epilogue: zod_1.z.boolean().optional(),
     epilogueMode: zod_1.z.enum(['a', 'b', 'c']).optional(),
+    /** A：creator | inworld */
+    epiloguePlayerRole: zod_1.z.enum(['creator', 'inworld']).optional(),
+    /** 称呼；空则服务端按「创世神」 */
+    epilogueAddressAs: zod_1.z.string().trim().max(32).optional(),
+    /** 杀青破墙知情 NPC */
+    breakWallNpcIds: zod_1.z.array(zod_1.z.string().min(1).max(64)).max(32).optional(),
+    /** 正片破墙知情 NPC（导演提示用） */
+    mainBreakWallNpcIds: zod_1.z.array(zod_1.z.string().min(1).max(64)).max(32).optional(),
     /** 附近 NPC，供导演 cast */
     nearbyNpcIds: zod_1.z.array(zod_1.z.string().min(1).max(64)).max(32).optional(),
 });

@@ -27,6 +27,13 @@ export declare const autoPlayGoalSchema: z.ZodObject<{
         b: "b";
         c: "c";
     }>>;
+    epilogue_player_role: z.ZodOptional<z.ZodEnum<{
+        creator: "creator";
+        inworld: "inworld";
+    }>>;
+    epilogue_address_as: z.ZodOptional<z.ZodString>;
+    break_wall_npc_ids: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    main_break_wall_npc_ids: z.ZodOptional<z.ZodArray<z.ZodString>>;
     accelerate: z.ZodDefault<z.ZodBoolean>;
 }, z.core.$strip>;
 export type AutoPlayGoal = z.infer<typeof autoPlayGoalSchema>;
@@ -36,9 +43,27 @@ export declare const autoPlayEpilogueModeSchema: z.ZodEnum<{
     c: "c";
 }>;
 export type AutoPlayEpilogueMode = z.infer<typeof autoPlayEpilogueModeSchema>;
-export declare const AUTO_PLAY_EPILOGUE_MODE_LABELS: Record<AutoPlayEpilogueMode, string>;
+export declare const autoPlayEpiloguePlayerRoleSchema: z.ZodEnum<{
+    creator: "creator";
+    inworld: "inworld";
+}>;
+export type AutoPlayEpiloguePlayerRole = z.infer<typeof autoPlayEpiloguePlayerRoleSchema>;
 /** 正片 / 杀青 */
 export type AutoPlayPhase = 'main' | 'epilogue';
+/** 空称呼 → 默认「创世神」 */
+export declare function resolveEpilogueAddress(addressAs: string | undefined | null): string;
+/**
+ * 杀青中自然语言改称呼（补充填表）。
+ * 例：「叫我阿灯」「别叫创世神，叫我导演」
+ */
+export declare function tryParseEpilogueAddressRename(message: string): string | null;
+/** 当前相位下该 NPC 是否破墙知情 */
+export declare function isBreakWallNpc(npcId: string, opts: {
+    phase: AutoPlayPhase;
+    break_wall_npc_ids?: string[] | null;
+    main_break_wall_npc_ids?: string[] | null;
+}): boolean;
+export declare const AUTO_PLAY_EPILOGUE_MODE_LABELS: Record<AutoPlayEpilogueMode, string>;
 export declare const autoPlayStatusSchema: z.ZodEnum<{
     abort: "abort";
     done: "done";
@@ -274,6 +299,13 @@ export declare const autoPlayPrefsSchema: z.ZodObject<{
         b: "b";
         c: "c";
     }>>;
+    epilogue_player_role: z.ZodOptional<z.ZodEnum<{
+        creator: "creator";
+        inworld: "inworld";
+    }>>;
+    epilogue_address_as: z.ZodOptional<z.ZodString>;
+    break_wall_npc_ids: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    main_break_wall_npc_ids: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 export type AutoPlayPrefs = z.infer<typeof autoPlayPrefsSchema>;
 export type AutoPlayEndingOption = {

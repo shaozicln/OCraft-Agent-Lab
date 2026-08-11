@@ -12,10 +12,13 @@ import {
   buildAutoPlayGoal,
   DEFAULT_AUTO_PLAY_STYLE_ID,
   isAutoPlayGoalReached,
+  isBreakWallNpc,
   listReachableAutoPlayEndings,
   mockProposeAutoPlayNext,
   parseAutoPlayNextJson,
   resolveAutoPlayStopKind,
+  resolveEpilogueAddress,
+  tryParseEpilogueAddressRename,
 } from '@ocraft/shared';
 
 type Case = {
@@ -452,6 +455,9 @@ const cases: Case[] = [
           chapter_speak_cap: 100,
           enter_epilogue: true,
           epilogue_mode: 'c',
+          epilogue_address_as: '阿灯',
+          break_wall_npc_ids: ['n'],
+          main_break_wall_npc_ids: ['other'],
         },
         pack: {
           endings: [
@@ -466,8 +472,42 @@ const cases: Case[] = [
       const ok =
         g.enter_epilogue === true &&
         g.epilogue_mode === 'c' &&
+        g.epilogue_player_role === 'creator' &&
+        g.epilogue_address_as === '阿灯' &&
+        g.break_wall_npc_ids?.[0] === 'n' &&
+        g.main_break_wall_npc_ids?.[0] === 'other' &&
         g.target_ending === 'ending_a';
-      return { ok, detail: `epi=${g.enter_epilogue} mode=${g.epilogue_mode}` };
+      return {
+        ok,
+        detail: `epi=${g.enter_epilogue} mode=${g.epilogue_mode} addr=${g.epilogue_address_as}`,
+      };
+    },
+  },
+  {
+    name: 'AP-5：称呼解析与破墙门控',
+    run: () => {
+      const renamed = tryParseEpilogueAddressRename('别叫创世神，叫我导演');
+      const wall = isBreakWallNpc('npc_x', {
+        phase: 'epilogue',
+        break_wall_npc_ids: ['npc_x'],
+        main_break_wall_npc_ids: ['npc_y'],
+      });
+      const mainOnly = isBreakWallNpc('npc_y', {
+        phase: 'main',
+        break_wall_npc_ids: ['npc_x'],
+        main_break_wall_npc_ids: ['npc_y'],
+      });
+      const ok =
+        renamed === '导演' &&
+        resolveEpilogueAddress('') === '创世神' &&
+        wall === true &&
+        mainOnly === true &&
+        isBreakWallNpc('npc_x', {
+          phase: 'main',
+          break_wall_npc_ids: ['npc_x'],
+          main_break_wall_npc_ids: ['npc_y'],
+        }) === false;
+      return { ok, detail: `rename=${renamed} wall=${wall} main=${mainOnly}` };
     },
   },
   {

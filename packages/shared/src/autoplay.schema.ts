@@ -40,6 +40,20 @@ export const autoPlayGoalSchema = z.object({
   enter_epilogue: z.boolean().default(false),
   /** 杀青台面：a 演员局 / b 无玩家位向 / c 创世神梗 */
   epilogue_mode: z.enum(['a', 'b', 'c']).optional(),
+  /**
+   * A 台玩家身份：creator=创世神视角（近 C）；inworld=本世界玩家名+人设。
+   * C 台固定按创世神；B 台忽略。
+   */
+  epilogue_player_role: z.enum(['creator', 'inworld']).optional(),
+  /** C / A① 希望 NPC 怎么称呼你；空则默认「创世神」 */
+  epilogue_address_as: z.string().trim().max(32).optional(),
+  /** 杀青破墙知情：勾选的在场 NPC id */
+  break_wall_npc_ids: z.array(z.string().min(1).max(64)).max(32).optional(),
+  /** 正片破墙知情：勾选的在场 NPC id（与杀青独立） */
+  main_break_wall_npc_ids: z
+    .array(z.string().min(1).max(64))
+    .max(32)
+    .optional(),
   /** 运行时加速：五句内冲升章/终章撞结局 */
   accelerate: z.boolean().default(false),
 });
@@ -47,6 +61,57 @@ export type AutoPlayGoal = z.infer<typeof autoPlayGoalSchema>;
 
 export const autoPlayEpilogueModeSchema = z.enum(['a', 'b', 'c']);
 export type AutoPlayEpilogueMode = z.infer<typeof autoPlayEpilogueModeSchema>;
+
+export const autoPlayEpiloguePlayerRoleSchema = z.enum(['creator', 'inworld']);
+export type AutoPlayEpiloguePlayerRole = z.infer<
+  typeof autoPlayEpiloguePlayerRoleSchema
+>;
+
+/** 正片 / 杀青 */
+export type AutoPlayPhase = 'main' | 'epilogue';
+
+/** 空称呼 → 默认「创世神」 */
+export function resolveEpilogueAddress(
+  addressAs: string | undefined | null,
+): string {
+  const t = addressAs?.trim();
+  return t || '创世神';
+}
+
+/**
+ * 杀青中自然语言改称呼（补充填表）。
+ * 例：「叫我阿灯」「别叫创世神，叫我导演」
+ */
+export function tryParseEpilogueAddressRename(message: string): string | null {
+  const raw = message.trim();
+  if (!raw) return null;
+  const patterns = [
+    /(?:别叫[^，,。！!？?\s]{0,12}[，,]?\s*)?(?:请)?(?:叫我|称呼我(?:为)?)\s*[「『""']?([^」』""'。！!？?\s，,]{1,16})/,
+    /(?:改称|改叫)\s*[「『""']?([^」』""'。！!？?\s，,]{1,16})/,
+  ];
+  for (const re of patterns) {
+    const m = raw.match(re);
+    const name = m?.[1]?.trim();
+    if (name && name !== '你' && name !== '我') return name.slice(0, 32);
+  }
+  return null;
+}
+
+/** 当前相位下该 NPC 是否破墙知情 */
+export function isBreakWallNpc(
+  npcId: string,
+  opts: {
+    phase: AutoPlayPhase;
+    break_wall_npc_ids?: string[] | null;
+    main_break_wall_npc_ids?: string[] | null;
+  },
+): boolean {
+  const ids =
+    opts.phase === 'epilogue'
+      ? opts.break_wall_npc_ids
+      : opts.main_break_wall_npc_ids;
+  return Boolean(npcId && (ids ?? []).includes(npcId));
+}
 
 export const AUTO_PLAY_EPILOGUE_MODE_LABELS: Record<
   AutoPlayEpilogueMode,
@@ -56,9 +121,6 @@ export const AUTO_PLAY_EPILOGUE_MODE_LABELS: Record<
   b: 'B 无玩家位向',
   c: 'C 创世神梗',
 };
-
-/** 正片 / 杀青 */
-export type AutoPlayPhase = 'main' | 'epilogue';
 
 export const autoPlayStatusSchema = z.enum([
   'idle',
@@ -249,6 +311,17 @@ export const autoPlayPrefsSchema = z.object({
   enter_epilogue: z.boolean().default(false),
   /** 杀青台面 */
   epilogue_mode: autoPlayEpilogueModeSchema.optional(),
+  /** A 台：创世神视角 / 本世界人设 */
+  epilogue_player_role: autoPlayEpiloguePlayerRoleSchema.optional(),
+  /** C / A① 称呼；可空 */
+  epilogue_address_as: z.string().trim().max(32).optional(),
+  /** 杀青破墙 NPC */
+  break_wall_npc_ids: z.array(z.string().min(1).max(64)).max(32).optional(),
+  /** 正片破墙 NPC */
+  main_break_wall_npc_ids: z
+    .array(z.string().min(1).max(64))
+    .max(32)
+    .optional(),
 });
 export type AutoPlayPrefs = z.infer<typeof autoPlayPrefsSchema>;
 
@@ -359,6 +432,23 @@ export function buildAutoPlayGoal(opts: {
       prefs.enter_epilogue && target_ending
         ? (prefs.epilogue_mode ?? 'a')
         : undefined,
+    epilogue_player_role:
+      prefs.enter_epilogue && target_ending
+        ? prefs.epilogue_mode === 'c'
+          ? 'creator'
+          : prefs.epilogue_mode === 'b'
+            ? undefined
+            : (prefs.epilogue_player_role ?? 'creator')
+        : undefined,
+    epilogue_address_as:
+      prefs.enter_epilogue && target_ending
+        ? prefs.epilogue_address_as?.trim() || undefined
+        : undefined,
+    break_wall_npc_ids:
+      prefs.enter_epilogue && target_ending
+        ? prefs.break_wall_npc_ids
+        : undefined,
+    main_break_wall_npc_ids: prefs.main_break_wall_npc_ids,
     accelerate: false,
   });
 }

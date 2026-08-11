@@ -349,6 +349,8 @@ export function useGameSocket(
         whisper?: boolean;
         autoPlay?: boolean;
         epilogue?: boolean;
+        breakWall?: boolean;
+        breakWallAddress?: string;
       },
     ): boolean => {
       if (!socketRef.current?.connected) {
@@ -366,6 +368,8 @@ export function useGameSocket(
         whisper: chatOpts?.whisper === true ? true : undefined,
         autoPlay: chatOpts?.autoPlay === true ? true : undefined,
         epilogue: chatOpts?.epilogue === true ? true : undefined,
+        breakWall: chatOpts?.breakWall === true ? true : undefined,
+        breakWallAddress: chatOpts?.breakWallAddress?.trim() || undefined,
         labPeerAgents: getLabPeerAgentsEnabled() ? true : undefined,
       });
       return true;
@@ -399,6 +403,10 @@ export function useGameSocket(
       accelerate?: boolean;
       epilogue?: boolean;
       epilogueMode?: 'a' | 'b' | 'c';
+      epiloguePlayerRole?: 'creator' | 'inworld';
+      epilogueAddressAs?: string;
+      breakWallNpcIds?: string[];
+      mainBreakWallNpcIds?: string[];
       nearbyNpcIds?: string[];
     }): boolean => {
       if (!socketRef.current?.connected) return false;
