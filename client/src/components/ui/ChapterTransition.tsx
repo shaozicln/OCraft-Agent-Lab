@@ -9,6 +9,8 @@ export type ChapterCue = {
   key: number;
   ordinal?: number;
   title: string;
+  /** 覆盖默认「第 N 章 / 章节推进」；杀青用如「正片杀青」 */
+  kicker?: string;
 };
 
 /** 下滑入场 / 悬停 / 上撤（ms） */
@@ -57,7 +59,8 @@ export function ChapterTransition({
   if (!active || !phase) return null;
 
   const kicker =
-    active.ordinal != null ? `第 ${active.ordinal} 章` : '章节推进';
+    active.kicker?.trim() ||
+    (active.ordinal != null ? `第 ${active.ordinal} 章` : '章节推进');
 
   return (
     <div

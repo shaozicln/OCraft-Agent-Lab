@@ -190,6 +190,34 @@ export declare const DEFAULT_AUTO_PLAY_STYLE_ID: AutoPlayStyleId;
 export declare const DEFAULT_CHAPTER_SPEAK_CAP = 100;
 /** 超过此值须提示 token/费用风险 */
 export declare const CHAPTER_SPEAK_CAP_COST_WARN = 200;
+/** 加速语义：尽量在此拍数内冲下一升章 / 终章撞结局 */
+export declare const AUTO_PLAY_ACCELERATE_WITHIN_BEATS = 5;
+export type AutoPlayAcceleratePlan = {
+    kind: 'chapter' | 'ending' | 'none';
+    label: string;
+    mustInclude: string[];
+};
+/** 导演加速提示（与服务端 autoplay-agent 共用） */
+export declare function formatAccelerateDirectorHints(plan: AutoPlayAcceleratePlan): string[];
+/**
+ * 纯函数：按 ready 升章/结局挑加速计划（供服务端与 offline eval）。
+ */
+export declare function pickAutoPlayAcceleratePlan(opts: {
+    accelerate: boolean;
+    readyAdvances: Array<{
+        id: string;
+        toChapter: string;
+        notes?: string;
+        playerTriggers: string[];
+    }>;
+    readyEndings: Array<{
+        id: string;
+        displayName: string;
+        playerTriggers: string[];
+    }>;
+    preferToChapter?: string;
+    preferEndingId?: string;
+}): AutoPlayAcceleratePlan;
 export declare function getAutoPlayStylePreset(id: string | undefined): {
     readonly id: "bare";
     readonly label: "裸 AI";

@@ -8,14 +8,17 @@ import * as path from 'path';
 import {
   AutoPlaySession,
   FEEL_DEMO_AUTO_GOAL,
+  AUTO_PLAY_ACCELERATE_WITHIN_BEATS,
   autoPlayGoalSchema,
   buildAutoPlayGoal,
   DEFAULT_AUTO_PLAY_STYLE_ID,
+  formatAccelerateDirectorHints,
   isAutoPlayGoalReached,
   isBreakWallNpc,
   listReachableAutoPlayEndings,
   mockProposeAutoPlayNext,
   parseAutoPlayNextJson,
+  pickAutoPlayAcceleratePlan,
   resolveAutoPlayStopKind,
   resolveEpilogueAddress,
   tryParseEpilogueAddressRename,
@@ -565,6 +568,72 @@ const cases: Case[] = [
       const kind = resolveAutoPlayStopKind(g, { chapter: 'ch2' });
       const ok = kind === 'chapter' && g.enter_epilogue === true;
       return { ok, detail: `kind=${kind} epi=${g.enter_epilogue}` };
+    },
+  },
+  {
+    name: 'AP-3：加速五句常量 + 计划挑升章词',
+    run: () => {
+      const plan = pickAutoPlayAcceleratePlan({
+        accelerate: true,
+        readyAdvances: [
+          {
+            id: 'adv_1',
+            toChapter: 'ch2',
+            notes: '裂痕',
+            playerTriggers: ['告诉我', '怎么回事'],
+          },
+        ],
+        readyEndings: [],
+      });
+      const hints = formatAccelerateDirectorHints(plan);
+      const joined = hints.join('\n');
+      const ok =
+        AUTO_PLAY_ACCELERATE_WITHIN_BEATS === 5 &&
+        plan.kind === 'chapter' &&
+        plan.mustInclude.includes('告诉我') &&
+        joined.includes('5 句') &&
+        joined.includes('告诉我');
+      return {
+        ok,
+        detail: `beats=${AUTO_PLAY_ACCELERATE_WITHIN_BEATS} kind=${plan.kind} hints=${hints.length}`,
+      };
+    },
+  },
+  {
+    name: 'AP-3：加速关则无计划；终章挑结局词',
+    run: () => {
+      const off = pickAutoPlayAcceleratePlan({
+        accelerate: false,
+        readyAdvances: [
+          {
+            id: 'adv_1',
+            toChapter: 'ch2',
+            playerTriggers: ['x'],
+          },
+        ],
+        readyEndings: [],
+      });
+      const endPlan = pickAutoPlayAcceleratePlan({
+        accelerate: true,
+        readyAdvances: [],
+        readyEndings: [
+          {
+            id: 'ending_a',
+            displayName: '真相',
+            playerTriggers: ['我明白了'],
+          },
+        ],
+        preferEndingId: 'ending_a',
+      });
+      const ok =
+        off.kind === 'none' &&
+        off.mustInclude.length === 0 &&
+        endPlan.kind === 'ending' &&
+        endPlan.mustInclude.includes('我明白了');
+      return {
+        ok,
+        detail: `off=${off.kind} end=${endPlan.kind}:${endPlan.mustInclude.join(',')}`,
+      };
     },
   },
 ];

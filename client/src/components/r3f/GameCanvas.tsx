@@ -20,7 +20,14 @@ export type SceneNpc = {
 
 export type { NearbyNpc };
 
-type StagedNpc = SceneNpc & { phase: NpcActorPhase };
+type StagedNpc = SceneNpc & {
+  phase: NpcActorPhase;
+  /** 进/离场错开秒数 */
+  motionDelay: number;
+};
+
+const ENTER_STAGGER = 0.28;
+const LEAVE_STAGGER = 0.22;
 
 interface GameCanvasProps {
   npcs: SceneNpc[];
@@ -58,12 +65,16 @@ export const GameCanvas = memo(function GameCanvas({
     if (snapped) {
       lastSnapRef.current = presenceSnapToken;
       modeRef.current = 'live';
-      setStaged(npcs.map((n) => ({ ...n, phase: 'present' as const })));
+      setStaged(
+        npcs.map((n) => ({ ...n, phase: 'present' as const, motionDelay: 0 })),
+      );
       return;
     }
 
     if (modeRef.current === 'boot') {
-      setStaged(npcs.map((n) => ({ ...n, phase: 'present' as const })));
+      setStaged(
+        npcs.map((n) => ({ ...n, phase: 'present' as const, motionDelay: 0 })),
+      );
       return;
     }
 
@@ -71,18 +82,29 @@ export const GameCanvas = memo(function GameCanvas({
       const prevById = new Map(prev.map((p) => [p.npcId, p]));
       const nextIds = new Set(npcs.map((n) => n.npcId));
       const next: StagedNpc[] = [];
+      let enterIdx = 0;
+      let leaveIdx = 0;
 
       for (const n of npcs) {
         const old = prevById.get(n.npcId);
         if (!old) {
-          next.push({ ...n, phase: 'entering' });
-        } else if (old.phase === 'leaving') {
-          next.push({ ...n, phase: 'present' });
-        } else {
           next.push({
             ...n,
-            phase: old.phase === 'entering' ? 'entering' : 'present',
+            phase: 'entering',
+            motionDelay: enterIdx * ENTER_STAGGER,
           });
+          enterIdx += 1;
+        } else if (old.phase === 'leaving') {
+          // 离场中途又该在场：立刻站回
+          next.push({ ...n, phase: 'present', motionDelay: 0 });
+        } else if (old.phase === 'entering') {
+          next.push({
+            ...n,
+            phase: 'entering',
+            motionDelay: old.motionDelay,
+          });
+        } else {
+          next.push({ ...n, phase: 'present', motionDelay: 0 });
         }
       }
 
@@ -91,7 +113,12 @@ export const GameCanvas = memo(function GameCanvas({
         if (old.phase === 'leaving') {
           next.push(old);
         } else {
-          next.push({ ...old, phase: 'leaving' });
+          next.push({
+            ...old,
+            phase: 'leaving',
+            motionDelay: leaveIdx * LEAVE_STAGGER,
+          });
+          leaveIdx += 1;
         }
       }
 
@@ -159,6 +186,7 @@ export const GameCanvas = memo(function GameCanvas({
               animation={n.animation}
               modelPath={n.modelPath}
               phase={n.phase}
+              motionDelay={n.motionDelay}
               speaking={speakingNpcId === n.npcId}
               onLeaveDone={handleLeaveDone}
             />

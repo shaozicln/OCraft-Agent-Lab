@@ -4,7 +4,13 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-export type HumanoidAnimation = 'idle' | 'sleeping' | 'talk' | 'excited_talk';
+export type HumanoidAnimation =
+  | 'idle'
+  | 'sleeping'
+  | 'talk'
+  | 'excited_talk'
+  /** 客户端进/离场用，不进 Pack schema */
+  | 'walk';
 
 /** Target standing height ~1.65m */
 export const HUMANOID_HEIGHT = 1.65;
@@ -74,6 +80,25 @@ export function Humanoid({
       groupRef.current.position.y = baseY;
       bodyRef.current.rotation.z = 0;
       resetLimbs();
+      return;
+    }
+
+    if (anim === 'walk') {
+      groupRef.current.rotation.x = THREE.MathUtils.lerp(
+        groupRef.current.rotation.x,
+        0,
+        0.12,
+      );
+      const step = Math.sin(t * 10);
+      groupRef.current.position.y = baseY + Math.abs(step) * 0.045;
+      bodyRef.current.rotation.z = step * 0.06;
+      if (headRef.current) headRef.current.rotation.x = step * 0.04;
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = step * 0.55;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = -step * 0.55;
+      }
       return;
     }
 

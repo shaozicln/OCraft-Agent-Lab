@@ -258,6 +258,91 @@ export const DEFAULT_CHAPTER_SPEAK_CAP = 100;
 /** 超过此值须提示 token/费用风险 */
 export const CHAPTER_SPEAK_CAP_COST_WARN = 200;
 
+/** 加速语义：尽量在此拍数内冲下一升章 / 终章撞结局 */
+export const AUTO_PLAY_ACCELERATE_WITHIN_BEATS = 5;
+
+export type AutoPlayAcceleratePlan = {
+  kind: 'chapter' | 'ending' | 'none';
+  label: string;
+  mustInclude: string[];
+};
+
+/** 导演加速提示（与服务端 autoplay-agent 共用） */
+export function formatAccelerateDirectorHints(
+  plan: AutoPlayAcceleratePlan,
+): string[] {
+  const lines: string[] = [
+    `【加速模式】少闲聊；尽量在 ${AUTO_PLAY_ACCELERATE_WITHIN_BEATS} 句内推动下一升章（终章则撞结局）。加速优先于风格铺垫。`,
+  ];
+  if (plan.kind === 'chapter' && plan.mustInclude.length > 0) {
+    lines.push(
+      `【升章关键词·必须】若有玩家句，text 须自然包含下列至少一词（命中 Pack 规则 ${plan.label}；禁止说「升章/触发/系统」）：${plan.mustInclude.join(' / ')}`,
+    );
+  } else if (plan.kind === 'ending' && plan.mustInclude.length > 0) {
+    lines.push(
+      `【结局关键词·必须】玩家句须自然包含下列至少一词（推向 ${plan.label}）：${plan.mustInclude.join(' / ')}`,
+    );
+  } else if (plan.kind === 'none') {
+    lines.push(
+      `【加速】${plan.label || '当前没有可立即命中的升章词；尽量追问异常/钩子。'}`,
+    );
+  } else {
+    lines.push('【加速】当前升章规则无关键词门槛，直接推进关键话题即可。');
+  }
+  return lines;
+}
+
+/**
+ * 纯函数：按 ready 升章/结局挑加速计划（供服务端与 offline eval）。
+ */
+export function pickAutoPlayAcceleratePlan(opts: {
+  accelerate: boolean;
+  readyAdvances: Array<{
+    id: string;
+    toChapter: string;
+    notes?: string;
+    playerTriggers: string[];
+  }>;
+  readyEndings: Array<{
+    id: string;
+    displayName: string;
+    playerTriggers: string[];
+  }>;
+  preferToChapter?: string;
+  preferEndingId?: string;
+}): AutoPlayAcceleratePlan {
+  if (!opts.accelerate) {
+    return { kind: 'none', label: '', mustInclude: [] };
+  }
+  if (opts.readyAdvances.length > 0) {
+    const preferred =
+      (opts.preferToChapter &&
+        opts.readyAdvances.find((a) => a.toChapter === opts.preferToChapter)) ||
+      opts.readyAdvances[0]!;
+    return {
+      kind: 'chapter',
+      label: `${preferred.id}→${preferred.toChapter}${preferred.notes ? `（${preferred.notes}）` : ''}`,
+      mustInclude: preferred.playerTriggers.filter(Boolean),
+    };
+  }
+  if (opts.readyEndings.length > 0) {
+    const preferred =
+      (opts.preferEndingId &&
+        opts.readyEndings.find((e) => e.id === opts.preferEndingId)) ||
+      opts.readyEndings[0]!;
+    return {
+      kind: 'ending',
+      label: `${preferred.displayName}（${preferred.id}）`,
+      mustInclude: preferred.playerTriggers.filter(Boolean),
+    };
+  }
+  return {
+    kind: 'none',
+    label: '无可立即命中的升章/结局规则',
+    mustInclude: [],
+  };
+}
+
 export function getAutoPlayStylePreset(id: string | undefined) {
   const found = AUTO_PLAY_STYLE_PRESETS.find((s) => s.id === id);
   return (

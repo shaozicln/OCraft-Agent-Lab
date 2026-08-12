@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   autoPlayGoalSchema,
+  formatAccelerateDirectorHints,
   getAutoPlayStyleMaxSpeakers,
   getAutoPlayStylePreset,
   getChapterRankMap,
@@ -9,6 +10,7 @@ import {
   mockProposeAutoPlayNext,
   normalizeAutoPlayBeatLines,
   parseAutoPlayNextJson,
+  pickAutoPlayAcceleratePlan,
   resolveEpilogueAddress,
   type AutoPlayBeatLine,
   type AutoPlayGoal,
@@ -22,14 +24,8 @@ import { WorldProgressService } from '../../story/world-progress.service';
 import { ConversationService } from '../../game/conversation.service';
 import { NpcService } from '../../npc/npc.service';
 import { listAvailableExchangeEventIds } from '../rules/npc-exchange';
-import {
-  listReadyChapterAdvances,
-  type ReadyChapterAdvance,
-} from '../rules/chapter-transition';
-import {
-  listReadyEndingHints,
-  type ReadyEndingHint,
-} from '../rules/ending-settle';
+import { listReadyChapterAdvances } from '../rules/chapter-transition';
+import { listReadyEndingHints } from '../rules/ending-settle';
 import {
   PUBLIC_SCENE_LINE_LIMIT,
   formatSceneUtteranceLines,
@@ -234,7 +230,7 @@ export class AutoPlayAgentService {
         });
 
     const accelerate = !isEpilogue && opts.accelerate === true;
-    const acceleratePlan = this.pickAcceleratePlan({
+    const acceleratePlan = pickAutoPlayAcceleratePlan({
       accelerate,
       readyAdvances,
       readyEndings,
@@ -462,51 +458,6 @@ export class AutoPlayAgentService {
     return withSyncedSay({ ...proposal, lines });
   }
 
-  private pickAcceleratePlan(opts: {
-    accelerate: boolean;
-    readyAdvances: ReadyChapterAdvance[];
-    readyEndings: ReadyEndingHint[];
-    preferToChapter?: string;
-    preferEndingId?: string;
-  }): {
-    kind: 'chapter' | 'ending' | 'none';
-    label: string;
-    mustInclude: string[];
-  } {
-    if (!opts.accelerate) {
-      return { kind: 'none', label: '', mustInclude: [] };
-    }
-
-    if (opts.readyAdvances.length > 0) {
-      const preferred =
-        (opts.preferToChapter &&
-          opts.readyAdvances.find(
-            (a) => a.toChapter === opts.preferToChapter,
-          )) ||
-        opts.readyAdvances[0]!;
-      const triggers = preferred.playerTriggers.filter(Boolean);
-      return {
-        kind: 'chapter',
-        label: `${preferred.id}→${preferred.toChapter}${preferred.notes ? `（${preferred.notes}）` : ''}`,
-        mustInclude: triggers,
-      };
-    }
-
-    if (opts.readyEndings.length > 0) {
-      const preferred =
-        (opts.preferEndingId &&
-          opts.readyEndings.find((e) => e.id === opts.preferEndingId)) ||
-        opts.readyEndings[0]!;
-      return {
-        kind: 'ending',
-        label: `${preferred.displayName}（${preferred.id}）`,
-        mustInclude: preferred.playerTriggers.filter(Boolean),
-      };
-    }
-
-    return { kind: 'none', label: '无可立即命中的升章/结局规则', mustInclude: [] };
-  }
-
   private buildPrompt(input: {
     goal: AutoPlayGoal;
     turnIndex: number;
@@ -559,35 +510,10 @@ export class AutoPlayAgentService {
         .map((c) => `- ${c.npc_id}（${c.display_name}）：${c.blurb}`)
         .join('\n') || '（空）';
 
-    const accelLines: string[] = [];
-    if (input.accelerate && !input.epilogue) {
-      accelLines.push(
-        '【加速模式】少闲聊，本拍就要推动进度。加速优先于风格铺垫。',
-      );
-      if (
-        input.acceleratePlan.kind === 'chapter' &&
-        input.acceleratePlan.mustInclude.length > 0
-      ) {
-        accelLines.push(
-          `【升章关键词·必须】若有玩家句，text 须自然包含下列至少一词（命中 Pack 规则 ${input.acceleratePlan.label}；禁止说「升章/触发/系统」）：${input.acceleratePlan.mustInclude.join(' / ')}`,
-        );
-      } else if (
-        input.acceleratePlan.kind === 'ending' &&
-        input.acceleratePlan.mustInclude.length > 0
-      ) {
-        accelLines.push(
-          `【结局关键词·必须】玩家句须自然包含下列至少一词（推向 ${input.acceleratePlan.label}）：${input.acceleratePlan.mustInclude.join(' / ')}`,
-        );
-      } else if (input.acceleratePlan.kind === 'none') {
-        accelLines.push(
-          `【加速】${input.acceleratePlan.label || '当前没有可立即命中的升章词；尽量追问异常/钩子。'}`,
-        );
-      } else {
-        accelLines.push(
-          '【加速】当前升章规则无关键词门槛，直接推进关键话题即可。',
-        );
-      }
-    }
+    const accelLines =
+      input.accelerate && !input.epilogue
+        ? formatAccelerateDirectorHints(input.acceleratePlan)
+        : [];
 
     const playerRule = !input.playablePresent
       ? '【无可演出玩家位或未出场】禁止输出 player 句；只点 cast 里的 NPC。'

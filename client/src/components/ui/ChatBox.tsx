@@ -20,11 +20,16 @@ import type {
 } from '@ocraft/shared';
 import { useAutoPlay } from '@/lib/autoplay/useAutoPlay';
 import { AutoPlaySetupModal } from './AutoPlaySetupModal';
+import {
+  ChapterTransition,
+  type ChapterCue,
+} from './ChapterTransition';
 import { getLabPeerAgentsEnabled } from '@/lib/lab-settings';
 import {
   SPEECH_BUBBLE_PLAYER_ID,
   setSpeechBubble,
 } from '@/lib/speechBubbles';
+import { AUTO_PLAY_EPILOGUE_MODE_LABELS } from '@ocraft/shared';
 
 interface ChatBoxProps {
   open: boolean;
@@ -424,6 +429,25 @@ export function ChatBox({
 
   const autoPlayRef = useRef(autoPlay);
   autoPlayRef.current = autoPlay;
+
+  const [epilogueCue, setEpilogueCue] = useState<ChapterCue | null>(null);
+  const prevPhaseRef = useRef(autoPlay.ui.phase);
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    const next = autoPlay.ui.phase;
+    prevPhaseRef.current = next;
+    if (prev === 'main' && next === 'epilogue') {
+      const mode = autoPlay.ui.epilogueMode ?? 'a';
+      const label = AUTO_PLAY_EPILOGUE_MODE_LABELS[mode];
+      setEpilogueCue({
+        key: Date.now(),
+        kicker: '正片杀青',
+        title: `进入杀青梗 · ${label}`,
+      });
+    }
+  }, [autoPlay.ui.phase, autoPlay.ui.epilogueMode]);
+
+  const clearEpilogueCue = useCallback(() => setEpilogueCue(null), []);
 
   const inputLocked = isStreaming || listening || autoPlay.locksInput;
 
@@ -1036,6 +1060,7 @@ export function ChatBox({
             </div>
           </div>
         )}
+        <ChapterTransition cue={epilogueCue} onDone={clearEpilogueCue} />
       </>
     );
   }
@@ -1517,6 +1542,7 @@ export function ChatBox({
           </form>
         </div>
       </div>
+      <ChapterTransition cue={epilogueCue} onDone={clearEpilogueCue} />
     </>
   );
 }

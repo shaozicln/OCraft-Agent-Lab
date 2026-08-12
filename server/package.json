@@ -29,6 +29,7 @@
     "distill:eval": "ts-node -r tsconfig-paths/register scripts/eval-distill.ts",
     "safety:eval": "ts-node -r tsconfig-paths/register scripts/eval-safety.ts",
     "autoplay:eval": "ts-node -r tsconfig-paths/register scripts/eval-autoplay.ts",
+    "voice:eval": "ts-node -r tsconfig-paths/register scripts/eval-pack-voice.ts",
     "ending:eval": "ts-node -r tsconfig-paths/register scripts/eval-ending.ts",
     "lab:eval": "ts-node -r tsconfig-paths/register scripts/eval-lab.ts",
     "notes:eval": "ts-node -r tsconfig-paths/register scripts/eval-player-notes.ts"
