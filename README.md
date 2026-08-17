@@ -1,6 +1,6 @@
 # OCraft Agent Lab
 
-OCraft系列游戏的技术向探索，用于学习和测试 Agent 工程在 npc 上的应用，有 Api-Key 就能玩，大概玩法是有新点子填填设定就能对话
+有 Api-Key 就能玩，大概是有新点子填填设定就能对话和看演绎
 
 - **前端**：Next.js + React Three Fiber（3D）+ Socket.io  
 - **后端**：NestJS（HTTP + WebSocket）+  LLM  
