@@ -3,6 +3,7 @@
 import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
+import type { NpcFollowState } from '@ocraft/shared';
 import { OfficeScene } from './OfficeScene';
 import { Player, type NearbyNpc } from './Player';
 import { type HumanoidAnimation } from './Humanoid';
@@ -16,6 +17,7 @@ export type SceneNpc = {
   headColor: string;
   animation: HumanoidAnimation;
   modelPath?: string;
+  follow?: NpcFollowState | null;
 };
 
 export type { NearbyNpc };
@@ -43,6 +45,7 @@ interface GameCanvasProps {
    * 每次需要「瞬现对齐」时递增。
    */
   presenceSnapToken?: number;
+  onFollowArrive?: (npcId: string, targetNpcId: string) => void;
 }
 
 export const GameCanvas = memo(function GameCanvas({
@@ -54,6 +57,7 @@ export const GameCanvas = memo(function GameCanvas({
   uiOverlayActive = false,
   speakingNpcId = null,
   presenceSnapToken = 0,
+  onFollowArrive,
 }: GameCanvasProps) {
   const [staged, setStaged] = useState<StagedNpc[]>([]);
   /** boot：站桩对齐；live：增量进/离场 */
@@ -188,7 +192,9 @@ export const GameCanvas = memo(function GameCanvas({
               phase={n.phase}
               motionDelay={n.motionDelay}
               speaking={speakingNpcId === n.npcId}
+              follow={n.follow ?? null}
               onLeaveDone={handleLeaveDone}
+              onFollowArrive={onFollowArrive}
             />
           ))}
           <Player

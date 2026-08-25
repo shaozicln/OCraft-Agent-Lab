@@ -36,6 +36,12 @@ export const requestNpcStatePayloadSchema = z.object({
   npcId: z.string().min(1).max(64),
 });
 
+/** 客户端：to_npc 跟随已到达目标旁，请求服务端清跟随状态 */
+export const npcFollowArrivedPayloadSchema = z.object({
+  npcId: z.string().min(1).max(64),
+  target_npc_id: z.string().min(1).max(64),
+});
+
 /** 按需请求：当前剧情下玩家可选回复建议（点击填入，不自动发送） */
 export const requestChatSuggestionsPayloadSchema = z.object({
   npcId: z.string().min(1).max(64),
@@ -110,6 +116,18 @@ export const toolCallResultSchema = z.object({
   observation: z.string(),
 });
 
+/** NPC 跟随玩家（客户端位移用） */
+export const npcFollowStateSchema = z.union([
+  z.object({
+    mode: z.literal('companion'),
+  }),
+  z.object({
+    mode: z.literal('to_npc'),
+    target_npc_id: z.string(),
+  }),
+]);
+export type NpcFollowState = z.infer<typeof npcFollowStateSchema>;
+
 export const npcStateUpdateSchema = z.object({
   npcId: z.string(),
   name: z.string().optional(),
@@ -121,6 +139,8 @@ export const npcStateUpdateSchema = z.object({
   chapter_state: chapterStateSchema.optional(),
   /** 当前会话 story flags（多 NPC 出场判定用） */
   story_flags: z.record(z.string(), z.string()).optional(),
+  /** null = 未跟随 */
+  follow: npcFollowStateSchema.nullable().optional(),
   toolCalls: z.array(toolCallResultSchema).optional(),
 });
 
@@ -462,6 +482,7 @@ export const archiveRenamedEventSchema = z.object({
 
 export type PlayerChatPayload = z.infer<typeof playerChatPayloadSchema>;
 export type RequestNpcStatePayload = z.infer<typeof requestNpcStatePayloadSchema>;
+export type NpcFollowArrivedPayload = z.infer<typeof npcFollowArrivedPayloadSchema>;
 export type RequestChatSuggestionsPayload = z.infer<
   typeof requestChatSuggestionsPayloadSchema
 >;

@@ -149,6 +149,7 @@ function GamePageInner({
     requestStoryMap,
     storyMap,
     setRunNpcSelection,
+    reportFollowArrived,
     clearLoadedConversation,
     clearLastSaved,
     clearLastNewRun,
@@ -223,6 +224,7 @@ function GamePageInner({
           color: palette.color,
           headColor: palette.headColor,
           modelPath: n.model_path,
+          follow: st?.follow ?? null,
           animation:
             exchangeSpeakNpcId === n.npc_id ? 'excited_talk' : baseAnim,
         };
@@ -516,8 +518,11 @@ function GamePageInner({
         lookEnabled={lookEnabled}
         onPointerLockChange={setPointerLocked}
         uiOverlayActive={uiBlocking}
-        speakingNpcId={exchangeSpeakNpcId}
+        speakingNpcId={
+          exchangeSpeakNpcId ?? (isStreaming ? activeNpcId : null)
+        }
         presenceSnapToken={presenceSnapToken}
+        onFollowArrive={reportFollowArrived}
       />
 
       <div className="absolute top-4 left-4 z-30 space-y-2">

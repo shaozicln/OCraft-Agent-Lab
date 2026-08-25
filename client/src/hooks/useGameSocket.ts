@@ -477,6 +477,18 @@ export function useGameSocket(
     [],
   );
 
+  const reportFollowArrived = useCallback(
+    (npcId: string, targetNpcId: string): boolean => {
+      if (!socketRef.current?.connected) return false;
+      socketRef.current.emit('npc_follow_arrived', {
+        npcId,
+        target_npc_id: targetNpcId,
+      });
+      return true;
+    },
+    [],
+  );
+
   const clearLoadedConversation = useCallback(
     () => setLoadedConversation(null),
     [],
@@ -526,6 +538,7 @@ export function useGameSocket(
     listArchives,
     loadArchive,
     setRunNpcSelection,
+    reportFollowArrived,
     clearLoadedConversation,
     clearLastSaved,
     clearLastNewRun,

@@ -22,15 +22,33 @@ export declare const recallMemorySchema: z.ZodObject<{
     top_k: z.ZodOptional<z.ZodNumber>;
     reason: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
+/**
+ * 场景跟随：
+ * - companion：跟着玩家走，直到 stop_follow
+ * - to_npc：跟到靠近目标 NPC 后自动停
+ */
+export declare const followPlayerSchema: z.ZodObject<{
+    mode: z.ZodEnum<{
+        companion: "companion";
+        to_npc: "to_npc";
+    }>;
+    target_npc_id: z.ZodOptional<z.ZodString>;
+    reason: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+export declare const stopFollowSchema: z.ZodObject<{
+    reason: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
 export type UpdateAffinityArgs = z.infer<typeof updateAffinitySchema>;
 export type UpdateFatigueArgs = z.infer<typeof updateFatigueSchema>;
 export type QueryRuntimeArgs = z.infer<typeof queryRuntimeSchema>;
 export type RequestHintArgs = z.infer<typeof requestHintSchema>;
 export type RecallMemoryArgs = z.infer<typeof recallMemorySchema>;
-/** 软数值 tool（可方差） */
-export declare const SOFT_NPC_TOOLS: readonly ["updateFatigue", "updateAffinity"];
+export type FollowPlayerArgs = z.infer<typeof followPlayerSchema>;
+export type StopFollowArgs = z.infer<typeof stopFollowSchema>;
+/** 软数值 / 场景行动 tool（可方差） */
+export declare const SOFT_NPC_TOOLS: readonly ["updateFatigue", "updateAffinity", "follow_player", "stop_follow"];
 /** 强业务 tool（严 schema、只读优先） */
 export declare const STRONG_NPC_TOOLS: readonly ["query_runtime", "request_hint", "recall_memory"];
-export declare const ALLOWED_NPC_TOOLS: readonly ["updateFatigue", "updateAffinity", "query_runtime", "request_hint", "recall_memory"];
+export declare const ALLOWED_NPC_TOOLS: readonly ["updateFatigue", "updateAffinity", "follow_player", "stop_follow", "query_runtime", "request_hint", "recall_memory"];
 export type AllowedNpcTool = (typeof ALLOWED_NPC_TOOLS)[number];
 export declare function isAllowedNpcTool(name: string): name is AllowedNpcTool;

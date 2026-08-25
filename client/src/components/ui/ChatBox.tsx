@@ -823,7 +823,8 @@ export function ChatBox({
           },
         ];
       }
-      if (!isStreaming) return prev;
+      // 思考模型可能「一整段 content + done」同批到达，此时 isStreaming 已是 false，
+      // 不能再要求 isStreaming 才建气泡（否则关窗重开才看得到）。
       return [
         ...prev,
         {
@@ -1401,6 +1402,15 @@ export function ChatBox({
                 )}
               </div>
             ))}
+            {isStreaming && !streamText && (
+              <div className="text-sm text-slate-400">
+                {npcName}：
+                <span className="inline-block w-1.5 h-4 ml-0.5 bg-slate-500 animate-pulse align-middle" />
+                <span className="ml-1 text-xs text-slate-500">
+                  正在组织语言…
+                </span>
+              </div>
+            )}
           </div>
 
           {suggestionsOpen && (
@@ -1524,7 +1534,9 @@ export function ChatBox({
                       : listening
                         ? '…正在旁听'
                         : isStreaming
-                          ? '对方正在说话…'
+                          ? streamText
+                            ? '对方正在说话…'
+                            : '对方正在想…'
                           : whisperMode
                             ? '悄悄话（仅对方听见）…'
                             : '输入对话…'

@@ -28,14 +28,46 @@ export const recallMemorySchema = z.object({
   reason: z.string().max(120).optional(),
 });
 
+/**
+ * 场景跟随：
+ * - companion：跟着玩家走，直到 stop_follow
+ * - to_npc：跟到靠近目标 NPC 后自动停
+ */
+export const followPlayerSchema = z
+  .object({
+    mode: z.enum(['companion', 'to_npc']),
+    target_npc_id: z.string().trim().min(1).max(64).optional(),
+    reason: z.string().max(120).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.mode === 'to_npc' && !v.target_npc_id) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'mode=to_npc 时必须提供 target_npc_id',
+        path: ['target_npc_id'],
+      });
+    }
+  });
+
+export const stopFollowSchema = z.object({
+  reason: z.string().max(120).optional(),
+});
+
 export type UpdateAffinityArgs = z.infer<typeof updateAffinitySchema>;
 export type UpdateFatigueArgs = z.infer<typeof updateFatigueSchema>;
 export type QueryRuntimeArgs = z.infer<typeof queryRuntimeSchema>;
 export type RequestHintArgs = z.infer<typeof requestHintSchema>;
 export type RecallMemoryArgs = z.infer<typeof recallMemorySchema>;
+export type FollowPlayerArgs = z.infer<typeof followPlayerSchema>;
+export type StopFollowArgs = z.infer<typeof stopFollowSchema>;
 
-/** 软数值 tool（可方差） */
-export const SOFT_NPC_TOOLS = ['updateFatigue', 'updateAffinity'] as const;
+/** 软数值 / 场景行动 tool（可方差） */
+export const SOFT_NPC_TOOLS = [
+  'updateFatigue',
+  'updateAffinity',
+  'follow_player',
+  'stop_follow',
+] as const;
 
 /** 强业务 tool（严 schema、只读优先） */
 export const STRONG_NPC_TOOLS = [

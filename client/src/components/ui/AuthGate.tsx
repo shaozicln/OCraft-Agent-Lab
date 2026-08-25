@@ -197,10 +197,6 @@ export function AuthGate({ children }: AuthGateProps) {
                   : '注册并进入游戏'}
             </button>
           </form>
-
-          <p className="mt-4 text-xs" style={{ color: 'var(--ui-fg-muted)' }}>
-            同一用户名在任何设备登录都会加载同一份进度。
-          </p>
         </div>
       </main>
     );

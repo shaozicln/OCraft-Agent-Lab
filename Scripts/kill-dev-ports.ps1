@@ -1,7 +1,7 @@
 # Free dev ports and Next.js dev lock before dev:all restarts services.
 $Root = Split-Path -Parent $PSScriptRoot
-# client Next=3300 · Nest=4000 · drizzle studio 常见 4983；顺带清旧默认 3000/3010
-$ports = @(3000, 3010, 3300, 4000, 4983)
+# client Next=3300 · Nest=4400 · drizzle studio 常见 4983；顺带清旧 3000/3010/4000
+$ports = @(3000, 3010, 3300, 4000, 4400, 4983)
 
 Write-Host 'Preparing dev environment...' -ForegroundColor Cyan
 

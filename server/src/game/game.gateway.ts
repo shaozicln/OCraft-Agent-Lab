@@ -14,6 +14,7 @@ import {
   listConversationArchivesPayloadSchema,
   loadConversationArchivePayloadSchema,
   normalizeAutoPlayBeatLines,
+  npcFollowArrivedPayloadSchema,
   playerChatPayloadSchema,
   renameArchivePayloadSchema,
   requestAutoplayNextPayloadSchema,
@@ -41,6 +42,7 @@ import { evaluateNpcReplyFlags } from '../agent/rules/chapter-transition';
 import { AgentTraceService } from '../agent/observability/agent-trace.service';
 import { PackService } from '../story/pack.service';
 import { ConversationService } from './conversation.service';
+import { NpcFollowService } from './npc-follow.service';
 import { NpcService } from '../npc/npc.service';
 import { WorldProgressService } from '../story/world-progress.service';
 
@@ -69,6 +71,7 @@ export class GameGateway implements OnGatewayConnection {
     private readonly autoPlayAgent: AutoPlayAgentService,
     private readonly labPeer: LabPeerService,
     private readonly conversationService: ConversationService,
+    private readonly npcFollow: NpcFollowService,
     private readonly npcService: NpcService,
     private readonly packService: PackService,
     private readonly worldProgress: WorldProgressService,
@@ -125,6 +128,7 @@ export class GameGateway implements OnGatewayConnection {
       current_status: state.current_status,
       chapter_state: this.conversationService.getChapterState(playerId, npcId),
       story_flags: this.conversationService.getStoryFlags(playerId, npcId),
+      follow: this.npcFollow.get(playerId, npcId),
     };
   }
 
@@ -165,6 +169,35 @@ export class GameGateway implements OnGatewayConnection {
       client.emit('run_npc_selection', {
         selected_npc_ids: this.conversationService.getNpcSelection(playerId),
       });
+    });
+  }
+
+  @SubscribeMessage('npc_follow_arrived')
+  async handleNpcFollowArrived(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: unknown,
+  ) {
+    const parsed = npcFollowArrivedPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new WsException(parsed.error.message);
+    }
+    const playerId = this.requirePlayerId(client);
+    const { npcId, target_npc_id } = parsed.data;
+    return this.packService.runWithPlayerAsync(playerId, async () => {
+      const cur = this.npcFollow.get(playerId, npcId);
+      if (
+        cur?.mode === 'to_npc' &&
+        cur.target_npc_id === target_npc_id &&
+        this.npcFollow.clear(playerId, npcId)
+      ) {
+        this.logger.log(
+          `follow arrived player=${playerId} npc=${npcId} target=${target_npc_id}`,
+        );
+        client.emit(
+          'npc_state_update',
+          this.buildStatePayload(playerId, npcId),
+        );
+      }
     });
   }
 
@@ -761,6 +794,7 @@ export class GameGateway implements OnGatewayConnection {
         snapshotIndex,
       );
 
+      this.npcFollow.clearPlayer(playerId);
       this.emitAllNpcStates(client, playerId);
 
       client.emit('conversation_loaded', {
@@ -828,6 +862,7 @@ export class GameGateway implements OnGatewayConnection {
           opts,
         );
         this.labPeer.resetSession(playerId);
+        this.npcFollow.clearPlayer(playerId);
         client.emit('new_run_started', {
           npcId,
           filename: result.filename,

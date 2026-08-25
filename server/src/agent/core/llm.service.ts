@@ -51,6 +51,18 @@ export class LlmService {
   }
 
   /**
+   * DashScope 用 enable_thinking；LM Studio / llama.cpp 认 chat_template_kwargs。
+   * hybrid 默认会先写 reasoning_content，前端像卡住。游戏默认关思考。
+   */
+  private vendorBodyExtras(): Record<string, unknown> {
+    const thinking = process.env.LLM_ENABLE_THINKING === 'true';
+    return {
+      enable_thinking: thinking,
+      chat_template_kwargs: { enable_thinking: thinking },
+    };
+  }
+
+  /**
    * 非流式补全。JSON 模式时尽量解析为对象；失败返回原文。
    */
   async complete(
@@ -74,6 +86,7 @@ export class LlmService {
       ...(opts.json
         ? { response_format: { type: 'json_object' as const } }
         : {}),
+      ...this.vendorBodyExtras(),
     });
     return res.choices[0]?.message?.content?.trim() ?? '';
   }
@@ -97,6 +110,7 @@ export class LlmService {
       tools,
       tool_choice: 'auto',
       temperature: opts.temperature ?? 0.4,
+      ...this.vendorBodyExtras(),
     });
 
     const msg = res.choices[0]?.message;
@@ -153,6 +167,7 @@ export class LlmService {
       messages,
       stream: true,
       temperature: 0.8,
+      ...this.vendorBodyExtras(),
     });
 
     for await (const chunk of stream) {
@@ -160,6 +175,15 @@ export class LlmService {
       if (text) {
         yield { text };
       }
+    }
+    yield { text: '', done: true };
+  }
+
+  /** 工具轮已有正文且无 tool_calls 时，跳过第二次 LLM，直接当流式吐出。 */
+  async *streamFromText(text: string): AsyncGenerator<StreamChunk> {
+    const trimmed = text.trim();
+    if (trimmed) {
+      yield { text: trimmed };
     }
     yield { text: '', done: true };
   }

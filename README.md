@@ -96,18 +96,17 @@ npm run db:studio
 
 #### 一键起前后端
 
-*先确保 Docker 里 Postgres 已起*
-
 ```text
 Ctrl+Shift+B
 ```
 
-效果：
+效果（顺序）：
 
-1. 先在**底部终端**跑 `dev:prep`（清端口）
-2. 再**并行**开 3 个底部终端：`db:studio` / `server:dev` / `client:dev`
+1. **Docker**：`docker compose up -d --wait postgres`（等 healthy）
+2. **清端口**：`dev:prep`
+3. **并行**开 3 个底部终端：`db:studio` / `server:dev` / `client:dev`
 
-若无响应：`Ctrl+Shift+P` → **Tasks: Run Task** → **dev:all**
+需本机已开 **Docker Desktop**。若无响应：`Ctrl+Shift+P` → **Tasks: Run Task** → **dev:all**
 
 自定义启动按键：`Ctrl+Shift+P` → Preferences: Open Keyboard Shortcuts (JSON)：
 
@@ -144,8 +143,6 @@ cd client
 npm run dev
 ```
 
-浏览器打开 http://localhost:3300 。首次进入需 **注册或登录**。
-
 > 首次若报 `@ocraft/shared` 找不到：  
 > `cd packages/shared && npm install && npm run build`
 
@@ -158,4 +155,4 @@ set NEXT_PUBLIC_GAME_SERVER_URL=http://localhost:4400
 
 ---
 
-*还要做好多东西啊。。。不然可能打不出预想中的自定义和多结局ORZ*
+*力竭了Orz*

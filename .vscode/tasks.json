@@ -2,13 +2,30 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "docker:postgres",
+      "type": "shell",
+      "command": "docker compose up -d --wait postgres",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {}
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true,
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "dev:prep",
       "type": "shell",
       "command": "powershell -ExecutionPolicy Bypass -File ${workspaceFolder}/scripts/kill-dev-ports.ps1",
       "presentation": {
         "reveal": "always",
         "panel": "shared",
-        "clear": true
+        "clear": false,
+        "showReuseMessage": false
       },
       "problemMatcher": []
     },
@@ -65,8 +82,14 @@
       "problemMatcher": []
     },
     {
+      "label": "dev:infra",
+      "dependsOn": ["docker:postgres", "dev:prep"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
       "label": "dev:all",
-      "dependsOn": ["dev:prep", "dev:apps"],
+      "dependsOn": ["dev:infra", "dev:apps"],
       "dependsOrder": "sequence",
       "group": {
         "kind": "build",

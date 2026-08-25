@@ -6,7 +6,9 @@ import {
   ToolCallResult,
   UpdateAffinityArgs,
   UpdateFatigueArgs,
+  followPlayerSchema,
   recallMemorySchema,
+  stopFollowSchema,
   updateAffinitySchema,
   updateFatigueSchema,
 } from '@ocraft/shared';
@@ -18,6 +20,7 @@ import { NpcService } from '../../npc/npc.service';
 import { ConversationService } from '../../game/conversation.service';
 import { WorldProgressService } from '../../story/world-progress.service';
 import { PackService } from '../../story/pack.service';
+import { NpcFollowService } from '../../game/npc-follow.service';
 import {
   evaluateChapterTransition,
   evaluateNpcReplyFlags,
@@ -58,6 +61,7 @@ export class AgentHarnessService {
     private readonly worldProgress: WorldProgressService,
     private readonly packService: PackService,
     private readonly agentTrace: AgentTraceService,
+    private readonly npcFollow: NpcFollowService,
   ) {}
 
   async run(
@@ -128,6 +132,8 @@ export class AgentHarnessService {
     const toolPolicy = [
       '【工具分层】',
       '软数值：updateFatigue / updateAffinity（仅关系/精力确有变化时）。',
+      '场景行动：follow_player（跟着玩家；mode=companion 一直跟，mode=to_npc 跟到某人旁停下）；',
+      'stop_follow（玩家说等等/先停时站定）。答应跟随或同行时必须调工具，不要只嘴上说。',
       '强指令（只读）：query_runtime（查章/好感/疲惫/flags）；request_hint（本章扮演提示，勿剧透）；',
       'recall_memory（按 query 再取长期记忆，章门控，只读）。',
       '不要在回复正文里伪造工具 JSON；需要时请发起 tool call。',
@@ -151,7 +157,7 @@ export class AgentHarnessService {
     }
 
     const openaiMessages = this.toOpenAiMessages(dialogMessages);
-    const tools = buildNpcToolDefinitions(pack);
+    const tools = buildNpcToolDefinitions(pack, npcId);
     const fc = await this.llmService.chatWithTools(openaiMessages, tools, {
       temperature: 0.35,
     });
@@ -244,7 +250,11 @@ export class AgentHarnessService {
     }
 
     const finalState = this.npcService.getRuntimeState(playerId, npcId);
-    const stream = this.llmService.streamChat(replyMessages, { toolCalls });
+    const spoken = fc.content?.trim() ?? '';
+    const stream =
+      spoken && fc.toolCalls.length === 0
+        ? this.llmService.streamFromText(spoken)
+        : this.llmService.streamChat(replyMessages, { toolCalls });
 
     const traceId = randomUUID();
     this.agentTrace.record({
@@ -556,6 +566,60 @@ export class AgentHarnessService {
         tool: 'updateAffinity',
         args,
         observation: `好感 ${args.delta >= 0 ? '+' : ''}${args.delta} → ${state.affinity}${args.reason ? `（${args.reason}）` : ''}`,
+      });
+      return;
+    }
+
+    if (name === 'follow_player') {
+      const args = followPlayerSchema.parse(parsed);
+      if (args.mode === 'to_npc') {
+        const targetId = args.target_npc_id!;
+        if (targetId === npcId) {
+          toolCalls.push({
+            tool: 'follow_player',
+            args,
+            observation: '拒绝：不能以自己为 to_npc 目标',
+          });
+          return;
+        }
+        const target = pack.npcs.find((n) => n.npc_id === targetId);
+        if (!target) {
+          toolCalls.push({
+            tool: 'follow_player',
+            args,
+            observation: `拒绝：未知目标 NPC「${targetId}」`,
+          });
+          return;
+        }
+        this.npcFollow.set(playerId, npcId, {
+          mode: 'to_npc',
+          target_npc_id: targetId,
+        });
+        toolCalls.push({
+          tool: 'follow_player',
+          args,
+          observation: `开始跟随玩家，直到靠近「${target.name}」(${targetId}) 后停下${args.reason ? `（${args.reason}）` : ''}`,
+        });
+        return;
+      }
+      this.npcFollow.set(playerId, npcId, { mode: 'companion' });
+      toolCalls.push({
+        tool: 'follow_player',
+        args,
+        observation: `开始一直跟随玩家${args.reason ? `（${args.reason}）` : ''}`,
+      });
+      return;
+    }
+
+    if (name === 'stop_follow') {
+      const args = stopFollowSchema.parse(parsed ?? {});
+      const cleared = this.npcFollow.clear(playerId, npcId);
+      toolCalls.push({
+        tool: 'stop_follow',
+        args,
+        observation: cleared
+          ? `已停止跟随${args.reason ? `（${args.reason}）` : ''}`
+          : '当前未在跟随，无需停止',
       });
       return;
     }

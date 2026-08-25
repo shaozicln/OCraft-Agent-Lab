@@ -71,4 +71,6 @@ services:
 
 volumes:
   ocraft_pgdata:
-    name: ocraft_ocraft_pgdata
+    # 沿用早期 server/compose 的卷，避免再起一套空库
+    external: true
+    name: server_ocraft_pgdata

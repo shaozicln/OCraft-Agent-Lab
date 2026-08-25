@@ -1,11 +1,15 @@
 import type OpenAI from 'openai';
 import type { StoryPack } from '@ocraft/shared';
 
-/** OpenAI 兼容的受控工具定义：软数值 + 强只读指令 */
+/** OpenAI 兼容的受控工具定义：软数值 + 场景跟随 + 强只读指令 */
 export function buildNpcToolDefinitions(
   pack: StoryPack,
+  selfNpcId?: string,
 ): OpenAI.Chat.ChatCompletionTool[] {
   const num = pack.world.numeric_tools;
+  const others = pack.npcs
+    .filter((n) => n.npc_id !== selfNpcId)
+    .map((n) => `${n.npc_id}（${n.name}）`);
   return [
     {
       type: 'function',
@@ -130,6 +134,61 @@ export function buildNpcToolDefinitions(
             },
           },
           required: ['query'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'follow_player',
+        description: [
+          '【场景行动】开始跟随玩家移动（会真的在场景里走动，不只是嘴上说）。',
+          'mode=companion：玩家说「跟着我」等——一直跟着，直到 stop_follow。',
+          'mode=to_npc：玩家说「一起去找某人」且你答应——跟到靠近目标 NPC 后自动停下。',
+          others.length
+            ? `to_npc 时 target_npc_id 必须是：${others.join('、')}。`
+            : '当前无其他可跟目标 NPC。',
+          '答应跟随/同行时必须调用；不要只在台词里说跟着。',
+        ].join(''),
+        parameters: {
+          type: 'object',
+          properties: {
+            mode: {
+              type: 'string',
+              enum: ['companion', 'to_npc'],
+              description: 'companion=一直跟；to_npc=跟到某 NPC 旁停下',
+            },
+            target_npc_id: {
+              type: 'string',
+              description: 'mode=to_npc 时必填的目标 npc_id',
+            },
+            reason: {
+              type: 'string',
+              description: '简短原因',
+            },
+          },
+          required: ['mode'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'stop_follow',
+        description: [
+          '【场景行动】停止跟随玩家（站定等待）。',
+          '玩家说「等等」「先停一下」「你在这等我」等时调用。',
+          '若尚未在跟随则不必调用。',
+        ].join(''),
+        parameters: {
+          type: 'object',
+          properties: {
+            reason: {
+              type: 'string',
+              description: '简短原因',
+            },
+          },
+          required: [],
         },
       },
     },

@@ -15,6 +15,10 @@ import {
   INTERACTION_DISTANCE,
   PLAYER_SPEED,
 } from '@/config/game';
+import {
+  getNpcScenePose,
+  setPlayerScenePose,
+} from '@/lib/scenePositions';
 
 export type NearbyNpc = { npcId: string; distance: number };
 
@@ -228,11 +232,14 @@ export function Player({
     camera.lookAt(lookTarget.current);
 
     const playerPos = groupRef.current.position;
+    setPlayerScenePose(px, py, pz, modelYaw.current);
     const nearby: NearbyNpc[] = [];
     for (const n of npcSpawnsRef.current) {
-      const d = playerPos.distanceTo(
-        npcScratch.current.set(n.position[0], n.position[1], n.position[2]),
-      );
+      const live = getNpcScenePose(n.npcId);
+      const nx = live?.x ?? n.position[0];
+      const ny = live?.y ?? n.position[1];
+      const nz = live?.z ?? n.position[2];
+      const d = playerPos.distanceTo(npcScratch.current.set(nx, ny, nz));
       if (d < INTERACTION_DISTANCE) {
         nearby.push({ npcId: n.npcId, distance: d });
       }

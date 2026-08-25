@@ -20,6 +20,11 @@ export declare const playerChatPayloadSchema: z.ZodObject<{
 export declare const requestNpcStatePayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
 }, z.core.$strip>;
+/** 客户端：to_npc 跟随已到达目标旁，请求服务端清跟随状态 */
+export declare const npcFollowArrivedPayloadSchema: z.ZodObject<{
+    npcId: z.ZodString;
+    target_npc_id: z.ZodString;
+}, z.core.$strip>;
 /** 按需请求：当前剧情下玩家可选回复建议（点击填入，不自动发送） */
 export declare const requestChatSuggestionsPayloadSchema: z.ZodObject<{
     npcId: z.ZodString;
@@ -99,6 +104,14 @@ export declare const toolCallResultSchema: z.ZodObject<{
     args: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     observation: z.ZodString;
 }, z.core.$strip>;
+/** NPC 跟随玩家（客户端位移用） */
+export declare const npcFollowStateSchema: z.ZodUnion<readonly [z.ZodObject<{
+    mode: z.ZodLiteral<"companion">;
+}, z.core.$strip>, z.ZodObject<{
+    mode: z.ZodLiteral<"to_npc">;
+    target_npc_id: z.ZodString;
+}, z.core.$strip>]>;
+export type NpcFollowState = z.infer<typeof npcFollowStateSchema>;
 export declare const npcStateUpdateSchema: z.ZodObject<{
     npcId: z.ZodString;
     name: z.ZodOptional<z.ZodString>;
@@ -109,6 +122,12 @@ export declare const npcStateUpdateSchema: z.ZodObject<{
     current_status: z.ZodOptional<z.ZodString>;
     chapter_state: z.ZodOptional<z.ZodString>;
     story_flags: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
+    follow: z.ZodOptional<z.ZodNullable<z.ZodUnion<readonly [z.ZodObject<{
+        mode: z.ZodLiteral<"companion">;
+    }, z.core.$strip>, z.ZodObject<{
+        mode: z.ZodLiteral<"to_npc">;
+        target_npc_id: z.ZodString;
+    }, z.core.$strip>]>>>;
     toolCalls: z.ZodOptional<z.ZodArray<z.ZodObject<{
         tool: z.ZodString;
         args: z.ZodRecord<z.ZodString, z.ZodUnknown>;
@@ -556,6 +575,7 @@ export declare const archiveRenamedEventSchema: z.ZodObject<{
 }, z.core.$strip>;
 export type PlayerChatPayload = z.infer<typeof playerChatPayloadSchema>;
 export type RequestNpcStatePayload = z.infer<typeof requestNpcStatePayloadSchema>;
+export type NpcFollowArrivedPayload = z.infer<typeof npcFollowArrivedPayloadSchema>;
 export type RequestChatSuggestionsPayload = z.infer<typeof requestChatSuggestionsPayloadSchema>;
 export type ChatSuggestionsEvent = z.infer<typeof chatSuggestionsEventSchema>;
 export type NpcStreamEvent = z.infer<typeof npcStreamEventSchema>;

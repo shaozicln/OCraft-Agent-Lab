@@ -4,6 +4,7 @@ import { DbModule } from '../db/db.module';
 import { GameGateway } from './game.gateway';
 import { ConversationService } from './conversation.service';
 import { ConversationArchiveService } from './conversation-archive.service';
+import { NpcFollowService } from './npc-follow.service';
 import { AgentHarnessService } from '../agent/core/agent-harness.service';
 import { NpcExchangeService } from '../agent/multiagent/npc-exchange.service';
 import { NpcAsideService } from '../agent/multiagent/npc-aside.service';
@@ -21,6 +22,7 @@ import { StoryModule } from '../story/story.module';
     GameGateway,
     ConversationService,
     ConversationArchiveService,
+    NpcFollowService,
     RagService,
     AgentHarnessService,
     NpcExchangeService,

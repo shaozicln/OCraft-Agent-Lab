@@ -23,5 +23,6 @@ services:
 
 volumes:
   ocraft_pgdata:
-    # 与根目录 compose 同名 volume，避免两套库
-    name: ocraft_ocraft_pgdata
+    # 与根目录 compose 同一旧卷
+    external: true
+    name: server_ocraft_pgdata

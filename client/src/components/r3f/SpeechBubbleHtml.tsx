@@ -2,15 +2,38 @@
 
 import { Html } from '@react-three/drei';
 
+const CHARS_PER_LINE = 10;
+const MAX_LINES = 3;
+
+/** 一行最多 10 字、最多 3 行，超出末尾用 ... */
+export function formatSpeechBubbleText(raw: string): string {
+  const chars = Array.from(raw.replace(/\s+/g, ' ').trim());
+  if (chars.length === 0) return '';
+  const capacity = CHARS_PER_LINE * MAX_LINES;
+  const display =
+    chars.length > capacity
+      ? [...chars.slice(0, capacity - 3), '.', '.', '.']
+      : chars;
+  const lines: string[] = [];
+  for (let i = 0; i < display.length; i += CHARS_PER_LINE) {
+    lines.push(display.slice(i, i + CHARS_PER_LINE).join(''));
+  }
+  return lines.join('\n');
+}
+
 /** 头顶台词气泡（drei Html）；无文案时不渲染 */
 export function SpeechBubbleHtml({
   text,
-  anchorY = 1.55,
+  /** 相对角色原点的高度；略高于头顶留空隙 */
+  anchorY = 1.95,
 }: {
   text: string | null;
   anchorY?: number;
 }) {
   if (!text) return null;
+  const display = formatSpeechBubbleText(text);
+  if (!display) return null;
+
   return (
     <Html
       position={[0, anchorY, 0]}
@@ -20,12 +43,17 @@ export function SpeechBubbleHtml({
       style={{ pointerEvents: 'none' }}
     >
       <div
-        className="max-w-[11rem] rounded-2xl border border-white/20 bg-slate-900/90 px-2.5 py-1.5 text-center text-[11px] leading-snug text-slate-50 shadow-lg"
+        className="pointer-events-none px-2 py-1 text-center text-[12px] font-medium leading-[1.35] text-white"
         style={{
-          backdropFilter: 'blur(4px)',
+          background: '#000',
+          color: '#fff',
+          whiteSpace: 'pre',
+          writingMode: 'horizontal-tb',
+          borderRadius: 4,
+          maxWidth: '11em',
         }}
       >
-        {text}
+        {display}
       </div>
     </Html>
   );

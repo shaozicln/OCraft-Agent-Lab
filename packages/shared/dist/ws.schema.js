@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.runNpcSelectionEventSchema = exports.setRunNpcSelectionPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV3Schema = exports.conversationSnapshotV2Schema = exports.SCENE_PLAYER_DISPLAY_NAME = exports.SCENE_PLAYER_ID = exports.sceneUtteranceSchema = exports.sceneUtteranceKindSchema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.labProgressEventSchema = exports.labPeerLineEventSchema = exports.endingReachedEventSchema = exports.npcAsideEventSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.autoplayNextEventSchema = exports.autoplayBeatLineEventSchema = exports.requestAutoplayNextPayloadSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
+exports.archiveRenamedEventSchema = exports.newRunStartedEventSchema = exports.storyMapEventSchema = exports.storyMapEdgeSchema = exports.requestStoryMapPayloadSchema = exports.renameArchivePayloadSchema = exports.startNewRunPayloadSchema = exports.runNpcSelectionEventSchema = exports.setRunNpcSelectionPayloadSchema = exports.conversationLoadedEventSchema = exports.conversationArchivesListEventSchema = exports.conversationSavedEventSchema = exports.conversationArchiveSummarySchema = exports.conversationSnapshotSummarySchema = exports.conversationSnapshotV3Schema = exports.conversationSnapshotV2Schema = exports.SCENE_PLAYER_DISPLAY_NAME = exports.SCENE_PLAYER_ID = exports.sceneUtteranceSchema = exports.sceneUtteranceKindSchema = exports.archivedNpcSlotSchema = exports.archiveScopeSchema = exports.archivedMessageSchema = exports.archivedNpcStateSchema = exports.loadConversationArchivePayloadSchema = exports.listConversationArchivesPayloadSchema = exports.saveConversationPayloadSchema = exports.labProgressEventSchema = exports.labPeerLineEventSchema = exports.endingReachedEventSchema = exports.npcAsideEventSchema = exports.npcExchangeEventSchema = exports.npcExchangeLineSchema = exports.npcErrorEventSchema = exports.npcStateUpdateSchema = exports.npcFollowStateSchema = exports.toolCallResultSchema = exports.npcStreamEventSchema = exports.autoplayNextEventSchema = exports.autoplayBeatLineEventSchema = exports.requestAutoplayNextPayloadSchema = exports.chatSuggestionsEventSchema = exports.requestChatSuggestionsPayloadSchema = exports.npcFollowArrivedPayloadSchema = exports.requestNpcStatePayloadSchema = exports.playerChatPayloadSchema = exports.playerIdSchema = exports.chapterStateSchema = void 0;
 const zod_1 = require("zod");
 const player_note_schema_1 = require("./player-note.schema");
 const story_schema_1 = require("./story.schema");
@@ -32,6 +32,11 @@ exports.playerChatPayloadSchema = zod_1.z.object({
 });
 exports.requestNpcStatePayloadSchema = zod_1.z.object({
     npcId: zod_1.z.string().min(1).max(64),
+});
+/** 客户端：to_npc 跟随已到达目标旁，请求服务端清跟随状态 */
+exports.npcFollowArrivedPayloadSchema = zod_1.z.object({
+    npcId: zod_1.z.string().min(1).max(64),
+    target_npc_id: zod_1.z.string().min(1).max(64),
 });
 /** 按需请求：当前剧情下玩家可选回复建议（点击填入，不自动发送） */
 exports.requestChatSuggestionsPayloadSchema = zod_1.z.object({
@@ -99,6 +104,16 @@ exports.toolCallResultSchema = zod_1.z.object({
     args: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()),
     observation: zod_1.z.string(),
 });
+/** NPC 跟随玩家（客户端位移用） */
+exports.npcFollowStateSchema = zod_1.z.union([
+    zod_1.z.object({
+        mode: zod_1.z.literal('companion'),
+    }),
+    zod_1.z.object({
+        mode: zod_1.z.literal('to_npc'),
+        target_npc_id: zod_1.z.string(),
+    }),
+]);
 exports.npcStateUpdateSchema = zod_1.z.object({
     npcId: zod_1.z.string(),
     name: zod_1.z.string().optional(),
@@ -110,6 +125,8 @@ exports.npcStateUpdateSchema = zod_1.z.object({
     chapter_state: exports.chapterStateSchema.optional(),
     /** 当前会话 story flags（多 NPC 出场判定用） */
     story_flags: zod_1.z.record(zod_1.z.string(), zod_1.z.string()).optional(),
+    /** null = 未跟随 */
+    follow: exports.npcFollowStateSchema.nullable().optional(),
     toolCalls: zod_1.z.array(exports.toolCallResultSchema).optional(),
 });
 exports.npcErrorEventSchema = zod_1.z.object({
