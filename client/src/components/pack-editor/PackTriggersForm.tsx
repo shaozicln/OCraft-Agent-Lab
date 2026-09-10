@@ -346,6 +346,7 @@ export function PackTriggersForm({
                       value.npcs[1]?.npc_id ?? value.npcs[0]?.npc_id ?? 'npc_b',
                     ],
                     beat_hints: [],
+                    fallback_lines: [],
                     set_flags: [],
                     once: true,
                   },

@@ -1,49 +1,21 @@
 /* OCraft settings — “场记台” shell (scoped; does not restyle game HUD) */
 
 .settings-shell {
-  /* cue：小面积品牌点；btn：主按钮（与蓝黑控制台更和谐） */
-  --set-gel: #9a7b3c;
-  --set-gel-soft: color-mix(in srgb, var(--set-gel) 16%, transparent);
-  --set-btn: #1e293b;
-  --set-btn-fg: #f8fafc;
+  --set-gel: var(--ui-accent);
+  --set-gel-soft: var(--ui-accent-muted);
+  --set-btn: var(--ui-accent);
+  --set-btn-fg: var(--ui-accent-fg);
   --set-rail: color-mix(in srgb, var(--ui-panel-solid) 92%, transparent);
   --set-display: var(--font-settings-display), var(--font-geist-sans),
     'Songti SC', serif;
-  --ui-accent: var(--set-btn);
-  --ui-accent-fg: var(--set-btn-fg);
   min-height: 100vh;
   color: var(--ui-fg);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--set-gel) 5%, var(--ui-bg)) 0%,
-      var(--ui-bg) 28%,
-      var(--ui-bg) 100%
-    );
-}
-
-html[data-theme='dark'] .settings-shell {
-  --set-gel: #8b9cb3;
-  --set-gel-soft: color-mix(in srgb, var(--set-gel) 16%, transparent);
-  /* 雾面浅钮：代替土黄主按钮，贴合蓝黑底 */
-  --set-btn: #e2e8f0;
-  --set-btn-fg: #0f172a;
-  --ui-accent: var(--set-btn);
-  --ui-accent-fg: var(--set-btn-fg);
+  background: var(--ui-bg);
 }
 
 .settings-shell__grain {
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-html[data-theme='dark'] .settings-shell__grain {
-  opacity: 0.055;
+  display: none;
 }
 
 .settings-shell__inner {
@@ -118,7 +90,7 @@ html[data-theme='dark'] .settings-shell__grain {
 }
 
 .settings-top__chip:focus-visible {
-  outline: 2px solid var(--set-gel);
+  outline: 2px solid var(--ui-ring);
   outline-offset: 2px;
 }
 
@@ -237,20 +209,22 @@ html[data-theme='dark'] .settings-shell__grain {
 
 .settings-cta {
   flex-shrink: 0;
-  border-radius: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ui-radius-md);
   padding: 0.55rem 0.95rem;
   font-size: 0.875rem;
   font-weight: 600;
-  background: var(--set-btn);
-  color: var(--set-btn-fg);
+  background: var(--ui-accent);
+  color: var(--ui-accent-fg);
   transition:
-    filter 0.18s ease,
-    transform 0.18s ease,
-    background-color 0.18s ease;
+    background-color var(--ui-duration) var(--ui-ease),
+    transform var(--ui-duration) var(--ui-ease);
 }
 
 .settings-cta:hover {
-  filter: brightness(1.04);
+  background: var(--ui-accent-hover);
 }
 
 .settings-cta:active {
@@ -258,7 +232,7 @@ html[data-theme='dark'] .settings-shell__grain {
 }
 
 .settings-cta:focus-visible {
-  outline: 2px solid var(--set-gel);
+  outline: 2px solid var(--ui-ring);
   outline-offset: 3px;
 }
 
@@ -398,7 +372,7 @@ html[data-theme='dark'] .settings-nav-btn[data-active='true'] {
 }
 
 .settings-nav-btn:focus-visible {
-  outline: 2px solid var(--set-gel);
+  outline: 2px solid var(--ui-ring);
   outline-offset: 2px;
 }
 

@@ -80,7 +80,7 @@ export function TextInput({
     <input
       type={type}
       readOnly={readOnly}
-      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${placeholderClass}`}
+      className={`w-full rounded-lg border px-3 py-2 text-sm ${placeholderClass}`}
       style={{
         ...inputStyle,
         opacity: readOnly ? 0.7 : 1,
@@ -104,7 +104,7 @@ export function NumInput({
   return (
     <input
       type="number"
-      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${placeholderClass}`}
+      className={`w-full rounded-lg border px-3 py-2 text-sm ${placeholderClass}`}
       style={inputStyle}
       value={Number.isFinite(value) ? value : 0}
       placeholder={placeholder}
@@ -126,7 +126,7 @@ export function TextAreaInput({
 }) {
   return (
     <textarea
-      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${placeholderClass}`}
+      className={`w-full rounded-lg border px-3 py-2 text-sm ${placeholderClass}`}
       style={inputStyle}
       rows={rows}
       value={value}
@@ -178,7 +178,7 @@ export function StringListInput({
 }) {
   return (
     <textarea
-      className={`w-full rounded-lg border px-3 py-2 font-mono text-xs outline-none ${placeholderClass}`}
+      className={`w-full rounded-lg border px-3 py-2 font-mono text-xs ${placeholderClass}`}
       style={inputStyle}
       rows={Math.min(8, Math.max(2, value.length + 1))}
       value={value.join('\n')}

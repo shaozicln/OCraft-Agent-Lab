@@ -1,0 +1,320 @@
+/* OCraft design tokens — palettes × light/dark. Never #000 / #fff. */
+
+:root {
+  --ui-font: var(--font-geist-sans), system-ui, sans-serif;
+  --ui-font-display: var(--font-settings-display), var(--font-geist-sans), serif;
+  --ui-font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --ui-radius-sm: 0.375rem;
+  --ui-radius-md: 0.625rem;
+  --ui-radius-lg: 0.9rem;
+  --ui-radius-xl: 1.15rem;
+  --ui-space-1: 0.25rem;
+  --ui-space-2: 0.5rem;
+  --ui-space-3: 0.75rem;
+  --ui-space-4: 1rem;
+  --ui-space-5: 1.25rem;
+  --ui-space-6: 1.5rem;
+  --ui-duration: 180ms;
+  --ui-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ui-scene: #efebe4;
+  --ui-focus: var(--ui-accent);
+}
+
+/* ── 雾蓝 ── */
+html[data-palette='mist'][data-theme='light'] {
+  --ui-bg: #eef2f6;
+  --ui-bg-elevated: #f5f8fb;
+  --ui-panel: rgba(245, 248, 251, 0.9);
+  --ui-panel-solid: #f5f8fb;
+  --ui-fg: #1c2a38;
+  --ui-fg-muted: #5b6b7a;
+  --ui-border: rgba(28, 42, 56, 0.12);
+  --ui-accent: #3d6a82;
+  --ui-accent-hover: #335a70;
+  --ui-accent-muted: color-mix(in srgb, #3d6a82 14%, transparent);
+  --ui-accent-fg: #f3f7f9;
+  --ui-danger: #b54a4a;
+  --ui-danger-fg: #f8f1f1;
+  --ui-warn: #8a6a32;
+  --ui-success: #3d6b52;
+  --ui-aside: #5a6a88;
+  --ui-whisper: #6a5a78;
+  --ui-input: #f8fafc;
+  --ui-overlay: rgba(28, 42, 56, 0.28);
+  --ui-shadow: 0 8px 28px rgba(28, 42, 56, 0.08);
+  --ui-ring: #3d6a82;
+}
+
+html[data-palette='mist'][data-theme='dark'] {
+  --ui-bg: #1a232c;
+  --ui-bg-elevated: #24303a;
+  --ui-panel: rgba(36, 48, 58, 0.9);
+  --ui-panel-solid: #24303a;
+  --ui-fg: #e4eaf0;
+  --ui-fg-muted: #93a1ae;
+  --ui-border: rgba(228, 234, 240, 0.12);
+  --ui-accent: #8bb0c4;
+  --ui-accent-hover: #9dc0d2;
+  --ui-accent-muted: color-mix(in srgb, #8bb0c4 16%, transparent);
+  --ui-accent-fg: #152028;
+  --ui-danger: #d88a8a;
+  --ui-danger-fg: #2a1c1c;
+  --ui-warn: #d4b878;
+  --ui-success: #8bb89a;
+  --ui-aside: #a8b4cc;
+  --ui-whisper: #b8a8c8;
+  --ui-input: #1e2a34;
+  --ui-overlay: rgba(10, 14, 18, 0.48);
+  --ui-shadow: 0 10px 32px rgba(8, 12, 16, 0.38);
+  --ui-ring: #8bb0c4;
+}
+
+/* ── 鼠尾草绿 ── */
+html[data-palette='sage'][data-theme='light'] {
+  --ui-bg: #eef2ee;
+  --ui-bg-elevated: #f5f8f5;
+  --ui-panel: rgba(245, 248, 245, 0.9);
+  --ui-panel-solid: #f5f8f5;
+  --ui-fg: #243028;
+  --ui-fg-muted: #5a6b5e;
+  --ui-border: rgba(36, 48, 40, 0.12);
+  --ui-accent: #4a6b54;
+  --ui-accent-hover: #3d5a46;
+  --ui-accent-muted: color-mix(in srgb, #4a6b54 14%, transparent);
+  --ui-accent-fg: #f3f7f4;
+  --ui-danger: #b54a4a;
+  --ui-danger-fg: #f8f1f1;
+  --ui-warn: #8a6a32;
+  --ui-success: #3d6b52;
+  --ui-aside: #5a6a88;
+  --ui-whisper: #6a5a78;
+  --ui-input: #f8faf8;
+  --ui-overlay: rgba(36, 48, 40, 0.28);
+  --ui-shadow: 0 8px 28px rgba(36, 48, 40, 0.08);
+  --ui-ring: #4a6b54;
+}
+
+html[data-palette='sage'][data-theme='dark'] {
+  --ui-bg: #1b221c;
+  --ui-bg-elevated: #252e26;
+  --ui-panel: rgba(37, 46, 38, 0.9);
+  --ui-panel-solid: #252e26;
+  --ui-fg: #e4ece6;
+  --ui-fg-muted: #96a698;
+  --ui-border: rgba(228, 236, 230, 0.12);
+  --ui-accent: #8ba992;
+  --ui-accent-hover: #9dbaa4;
+  --ui-accent-muted: color-mix(in srgb, #8ba992 16%, transparent);
+  --ui-accent-fg: #152018;
+  --ui-danger: #d88a8a;
+  --ui-danger-fg: #2a1c1c;
+  --ui-warn: #d4b878;
+  --ui-success: #8bb89a;
+  --ui-aside: #a8b4cc;
+  --ui-whisper: #b8a8c8;
+  --ui-input: #1e281f;
+  --ui-overlay: rgba(10, 14, 11, 0.48);
+  --ui-shadow: 0 10px 32px rgba(8, 12, 9, 0.38);
+  --ui-ring: #8ba992;
+}
+
+/* ── 暖沙 ── */
+html[data-palette='sand'][data-theme='light'] {
+  --ui-bg: #f4efe8;
+  --ui-bg-elevated: #faf6f0;
+  --ui-panel: rgba(250, 246, 240, 0.92);
+  --ui-panel-solid: #faf6f0;
+  --ui-fg: #3a3228;
+  --ui-fg-muted: #6e6356;
+  --ui-border: rgba(58, 50, 40, 0.12);
+  --ui-accent: #8a6a4a;
+  --ui-accent-hover: #755a3e;
+  --ui-accent-muted: color-mix(in srgb, #8a6a4a 14%, transparent);
+  --ui-accent-fg: #f8f4ee;
+  --ui-danger: #b54a4a;
+  --ui-danger-fg: #f8f1f1;
+  --ui-warn: #8a6a32;
+  --ui-success: #4a6b54;
+  --ui-aside: #6a5a48;
+  --ui-whisper: #7a5a68;
+  --ui-input: #fcf9f5;
+  --ui-overlay: rgba(58, 50, 40, 0.28);
+  --ui-shadow: 0 8px 28px rgba(58, 50, 40, 0.08);
+  --ui-ring: #8a6a4a;
+}
+
+html[data-palette='sand'][data-theme='dark'] {
+  --ui-bg: #241f1a;
+  --ui-bg-elevated: #2e2822;
+  --ui-panel: rgba(46, 40, 34, 0.92);
+  --ui-panel-solid: #2e2822;
+  --ui-fg: #ece6dc;
+  --ui-fg-muted: #a89c8c;
+  --ui-border: rgba(236, 230, 220, 0.12);
+  --ui-accent: #c4a882;
+  --ui-accent-hover: #d2b894;
+  --ui-accent-muted: color-mix(in srgb, #c4a882 16%, transparent);
+  --ui-accent-fg: #221c16;
+  --ui-danger: #d88a8a;
+  --ui-danger-fg: #2a1c1c;
+  --ui-warn: #d4b878;
+  --ui-success: #8bb89a;
+  --ui-aside: #c4b49a;
+  --ui-whisper: #c4a8b0;
+  --ui-input: #2a241e;
+  --ui-overlay: rgba(12, 10, 8, 0.5);
+  --ui-shadow: 0 10px 32px rgba(8, 6, 4, 0.4);
+  --ui-ring: #c4a882;
+}
+
+/* ── 薰衣草灰 ── */
+html[data-palette='lavender'][data-theme='light'] {
+  --ui-bg: #f0eef3;
+  --ui-bg-elevated: #f7f5fa;
+  --ui-panel: rgba(247, 245, 250, 0.92);
+  --ui-panel-solid: #f7f5fa;
+  --ui-fg: #2c2834;
+  --ui-fg-muted: #655e70;
+  --ui-border: rgba(44, 40, 52, 0.12);
+  --ui-accent: #6a6280;
+  --ui-accent-hover: #585270;
+  --ui-accent-muted: color-mix(in srgb, #6a6280 14%, transparent);
+  --ui-accent-fg: #f5f3f8;
+  --ui-danger: #b54a4a;
+  --ui-danger-fg: #f8f1f1;
+  --ui-warn: #8a6a32;
+  --ui-success: #4a6b54;
+  --ui-aside: #5a6a88;
+  --ui-whisper: #6a5a78;
+  --ui-input: #faf8fc;
+  --ui-overlay: rgba(44, 40, 52, 0.28);
+  --ui-shadow: 0 8px 28px rgba(44, 40, 52, 0.08);
+  --ui-ring: #6a6280;
+}
+
+html[data-palette='lavender'][data-theme='dark'] {
+  --ui-bg: #201e26;
+  --ui-bg-elevated: #2a2732;
+  --ui-panel: rgba(42, 39, 50, 0.92);
+  --ui-panel-solid: #2a2732;
+  --ui-fg: #e8e4f0;
+  --ui-fg-muted: #a69eb4;
+  --ui-border: rgba(232, 228, 240, 0.12);
+  --ui-accent: #a89bb8;
+  --ui-accent-hover: #b8adc6;
+  --ui-accent-muted: color-mix(in srgb, #a89bb8 16%, transparent);
+  --ui-accent-fg: #1c1a22;
+  --ui-danger: #d88a8a;
+  --ui-danger-fg: #2a1c1c;
+  --ui-warn: #d4b878;
+  --ui-success: #8bb89a;
+  --ui-aside: #a8b4cc;
+  --ui-whisper: #b8a8c8;
+  --ui-input: #24202c;
+  --ui-overlay: rgba(10, 8, 14, 0.5);
+  --ui-shadow: 0 10px 32px rgba(8, 6, 12, 0.4);
+  --ui-ring: #a89bb8;
+}
+
+/* ── 玫瑰灰 ── */
+html[data-palette='rose'][data-theme='light'] {
+  --ui-bg: #f3eeee;
+  --ui-bg-elevated: #f9f5f5;
+  --ui-panel: rgba(249, 245, 245, 0.92);
+  --ui-panel-solid: #f9f5f5;
+  --ui-fg: #32282a;
+  --ui-fg-muted: #6e5e62;
+  --ui-border: rgba(50, 40, 42, 0.12);
+  --ui-accent: #8a5e68;
+  --ui-accent-hover: #754e58;
+  --ui-accent-muted: color-mix(in srgb, #8a5e68 14%, transparent);
+  --ui-accent-fg: #f8f3f4;
+  --ui-danger: #b54a4a;
+  --ui-danger-fg: #f8f1f1;
+  --ui-warn: #8a6a32;
+  --ui-success: #4a6b54;
+  --ui-aside: #6a5a68;
+  --ui-whisper: #7a5a68;
+  --ui-input: #fcf8f8;
+  --ui-overlay: rgba(50, 40, 42, 0.28);
+  --ui-shadow: 0 8px 28px rgba(50, 40, 42, 0.08);
+  --ui-ring: #8a5e68;
+}
+
+html[data-palette='rose'][data-theme='dark'] {
+  --ui-bg: #241c1e;
+  --ui-bg-elevated: #2e2426;
+  --ui-panel: rgba(46, 36, 38, 0.92);
+  --ui-panel-solid: #2e2426;
+  --ui-fg: #ece4e6;
+  --ui-fg-muted: #b09aa0;
+  --ui-border: rgba(236, 228, 230, 0.12);
+  --ui-accent: #c49aa2;
+  --ui-accent-hover: #d2aab2;
+  --ui-accent-muted: color-mix(in srgb, #c49aa2 16%, transparent);
+  --ui-accent-fg: #22181a;
+  --ui-danger: #d88a8a;
+  --ui-danger-fg: #2a1c1c;
+  --ui-warn: #d4b878;
+  --ui-success: #8bb89a;
+  --ui-aside: #c4b4c0;
+  --ui-whisper: #c4a8b0;
+  --ui-input: #2a2022;
+  --ui-overlay: rgba(12, 8, 9, 0.5);
+  --ui-shadow: 0 10px 32px rgba(8, 4, 6, 0.4);
+  --ui-ring: #c49aa2;
+}
+
+/* ── 青灰 ── */
+html[data-palette='teal'][data-theme='light'] {
+  --ui-bg: #ecf1f1;
+  --ui-bg-elevated: #f4f8f8;
+  --ui-panel: rgba(244, 248, 248, 0.92);
+  --ui-panel-solid: #f4f8f8;
+  --ui-fg: #1e2c2c;
+  --ui-fg-muted: #567070;
+  --ui-border: rgba(30, 44, 44, 0.12);
+  --ui-accent: #3e6e6c;
+  --ui-accent-hover: #325c5a;
+  --ui-accent-muted: color-mix(in srgb, #3e6e6c 14%, transparent);
+  --ui-accent-fg: #f2f7f7;
+  --ui-danger: #b54a4a;
+  --ui-danger-fg: #f8f1f1;
+  --ui-warn: #8a6a32;
+  --ui-success: #3d6b52;
+  --ui-aside: #4a6a78;
+  --ui-whisper: #5a5a78;
+  --ui-input: #f7fbfb;
+  --ui-overlay: rgba(30, 44, 44, 0.28);
+  --ui-shadow: 0 8px 28px rgba(30, 44, 44, 0.08);
+  --ui-ring: #3e6e6c;
+}
+
+html[data-palette='teal'][data-theme='dark'] {
+  --ui-bg: #1a2323;
+  --ui-bg-elevated: #243030;
+  --ui-panel: rgba(36, 48, 48, 0.92);
+  --ui-panel-solid: #243030;
+  --ui-fg: #e2ecec;
+  --ui-fg-muted: #92a8a8;
+  --ui-border: rgba(226, 236, 236, 0.12);
+  --ui-accent: #7aaba8;
+  --ui-accent-hover: #8cbab8;
+  --ui-accent-muted: color-mix(in srgb, #7aaba8 16%, transparent);
+  --ui-accent-fg: #142020;
+  --ui-danger: #d88a8a;
+  --ui-danger-fg: #2a1c1c;
+  --ui-warn: #d4b878;
+  --ui-success: #8bb89a;
+  --ui-aside: #a8c4cc;
+  --ui-whisper: #b8a8c8;
+  --ui-input: #1e2a2a;
+  --ui-overlay: rgba(8, 12, 12, 0.5);
+  --ui-shadow: 0 10px 32px rgba(4, 8, 8, 0.4);
+  --ui-ring: #7aaba8;
+}
+
+html {
+  --background: var(--ui-bg);
+  --foreground: var(--ui-fg);
+}

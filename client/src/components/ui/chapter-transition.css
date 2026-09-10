@@ -18,20 +18,13 @@
   min-width: min(18rem, calc(100vw - 2rem));
   max-width: 22rem;
   padding: 0.85rem 1.35rem 1rem;
-  border-radius: 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--ui-accent, #38bdf8) 28%, #334155);
-  background:
-    linear-gradient(
-      165deg,
-      color-mix(in srgb, var(--ui-accent, #38bdf8) 12%, #0f172a) 0%,
-      #0f172a 55%,
-      #020617 100%
-    );
-  box-shadow:
-    0 10px 28px rgb(2 6 23 / 45%),
-    0 0 0 1px rgb(15 23 42 / 40%) inset;
-  color: #f1f5f9;
+  border-radius: var(--ui-radius-lg);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-panel);
+  box-shadow: var(--ui-shadow);
+  color: var(--ui-fg);
   text-align: center;
+  backdrop-filter: blur(14px);
   transform: translateY(calc(-100% - 1.25rem));
   opacity: 0;
   will-change: transform, opacity;
@@ -77,9 +70,9 @@
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: 0.7rem;
   font-weight: 500;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--ui-accent, #38bdf8) 88%, #e2e8f0);
+  color: var(--ui-accent);
 }
 
 .chapter-cue__title {
@@ -87,7 +80,16 @@
   max-width: 20rem;
   font-size: clamp(1.05rem, 2.4vw, 1.35rem);
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   line-height: 1.35;
-  color: #f8fafc;
+  color: var(--ui-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chapter-cue[data-phase='in'] .chapter-cue__card,
+  .chapter-cue[data-phase='out'] .chapter-cue__card {
+    animation: none;
+    transform: translateY(0);
+    opacity: 1;
+  }
 }

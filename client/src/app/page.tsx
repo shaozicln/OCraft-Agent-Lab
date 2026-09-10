@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isNpcPresent } from '@ocraft/shared';
 import { AuthGate } from '@/components/ui/AuthGate';
+import { ScreenState } from '@/components/ui/ScreenState';
 import { GameCanvas, type SceneNpc } from '@/components/r3f/GameCanvas';
+import '@/components/ui/game-overlay.css';
 import { type HumanoidAnimation } from '@/components/r3f/Humanoid';
 import { ChapterTransition, type ChapterCue } from '@/components/ui/ChapterTransition';
 import { ChatBox } from '@/components/ui/ChatBox';
@@ -460,24 +462,16 @@ function GamePageInner({
 
   // 包加载完后不再因切换 NPC 整页卸载 Canvas（否则玩家位置/视角会被重置）
   if (packLoading) {
-    return (
-      <main
-        className="flex h-screen w-screen items-center justify-center"
-        style={{ background: 'var(--ui-bg)', color: 'var(--ui-fg-muted)' }}
-      >
-        加载剧情包…
-      </main>
-    );
+    return <ScreenState kind="loading" title="正在加载剧情包" />;
   }
 
   if (packError || !runtime) {
     return (
-      <main
-        className="flex h-screen w-screen items-center justify-center"
-        style={{ background: 'var(--ui-bg)', color: 'var(--ui-danger)' }}
-      >
-        无法加载剧情包：{packError ?? 'unknown'}（请确认 server 已启动）
-      </main>
+      <ScreenState
+        kind="error"
+        title="无法加载剧情包"
+        detail={`${packError ?? '未知错误'}。请确认服务已启动后刷新。`}
+      />
     );
   }
 
@@ -510,7 +504,7 @@ function GamePageInner({
   const hintNames = visibleNpcs.map((n) => n.name).join(' / ') || chatNpcName;
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-white">
+    <main className="game-shell">
       <GameCanvas
         npcs={sceneNpcs}
         onPlayerMove={handlePlayerMove}
@@ -525,22 +519,22 @@ function GamePageInner({
         onFollowArrive={reportFollowArrived}
       />
 
-      <div className="absolute top-4 left-4 z-30 space-y-2">
-        <div className="pointer-events-none space-y-1">
-          <h1 className="text-lg font-bold text-gray-800">
-            {runtime.selection.world_id}/{runtime.selection.pack_version_id}
-          </h1>
-          <p className="text-xs text-gray-500">
-            WASD 移动 · Esc 菜单 · 靠近 {hintNames} 按 F
-          </p>
-          <p
-            className={`text-xs ${connected ? 'text-emerald-600' : 'text-red-500'}`}
-          >
-            {connected ? '● 已连接服务器' : '○ 未连接服务器 (4000)'}
-          </p>
-          <p className="text-xs text-gray-400">当前账号：{username}</p>
+      <div className="game-hud-cluster">
+        <div className="game-status">
+          {!connected ? (
+            <p className="game-status__line game-status__line--alert">
+              未连接服务器
+            </p>
+          ) : null}
           {npcError ? (
-            <p className="text-xs text-amber-600">NPC 配置暂不可用：{npcError}</p>
+            <p className="game-status__line game-status__line--alert">
+              NPC 配置暂不可用
+            </p>
+          ) : null}
+          {!pointerLocked && !uiBlocking ? (
+            <p className="game-status__line">
+              WASD 移动 · 靠近 {hintNames} 按 F
+            </p>
           ) : null}
         </div>
 
@@ -555,30 +549,27 @@ function GamePageInner({
         />
       </div>
 
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+      <div className="game-chrome-right">
         {chapterHudText ? (
-          <p className="pointer-events-none rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-amber-800 shadow-sm">
-            {chapterHudText}
-          </p>
+          <p className="game-chip game-chip--label">{chapterHudText}</p>
         ) : null}
         <button
           type="button"
+          aria-label={menuOpen ? '关闭菜单' : '打开菜单'}
           onClick={() => {
             if (chatOpen) return;
             document.exitPointerLock();
             setMenuOpen((v) => !v);
           }}
-          className="rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs text-gray-600 shadow-sm hover:bg-gray-50"
+          className="game-chip game-chip--btn"
         >
-          Esc
+          菜单
         </button>
       </div>
 
       {!pointerLocked && !uiBlocking && (
-        <div className="pointer-events-none absolute top-1/2 left-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-          <p className="rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-sm text-gray-400/80">
-            点击画面锁定鼠标 · Esc 打开菜单
-          </p>
+        <div className="game-lock-hint">
+          <p>点击画面进入 · Esc 打开菜单</p>
         </div>
       )}
 

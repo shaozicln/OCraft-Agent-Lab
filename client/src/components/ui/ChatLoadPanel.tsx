@@ -113,22 +113,22 @@ export function ChatLoadPanel({
     <div className="pointer-events-auto absolute inset-0 z-50 flex items-end justify-center px-4 pb-48">
       <button
         type="button"
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-black/50"
         aria-label="关闭读档面板"
         onClick={onClose}
       />
-      <div className="relative flex max-h-80 w-full max-w-md flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-700 px-4 py-2">
+      <div className="relative flex max-h-80 w-full max-w-md flex-col overflow-hidden rounded-xl border border-hud-line bg-hud shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-hud-line px-4 py-2">
           <div className="min-w-0">
-            <span className="text-sm font-medium text-white">整局存档</span>
-            <p className="text-[11px] text-slate-500 truncate">
+            <span className="text-sm font-medium text-hud-fg">整局存档</span>
+            <p className="text-[11px] text-hud-muted truncate">
               每轮对话自动写入当前槽 · 「继续」= 当前局，「读取」= 换一局
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 px-2 py-1 text-xs text-slate-400 hover:text-white"
+            className="shrink-0 px-2 py-1 text-xs text-hud-muted hover:text-hud-fg"
           >
             关闭
           </button>
@@ -136,23 +136,23 @@ export function ChatLoadPanel({
 
         <div className="flex-1 space-y-2 overflow-y-auto px-2 py-2">
           {loading && (
-            <p className="py-4 text-center text-sm text-slate-400">
+            <p className="py-4 text-center text-sm text-hud-muted">
               加载存档列表…
             </p>
           )}
           {error && (
-            <p className="py-2 text-center text-sm text-red-400">{error}</p>
+            <p className="py-2 text-center text-sm text-hud-danger">{error}</p>
           )}
           {!loading && !error && sorted.length === 0 && (
             <div className="space-y-3 px-2 py-6 text-center">
-              <p className="text-sm text-slate-400">还没有存档槽</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-hud-muted">还没有存档槽</p>
+              <p className="text-xs text-hud-muted">
                 开聊后会自动创建；也可以直接新开一局。
               </p>
               {onNewRunFromStart && (
                 <button
                   type="button"
-                  className="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-500"
+                  className="rounded-lg bg-hud-accent px-4 py-2 text-sm text-hud-on-accent hover:bg-hud-accent"
                   onClick={() => {
                     onNewRunFromStart();
                     onClose();
@@ -180,7 +180,7 @@ export function ChatLoadPanel({
                 className={`overflow-hidden rounded-lg border ${
                   isCurrent
                     ? 'border-sky-500/70 bg-sky-950/40 ring-1 ring-sky-500/30'
-                    : 'border-slate-700 bg-slate-800/80'
+                    : 'border-hud-line bg-hud-elevated/80'
                 }`}
               >
                 <div
@@ -198,19 +198,19 @@ export function ChatLoadPanel({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="truncate text-sm font-medium text-white">
+                        <span className="truncate text-sm font-medium text-hud-fg">
                           {titleOf(archive)}
                         </span>
                         {isCurrent && (
-                          <span className="shrink-0 rounded bg-sky-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                          <span className="shrink-0 rounded bg-hud-accent px-1.5 py-0.5 text-[10px] font-medium text-hud-on-accent">
                             当前
                           </span>
                         )}
-                        <span className="shrink-0 rounded bg-emerald-950 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                        <span className="shrink-0 rounded bg-emerald-950 px-1.5 py-0.5 text-[10px] text-hud-aside">
                           自动保存
                         </span>
                       </div>
-                      <div className="mt-1 text-[11px] text-slate-400">
+                      <div className="mt-1 text-[11px] text-hud-muted">
                         {latest
                           ? `${latest.message_count} 条 · ${formatTime(latest.saved_at)}`
                           : formatTime(archive.session_started_at)}
@@ -226,8 +226,8 @@ export function ChatLoadPanel({
                       onClick={() => handlePrimary(archive)}
                       className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 ${
                         isCurrent
-                          ? 'bg-sky-600 text-white hover:bg-sky-500'
-                          : 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                          ? 'bg-hud-accent text-hud-on-accent hover:bg-hud-accent'
+                          : 'bg-hud-elevated text-hud-fg hover:bg-hud-line'
                       }`}
                     >
                       {isCurrent ? '继续' : '读取'}
@@ -235,10 +235,10 @@ export function ChatLoadPanel({
                   </div>
 
                   {older.length > 0 && (
-                    <div className="mt-2 border-t border-slate-700/80 pt-1.5">
+                    <div className="mt-2 border-t border-hud-line/80 pt-1.5">
                       <button
                         type="button"
-                        className="text-[11px] text-slate-500 hover:text-slate-300"
+                        className="text-[11px] text-hud-muted hover:text-hud-fg"
                         onClick={() =>
                           setExpandedOlder((prev) =>
                             prev === archive.filename ? null : archive.filename,
@@ -258,7 +258,7 @@ export function ChatLoadPanel({
                                 onClick={() =>
                                   onLoad(archive.filename, snap.index)
                                 }
-                                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-slate-400 hover:bg-slate-700/50 hover:text-slate-200"
+                                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-hud-muted hover:bg-hud-line/50 hover:text-hud-fg"
                               >
                                 <span>
                                   快照 #{snap.index + 1} · {snap.message_count}{' '}
@@ -282,14 +282,14 @@ export function ChatLoadPanel({
 
         {/* 新开一局：与读档列表隔离 */}
         {onNewRunFromStart && sorted.length > 0 && (
-          <div className="shrink-0 border-t border-slate-700 bg-slate-950/80 px-4 py-3">
-            <p className="text-[11px] text-slate-500">
-              新开会创建<strong className="text-slate-400">新槽</strong>
+          <div className="shrink-0 border-t border-hud-line bg-hud/80 px-4 py-3">
+            <p className="text-[11px] text-hud-muted">
+              新开会创建<strong className="text-hud-muted">新槽</strong>
               ，旧槽仍留在上方列表，不会覆盖删除。
             </p>
             <button
               type="button"
-              className="mt-2 w-full rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-200 hover:bg-amber-900/50"
+              className="mt-2 w-full rounded-lg border border-hud-warn/50 bg-amber-950/40 px-3 py-2 text-xs text-amber-200 hover:bg-amber-900/50"
               onClick={() => {
                 if (
                   window.confirm(
@@ -310,12 +310,12 @@ export function ChatLoadPanel({
       {menu && (
         <div
           ref={menuRef}
-          className="fixed z-[70] min-w-[8rem] rounded-lg border border-slate-600 bg-slate-800 py-1 shadow-xl"
+          className="fixed z-[70] min-w-[8rem] rounded-lg border border-hud-line bg-hud-elevated py-1 shadow-xl"
           style={{ left: menu.x, top: menu.y }}
         >
           <button
             type="button"
-            className="block w-full px-3 py-1.5 text-left text-xs text-white hover:bg-slate-700"
+            className="block w-full px-3 py-1.5 text-left text-xs text-hud-fg hover:bg-hud-line"
             onClick={() => {
               const arch = archives?.find((a) => a.filename === menu.filename);
               setRenameFor(menu.filename);
@@ -330,11 +330,11 @@ export function ChatLoadPanel({
 
       {renameFor && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-slate-600 bg-slate-900 p-4">
-            <h4 className="text-sm font-medium text-white">重命名存档</h4>
-            <p className="mt-1 text-xs text-slate-400">{renameFor}</p>
+          <div className="w-full max-w-sm rounded-xl border border-hud-line bg-hud p-4">
+            <h4 className="text-sm font-medium text-hud-fg">重命名存档</h4>
+            <p className="mt-1 text-xs text-hud-muted">{renameFor}</p>
             <input
-              className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none"
+              className="mt-3 w-full rounded-lg border border-hud-line bg-hud-elevated px-3 py-2 text-sm text-hud-fg outline-none"
               value={renameValue}
               maxLength={64}
               autoFocus
@@ -350,7 +350,7 @@ export function ChatLoadPanel({
             <div className="mt-3 flex justify-end gap-2">
               <button
                 type="button"
-                className="px-3 py-1.5 text-xs text-slate-400"
+                className="px-3 py-1.5 text-xs text-hud-muted"
                 onClick={() => setRenameFor(null)}
               >
                 取消
@@ -358,7 +358,7 @@ export function ChatLoadPanel({
               <button
                 type="button"
                 disabled={!renameValue.trim() || !onRename}
-                className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs text-white disabled:opacity-40"
+                className="rounded-lg bg-hud-accent px-3 py-1.5 text-xs text-hud-on-accent disabled:opacity-40"
                 onClick={() => {
                   if (!renameValue.trim() || !onRename) return;
                   onRename(renameFor, renameValue.trim());

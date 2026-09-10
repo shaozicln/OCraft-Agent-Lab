@@ -43,7 +43,7 @@ import {
   getLabPeerAgentsEnabled,
   setLabPeerAgentsEnabled,
 } from '@/lib/lab-settings';
-import { useTheme } from '@/theme/ThemeProvider';
+import { ThemePicker } from '@/components/ui/ThemePicker';
 import './settings.css';
 
 /** 题头拉丁：Literata 书刊感，字面更宽、更舒展 */
@@ -96,7 +96,6 @@ function SettingsInner({
   username: string;
   updateSession: (session: AuthSession) => void;
 }) {
-  const { theme, setTheme } = useTheme();
   const [tab, setTab] = useState<Tab>('packs');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -298,7 +297,6 @@ function SettingsInner({
       setPackDraft(res.pack);
       applyPackProfile(profile);
       setClarifySatisfied(false);
-      setMessage(`已加载 ${res.pack.version_dir}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载包失败');
     } finally {
@@ -335,7 +333,6 @@ function SettingsInner({
           { token, method: 'PUT', body: { pack } },
         );
         setPackDraft(res.pack);
-        setMessage(`已保存：${res.pack.version_dir}`);
         await refreshPacks();
       } catch (err) {
         setError(err instanceof Error ? err.message : '保存失败');
@@ -418,21 +415,6 @@ function SettingsInner({
       setClarifySatisfied(true);
       setClarifyOpen(false);
 
-      const summary =
-        res.applied_summary ??
-        (res.patch_notes.length > 0
-          ? `已写入草稿 ${res.patch_notes.length} 处`
-          : '没有写入改动');
-      pushGenToast({
-        kind: 'ok',
-        title:
-          res.patch_notes.length > 0
-            ? '澄清已写入草稿'
-            : '澄清未改动草稿',
-        detail: summary,
-      });
-      setMessage(summary);
-
       if (clarifyPendingAction === 'save') {
         await performSavePack(parsed.data);
       }
@@ -449,13 +431,9 @@ function SettingsInner({
   };
 
   const pushGenToast = useCallback((toast: Omit<GenToast, 'id'>) => {
+    if (toast.kind === 'ok') return;
     const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     setGenToasts((list) => [...list, { ...toast, id }]);
-    if (toast.kind === 'ok') {
-      window.setTimeout(() => {
-        setGenToasts((list) => list.filter((t) => t.id !== id));
-      }, 3200);
-    }
   }, []);
 
   const dismissGenToast = useCallback((id: string) => {
@@ -617,7 +595,6 @@ function SettingsInner({
               (ev.source === 'mock'
                 ? '流式生成完成（MOCK）。请检查后保存并选用。'
                 : '流式生成完成。请检查后保存并选用；个人信息需再点保存。');
-            setMessage(summary);
             if (ev.failedSections?.length) {
               setError(
                 `仍失败：${ev.failedSections
@@ -667,7 +644,6 @@ function SettingsInner({
         body: { worldId, packVersionId: versionDir },
       });
       setSelection(sel);
-      setMessage(`已选用：${sel.world_id}/${sel.pack_version_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '选用失败');
     } finally {
@@ -683,7 +659,6 @@ function SettingsInner({
         method: 'DELETE',
       });
       setSelection(sel);
-      setMessage('已恢复默认包');
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败');
     } finally {
@@ -711,7 +686,6 @@ function SettingsInner({
           blankContent: true,
         },
       });
-      setMessage(`已另存：${res.version_dir}`);
       setSaveAsName('');
       await refreshPacks();
       setEditWorldId(res.world_id);
@@ -744,7 +718,6 @@ function SettingsInner({
           description: newWorldDesc.trim() || undefined,
         },
       });
-      setMessage(`已新建世界：${res.world_id} / ${res.version_dir}`);
       setNewWorldId('');
       setNewWorldVersion('');
       setNewWorldDesc('');
@@ -830,7 +803,6 @@ function SettingsInner({
       });
       updateSession(session);
       await refreshAccount();
-      setMessage('账号已更新');
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
     } finally {
@@ -859,7 +831,6 @@ function SettingsInner({
         },
       });
       applyPackProfile(p);
-      setMessage('本世界个人信息已保存');
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存人设失败');
     } finally {
@@ -927,7 +898,7 @@ function SettingsInner({
             <div className="settings-top__full-inner">
               <div className="settings-top__row">
                 <div className="min-w-0">
-                  <p className="settings-top__brand">OCraft · Control</p>
+                  <p className="settings-top__brand">OCraft</p>
                   <h1 className="settings-top__title">设置</h1>
                 </div>
                 <Link href="/" className="settings-cta">
@@ -936,7 +907,7 @@ function SettingsInner({
               </div>
               <div className="settings-cue" title={`${username} · ${cuePath}`}>
                 <span className="settings-cue__tick" aria-hidden />
-                <span className="settings-cue__label">Active pack</span>
+                <span className="settings-cue__label">当前包</span>
                 <span
                   className="settings-cue__path"
                   data-empty={selection ? 'false' : 'true'}
@@ -950,8 +921,8 @@ function SettingsInner({
 
         <div className="settings-body">
           <aside className="settings-sidebar shrink-0">
-            <p className="settings-sidebar-label">Cue sheet</p>
-            <nav className="settings-sidebar-nav" aria-label="设置分类">
+            <p className="settings-sidebar-label">目录</p>
+            <nav className="settings-sidebar-nav" aria-label="设置目录">
               {tabGroups.map((group, gi) => (
                 <div key={gi} className="contents">
                   {gi > 0 && (
@@ -995,37 +966,12 @@ function SettingsInner({
 
           {tab === 'appearance' && (
             <div className="settings-panel" style={panelStyle}>
-              <h2 className="settings-panel__title">外观主题</h2>
+              <h2 className="settings-panel__title">外观</h2>
               <p className="settings-panel__lead">
-                浅色偏纸面；深色偏蓝黑控制台。选好后立刻应用到本页与游戏 HUD。
+                跟随系统或手动选择明暗，再选一套低饱和主题色。偏好保存在本机，进入游戏后同样生效。
               </p>
-              <div
-                className="mt-4 flex max-w-sm rounded-xl p-1"
-                style={{ background: 'var(--ui-bg)' }}
-              >
-                {(
-                  [
-                    ['light', '浅色'],
-                    ['dark', '深色'],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTheme(id)}
-                    className="flex-1 rounded-lg px-3 py-2 text-sm font-medium"
-                    style={
-                      theme === id
-                        ? {
-                            background: 'var(--ui-panel-solid)',
-                            boxShadow: 'var(--ui-shadow)',
-                          }
-                        : { color: 'var(--ui-fg-muted)' }
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="mt-5 max-w-md">
+                <ThemePicker />
               </div>
             </div>
           )}
@@ -1795,7 +1741,9 @@ function SettingsInner({
                       : null
                   }
                   distillToken={token}
-                  onDistillMessage={setMessage}
+                  onDistillMessage={(msg) => {
+                    if (msg.includes('请先')) setError(msg);
+                  }}
                 />
               )}
             </div>
@@ -2084,7 +2032,6 @@ function SettingsInner({
                         setLabPeerAgentsEnabled(true);
                         setLabPeerAgents(true);
                         setLabRiskAck(false);
-                        setMessage('实验室：平级多 Agent 已开启（仅本机标记）');
                       }}
                     >
                       开启实验开关
@@ -2100,7 +2047,6 @@ function SettingsInner({
                         setLabPeerAgentsEnabled(false);
                         setLabPeerAgents(false);
                         setLabRiskAck(false);
-                        setMessage('实验室：平级多 Agent 已关闭，回到默认导演制标记');
                       }}
                     >
                       关闭并回到默认
@@ -2170,8 +2116,6 @@ function SettingsInner({
             setClarifyPendingAction(null);
             if (pending === 'save') {
               void performSavePack(packDraft);
-            } else {
-              setMessage('已不接受澄清建议，可直接保存到磁盘。');
             }
           }}
           onSubmit={(answers) => {

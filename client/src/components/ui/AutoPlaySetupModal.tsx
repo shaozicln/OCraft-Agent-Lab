@@ -171,17 +171,17 @@ export function AutoPlaySetupModal({
       aria-modal="true"
       aria-label="自动演绎设置"
     >
-      <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900 text-slate-100 shadow-xl">
-        <div className="flex items-start justify-between gap-3 border-b border-slate-700 px-4 py-3">
+      <div className="w-full max-w-md rounded-xl border border-hud-line bg-hud text-hud-fg shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-hud-line px-4 py-3">
           <div>
             <h2 className="text-base font-semibold">自动演绎设置</h2>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-hud-muted">
               焦点：{npcName} · 必选结局（或最终章）· 目标来自当前剧本
             </p>
           </div>
           <button
             type="button"
-            className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300"
+            className="rounded border border-hud-line px-2 py-1 text-xs text-hud-fg"
             onClick={onClose}
           >
             关闭
@@ -189,14 +189,14 @@ export function AutoPlaySetupModal({
         </div>
 
         <div className="max-h-[70vh] space-y-3 overflow-y-auto px-4 py-3 text-sm">
-          <p className="text-xs font-medium text-slate-300">正片</p>
+          <p className="text-xs font-medium text-hud-fg">正片</p>
 
           <label className="block">
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-hud-muted">
               风格（可覆盖 Pack 默认，不写回）
             </span>
             <select
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
+              className="mt-1 w-full rounded border border-hud-line bg-hud px-2 py-1.5"
               value={styleId}
               onChange={(e) => setStyleId(e.target.value)}
             >
@@ -209,7 +209,7 @@ export function AutoPlaySetupModal({
           </label>
 
           <fieldset className="space-y-1">
-            <legend className="text-xs text-slate-400">结局目标（必选）</legend>
+            <legend className="text-xs text-hud-muted">结局目标（必选）</legend>
             {hasEndings ? (
               <>
                 <label className="flex items-center gap-2">
@@ -230,7 +230,7 @@ export function AutoPlaySetupModal({
                 </label>
                 {endingMode === 'specific' && (
                   <select
-                    className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
+                    className="mt-1 w-full rounded border border-hud-line bg-hud px-2 py-1.5"
                     value={targetEndingId}
                     onChange={(e) => setTargetEndingId(e.target.value)}
                   >
@@ -241,13 +241,13 @@ export function AutoPlaySetupModal({
                     ))}
                   </select>
                 )}
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-hud-muted">
                   仅列出当前进度仍可能走到的结局（已过章 / 禁忌 flag
                   已置 / 已结算会剔除）。
                 </p>
               </>
             ) : (
-              <p className="text-xs text-amber-200/90">
+              <p className="text-xs text-hud-warn/90">
                 当前进度下无可达结局：将演到最终章后停止（不可进杀青）。
                 {endings.some((e) => e.enabled !== false)
                   ? '（包内有结局，但已过章 / 禁忌已置 / 已结算）'
@@ -257,11 +257,11 @@ export function AutoPlaySetupModal({
           </fieldset>
 
           <label className="block">
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-hud-muted">
               停在章节（可选；先到则停正片、不进杀青）
             </span>
             <select
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
+              className="mt-1 w-full rounded border border-hud-line bg-hud px-2 py-1.5"
               value={stopAtChapter}
               onChange={(e) => setStopAtChapter(e.target.value)}
             >
@@ -275,14 +275,14 @@ export function AutoPlaySetupModal({
           </label>
 
           <label className="block">
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-hud-muted">
               每章最多发言次数（默认 {DEFAULT_CHAPTER_SPEAK_CAP}，换章清零）
             </span>
             <input
               type="number"
               min={1}
               max={10000}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
+              className="mt-1 w-full rounded border border-hud-line bg-hud px-2 py-1.5"
               value={chapterSpeakCap}
               onChange={(e) =>
                 setChapterSpeakCap(
@@ -291,7 +291,7 @@ export function AutoPlaySetupModal({
               }
             />
             {capWarn ? (
-              <p className="mt-1 text-[11px] text-amber-300/90">
+              <p className="mt-1 text-[11px] text-hud-warn/90">
                 超过 {CHAPTER_SPEAK_CAP_COST_WARN}{' '}
                 可能导致 token 消耗过大与模型费用升高。
               </p>
@@ -299,7 +299,7 @@ export function AutoPlaySetupModal({
           </label>
 
           <fieldset className="space-y-1">
-            <legend className="text-xs text-slate-400">旁观 / 接管</legend>
+            <legend className="text-xs text-hud-muted">旁观 / 接管</legend>
             <label className="flex items-center gap-2">
               <input
                 type="radio"
@@ -318,15 +318,15 @@ export function AutoPlaySetupModal({
             </label>
           </fieldset>
 
-          <fieldset className="space-y-1 rounded border border-slate-700 p-2">
-            <legend className="px-1 text-xs text-slate-400">
+          <fieldset className="space-y-1 rounded border border-hud-line p-2">
+            <legend className="px-1 text-xs text-hud-muted">
               正片破墙（部分知情）
             </legend>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-hud-muted">
               仅勾选的在场 NPC 知道你是创造者/观众；与杀青知情独立。
             </p>
             {presentNpcs.length === 0 ? (
-              <p className="text-[11px] text-slate-500">暂无在场 NPC</p>
+              <p className="text-[11px] text-hud-muted">暂无在场 NPC</p>
             ) : (
               presentNpcs.map((n) => (
                 <label key={n.id} className="flex items-center gap-2">
@@ -343,7 +343,7 @@ export function AutoPlaySetupModal({
             )}
           </fieldset>
 
-          <label className="flex items-start gap-2 border-t border-slate-700 pt-3">
+          <label className="flex items-start gap-2 border-t border-hud-line pt-3">
             <input
               type="checkbox"
               className="mt-0.5"
@@ -353,16 +353,16 @@ export function AutoPlaySetupModal({
             />
             <span>
               <span className="text-sm">演完进杀青梗</span>
-              <span className="mt-0.5 block text-[11px] text-slate-500">
+              <span className="mt-0.5 block text-[11px] text-hud-muted">
                 仅打到结局后进入；章停不会进杀青。杀青轻松向，不改正片进度。
               </span>
             </span>
           </label>
 
           {enterEpilogue && hasEndings ? (
-            <div className="space-y-2 rounded border border-slate-700 p-2">
+            <div className="space-y-2 rounded border border-hud-line p-2">
               <fieldset className="space-y-1">
-                <legend className="text-xs text-slate-400">杀青台面</legend>
+                <legend className="text-xs text-hud-muted">杀青台面</legend>
                 <label className="flex items-center gap-2">
                   <input
                     type="radio"
@@ -390,8 +390,8 @@ export function AutoPlaySetupModal({
               </fieldset>
 
               {epilogueMode === 'a' ? (
-                <fieldset className="space-y-1 border-t border-slate-700 pt-2">
-                  <legend className="text-xs text-slate-400">
+                <fieldset className="space-y-1 border-t border-hud-line pt-2">
+                  <legend className="text-xs text-hud-muted">
                     A · 玩家身份
                   </legend>
                   <label className="flex items-center gap-2">
@@ -414,34 +414,34 @@ export function AutoPlaySetupModal({
               ) : null}
 
               {showAddress ? (
-                <label className="block border-t border-slate-700 pt-2">
-                  <span className="text-xs text-slate-400">
+                <label className="block border-t border-hud-line pt-2">
+                  <span className="text-xs text-hud-muted">
                     希望他们怎么称呼你？（可空，默认「创世神」）
                   </span>
                   <input
                     type="text"
                     maxLength={32}
-                    className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5"
+                    className="mt-1 w-full rounded border border-hud-line bg-hud px-2 py-1.5"
                     placeholder="创世神"
                     value={epilogueAddressAs}
                     onChange={(e) => setEpilogueAddressAs(e.target.value)}
                   />
-                  <span className="mt-0.5 block text-[11px] text-slate-500">
+                  <span className="mt-0.5 block text-[11px] text-hud-muted">
                     杀青里也可说「叫我××」临时改称呼。
                   </span>
                 </label>
               ) : null}
 
               {showEpilogueBreakWall ? (
-                <fieldset className="space-y-1 border-t border-slate-700 pt-2">
-                  <legend className="text-xs text-slate-400">
+                <fieldset className="space-y-1 border-t border-hud-line pt-2">
+                  <legend className="text-xs text-hud-muted">
                     杀青破墙知情（多选在场）
                   </legend>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-hud-muted">
                     仅勾选者在杀青里知情破墙；与正片破墙不互相覆盖。
                   </p>
                   {presentNpcs.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">暂无在场 NPC</p>
+                    <p className="text-[11px] text-hud-muted">暂无在场 NPC</p>
                   ) : (
                     presentNpcs.map((n) => (
                       <label key={n.id} className="flex items-center gap-2">
@@ -464,17 +464,17 @@ export function AutoPlaySetupModal({
           ) : null}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-slate-700 px-4 py-3">
+        <div className="flex justify-end gap-2 border-t border-hud-line px-4 py-3">
           <button
             type="button"
-            className="rounded border border-slate-600 px-3 py-1.5 text-xs"
+            className="rounded border border-hud-line px-3 py-1.5 text-xs"
             onClick={onClose}
           >
             取消
           </button>
           <button
             type="button"
-            className="rounded border border-amber-500/50 bg-amber-500/20 px-3 py-1.5 text-xs text-amber-100"
+            className="rounded-lg bg-hud-accent px-3 py-1.5 text-xs font-medium text-hud-on-accent disabled:opacity-40"
             onClick={submit}
           >
             开始自动演绎

@@ -13,6 +13,7 @@ import {
   getBezierPath,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Edge,
   type EdgeProps,
   type Node,
@@ -28,6 +29,12 @@ type RestartTarget =
   | { kind: 'chapter'; chapterId: string; label: string }
   | { kind: 'edge'; ruleId: string; label: string; toLabel: string };
 
+type Selection =
+  | { kind: 'chapter'; chapterId: string }
+  | { kind: 'edge'; ruleId: string };
+
+type ChapterPhase = 'past' | 'now' | 'future';
+
 const NODE_W = 176;
 const NODE_H = 90;
 const GAP_X = 120;
@@ -37,7 +44,8 @@ const LANE_H = 140;
 type ChapterNodeData = {
   rank: number;
   displayName: string;
-  active: boolean;
+  phase: ChapterPhase;
+  selected: boolean;
   busy?: boolean;
   onSelect: () => void;
 };
@@ -47,6 +55,7 @@ type StubNodeData = Record<string, never>;
 type StoryEdgeData = {
   label: string;
   related: boolean;
+  selected: boolean;
   busy?: boolean;
   onSelect: () => void;
 };
@@ -54,6 +63,30 @@ type StoryEdgeData = {
 function chapterShort(map: StoryMapEvent, id: string): string {
   const c = map.chapters.find((x) => x.id === id);
   return c ? `第${c.rank + 1}章：${c.display_name}` : id;
+}
+
+function currentChapter(map: StoryMapEvent) {
+  return map.chapters.find((c) => c.id === map.current_chapter);
+}
+
+function phaseOf(map: StoryMapEvent, chapterId: string): ChapterPhase {
+  const cur = currentChapter(map);
+  const ch = map.chapters.find((c) => c.id === chapterId);
+  if (!ch || !cur) return 'future';
+  if (ch.id === cur.id) return 'now';
+  return ch.rank < cur.rank ? 'past' : 'future';
+}
+
+function phaseLabel(phase: ChapterPhase) {
+  if (phase === 'now') return '当前';
+  if (phase === 'past') return '已过';
+  return '未到';
+}
+
+function truncateLabel(text: string, max = 18) {
+  const chars = Array.from(text.trim());
+  if (chars.length <= max) return text.trim();
+  return `${chars.slice(0, max - 1).join('')}…`;
 }
 
 type Pos = { x: number; y: number; lane: number; col: number };
@@ -117,7 +150,7 @@ function buildLayout(map: StoryMapEvent) {
     });
   }
 
-  return { chapters, positions, centerY, laneOf };
+  return { chapters, positions };
 }
 
 const ChapterNode = memo(function ChapterNode({
@@ -137,7 +170,10 @@ const ChapterNode = memo(function ChapterNode({
       <button
         type="button"
         className="story-node story-node--flow"
-        data-active={data.active ? 'true' : 'false'}
+        data-phase={data.phase}
+        data-selected={data.selected ? 'true' : 'false'}
+        aria-current={data.phase === 'now' ? 'step' : undefined}
+        aria-pressed={data.selected}
         disabled={data.busy}
         onClick={(e) => {
           e.stopPropagation();
@@ -146,10 +182,10 @@ const ChapterNode = memo(function ChapterNode({
       >
         <span className="story-node__rank">
           {String(data.rank + 1).padStart(2, '0')}
-          {data.active ? ' · NOW' : ''}
+          {data.phase === 'now' ? ' · 当前' : ''}
         </span>
         <span className="story-node__name">{data.displayName}</span>
-        {data.active && <span className="story-node__now" />}
+        {data.phase === 'now' && <span className="story-node__now" />}
       </button>
       <Handle
         type="source"
@@ -194,7 +230,8 @@ function StoryEdge({
     sourcePosition,
     targetPosition,
   });
-  const hot = hover || Boolean(data?.related);
+  const hot = hover || Boolean(data?.related) || Boolean(data?.selected);
+  const label = data?.label?.trim() ?? '';
 
   return (
     <>
@@ -203,19 +240,21 @@ function StoryEdge({
         path={edgePath}
         markerEnd={markerEnd}
         style={{
-          stroke: hot
+          stroke: data?.selected
             ? 'var(--ui-accent)'
-            : 'color-mix(in srgb, var(--ui-fg-muted) 55%, transparent)',
-          strokeOpacity: hot ? 0.9 : 1,
-          strokeWidth: hot ? 2.5 : 1.75,
-          transition: 'stroke 160ms ease, stroke-width 160ms ease',
+            : hot
+              ? 'color-mix(in srgb, var(--ui-accent) 75%, var(--ui-fg-muted))'
+              : 'color-mix(in srgb, var(--ui-fg-muted) 55%, transparent)',
+          strokeOpacity: hot ? 0.95 : 0.85,
+          strokeWidth: data?.selected ? 2.75 : hot ? 2.25 : 1.6,
+          strokeDasharray: data?.related || data?.selected ? undefined : '5 5',
         }}
       />
       <path
         d={edgePath}
         fill="none"
         stroke="transparent"
-        strokeWidth={18}
+        strokeWidth={22}
         strokeLinecap="round"
         className="react-flow__edge-interaction"
         style={{ cursor: data?.busy ? 'not-allowed' : 'pointer' }}
@@ -226,21 +265,21 @@ function StoryEdge({
           data?.onSelect();
         }}
       />
-      {hover && data?.label && (
+      {label ? (
         <EdgeLabelRenderer>
           <div
             className="story-edge-tip"
+            data-hot={hot ? 'true' : 'false'}
             style={{
               position: 'absolute',
-              transform: `translate(-50%, calc(-100% - 10px)) translate(${labelX}px, ${labelY}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               pointerEvents: 'none',
             }}
-            role="tooltip"
           >
-            {data.label}
+            {hover || data?.selected ? label : truncateLabel(label)}
           </div>
         </EdgeLabelRenderer>
-      )}
+      ) : null}
     </>
   );
 }
@@ -257,10 +296,11 @@ const edgeTypes = {
 function mapToFlow(
   map: StoryMapEvent,
   busy: boolean | undefined,
-  onChapter: (chapterId: string, label: string) => void,
-  onEdge: (ruleId: string, label: string, toLabel: string) => void,
+  selection: Selection | null,
+  onChapter: (chapterId: string) => void,
+  onEdge: (ruleId: string) => void,
 ): { nodes: Node[]; edges: Edge[] } {
-  const { chapters, positions, laneOf } = buildLayout(map);
+  const { chapters, positions } = buildLayout(map);
   const related = new Set(
     map.edges
       .filter((e) => e.from === map.current_chapter || e.to === map.current_chapter)
@@ -276,9 +316,11 @@ function mapToFlow(
       data: {
         rank: c.rank,
         displayName: c.display_name,
-        active: c.id === map.current_chapter,
+        phase: phaseOf(map, c.id),
+        selected:
+          selection?.kind === 'chapter' && selection.chapterId === c.id,
         busy,
-        onSelect: () => onChapter(c.id, chapterShort(map, c.id)),
+        onSelect: () => onChapter(c.id),
       } satisfies ChapterNodeData,
       draggable: false,
       selectable: false,
@@ -319,8 +361,9 @@ function mapToFlow(
         data: {
           label: edge.label,
           related: related.has(edge.id),
+          selected: selection?.kind === 'edge' && selection.ruleId === edge.id,
           busy,
-          onSelect: () => onEdge(edge.id, edge.label, '（同章置 flag）'),
+          onSelect: () => onEdge(edge.id),
         } satisfies StoryEdgeData,
       });
     });
@@ -336,31 +379,59 @@ function mapToFlow(
       data: {
         label: edge.label,
         related: related.has(edge.id),
+        selected: selection?.kind === 'edge' && selection.ruleId === edge.id,
         busy,
-        onSelect: () =>
-          onEdge(edge.id, edge.label, chapterShort(map, edge.to!)),
+        onSelect: () => onEdge(edge.id),
       } satisfies StoryEdgeData,
     });
   }
 
-  void laneOf;
   return { nodes, edges };
+}
+
+function FitSelection({
+  chapterId,
+}: {
+  chapterId: string | null;
+}) {
+  const rf = useReactFlow();
+
+  useEffect(() => {
+    if (!chapterId) return;
+    const id = window.requestAnimationFrame(() => {
+      const node = rf.getNode(chapterId);
+      if (!node) {
+        rf.fitView({ padding: 0.22, duration: 180 });
+        return;
+      }
+      rf.setCenter(
+        node.position.x + NODE_W / 2,
+        node.position.y + NODE_H / 2,
+        { zoom: 0.95, duration: 220 },
+      );
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [chapterId, rf]);
+
+  return null;
 }
 
 function StoryFlowCanvas({
   map,
   busy,
+  selection,
   onChapter,
   onEdge,
 }: {
   map: StoryMapEvent;
   busy?: boolean;
-  onChapter: (chapterId: string, label: string) => void;
-  onEdge: (ruleId: string, label: string, toLabel: string) => void;
+  selection: Selection | null;
+  onChapter: (chapterId: string) => void;
+  onEdge: (ruleId: string) => void;
 }) {
   const graph = useMemo(
-    () => mapToFlow(map, busy, onChapter, onEdge),
-    [map, busy, onChapter, onEdge],
+    () => mapToFlow(map, busy, selection, onChapter, onEdge),
+    [map, busy, selection, onChapter, onEdge],
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
@@ -371,9 +442,15 @@ function StoryFlowCanvas({
   }, [graph, setNodes, setEdges]);
 
   const { theme } = useTheme();
+  const focusId =
+    selection?.kind === 'chapter'
+      ? selection.chapterId
+      : selection?.kind === 'edge'
+        ? (map.edges.find((e) => e.id === selection.ruleId)?.from ??
+          map.current_chapter)
+        : map.current_chapter;
 
   const onInit = useCallback((instance: { fitView: (opts?: object) => void }) => {
-    // 容器量完尺寸后再 fit，避免首帧高度为 0 导致空白
     requestAnimationFrame(() => {
       instance.fitView({ padding: 0.22, duration: 200 });
     });
@@ -409,12 +486,149 @@ function StoryFlowCanvas({
           color="color-mix(in srgb, var(--ui-fg-muted) 22%, transparent)"
         />
         <Controls showInteractive={false} className="story-flow__controls" />
+        <FitSelection chapterId={focusId} />
       </ReactFlow>
     </div>
   );
 }
 
-/** Esc：按钮；点开整屏留缝故事线弹窗 */
+function StoryInspector({
+  map,
+  selection,
+  busy,
+  onPickChapter,
+  onPickEdge,
+  onRequestRestart,
+}: {
+  map: StoryMapEvent;
+  selection: Selection;
+  busy?: boolean;
+  onPickChapter: (id: string) => void;
+  onPickEdge: (id: string) => void;
+  onRequestRestart: (target: RestartTarget) => void;
+}) {
+  if (selection.kind === 'chapter') {
+    const ch = map.chapters.find((c) => c.id === selection.chapterId);
+    if (!ch) return null;
+    const phase = phaseOf(map, ch.id);
+    const outgoing = map.edges.filter((e) => e.from === ch.id);
+    const incoming = map.edges.filter((e) => e.to === ch.id);
+    const label = chapterShort(map, ch.id);
+
+    return (
+      <div className="story-inspector">
+        <p className="story-inspector__kicker">
+          第{ch.rank + 1}章 · {phaseLabel(phase)}
+        </p>
+        <h3 className="story-inspector__title">{ch.display_name}</h3>
+        {incoming.length > 0 && (
+          <div className="story-inspector__block">
+            <p className="story-inspector__label">如何到达</p>
+            <ul className="story-inspector__list">
+              {incoming.map((e) => (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    className="story-inspector__link"
+                    onClick={() => onPickEdge(e.id)}
+                  >
+                    {e.label || '未命名分歧'}
+                    <span>自 {chapterShort(map, e.from)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="story-inspector__block">
+          <p className="story-inspector__label">
+            {outgoing.length > 0 ? '由此出发' : '没有列出的分歧'}
+          </p>
+          {outgoing.length > 0 ? (
+            <ul className="story-inspector__list">
+              {outgoing.map((e) => (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    className="story-inspector__link"
+                    onClick={() => onPickEdge(e.id)}
+                  >
+                    {e.label || '未命名分歧'}
+                    <span>
+                      {e.to ? `至 ${chapterShort(map, e.to)}` : '同章置 flag'}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="story-inspector__empty">可从此章新开一局重玩。</p>
+          )}
+        </div>
+        <button
+          type="button"
+          className="oc-btn oc-btn-primary w-full"
+          disabled={busy}
+          onClick={() =>
+            onRequestRestart({ kind: 'chapter', chapterId: ch.id, label })
+          }
+        >
+          从此章新开
+        </button>
+      </div>
+    );
+  }
+
+  const edge = map.edges.find((e) => e.id === selection.ruleId);
+  if (!edge) return null;
+  const toLabel = edge.to ? chapterShort(map, edge.to) : '（同章置 flag）';
+
+  return (
+    <div className="story-inspector">
+      <p className="story-inspector__kicker">分歧</p>
+      <h3 className="story-inspector__title">{edge.label || '未命名分歧'}</h3>
+      <p className="story-inspector__meta">
+        {chapterShort(map, edge.from)}
+        <span aria-hidden> → </span>
+        {toLabel}
+      </p>
+      {edge.set_flag_names.length > 0 && (
+        <div className="story-inspector__block">
+          <p className="story-inspector__label">会写入</p>
+          <p className="story-inspector__flags">
+            {edge.set_flag_names.join(' · ')}
+          </p>
+        </div>
+      )}
+      <div className="story-inspector__actions">
+        <button
+          type="button"
+          className="oc-btn oc-btn-ghost"
+          onClick={() => onPickChapter(edge.from)}
+        >
+          查看起点章
+        </button>
+        <button
+          type="button"
+          className="oc-btn oc-btn-primary"
+          disabled={busy}
+          onClick={() =>
+            onRequestRestart({
+              kind: 'edge',
+              ruleId: edge.id,
+              label: edge.label,
+              toLabel,
+            })
+          }
+        >
+          沿此分歧新开
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Esc：当前进度摘要；点开故事线 */
 export function StoryProgressMap({
   map,
   onRestart,
@@ -431,6 +645,8 @@ export function StoryProgressMap({
   onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const current = map ? currentChapter(map) : undefined;
+  const chapterCount = map?.chapters.length ?? 0;
 
   return (
     <>
@@ -444,13 +660,19 @@ export function StoryProgressMap({
       >
         <span className="story-entry__row">
           <span>
-            <span className="story-entry__eyebrow">Storyline</span>
-            <span className="story-entry__title block">剧情进度</span>
+            <span className="story-entry__eyebrow">进度</span>
+            <span className="story-entry__title block">
+              {current
+                ? `第${current.rank + 1}章：${current.display_name}`
+                : '故事线'}
+            </span>
           </span>
-          <span className="story-entry__go">打开 →</span>
+          <span className="story-entry__go">打开</span>
         </span>
         <span className="story-entry__lead">
-          横向故事线 · 分歧支点 · 新开存档
+          {map
+            ? `${chapterCount} 章 · 查看分歧或从此处新开`
+            : '打开后同步进度'}
         </span>
       </button>
 
@@ -490,6 +712,9 @@ function StorylineModal({
   const [pending, setPending] = useState<RestartTarget | null>(null);
   const [slotName, setSlotName] = useState('');
   const [entered, setEntered] = useState(false);
+  const [selection, setSelection] = useState<Selection | null>(
+    map ? { kind: 'chapter', chapterId: map.current_chapter } : null,
+  );
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setEntered(true));
@@ -497,40 +722,41 @@ function StorylineModal({
   }, []);
 
   useEffect(() => {
+    if (!map) return;
+    setSelection((prev) => {
+      if (prev?.kind === 'chapter' && map.chapters.some((c) => c.id === prev.chapterId)) {
+        return prev;
+      }
+      if (prev?.kind === 'edge' && map.edges.some((e) => e.id === prev.ruleId)) {
+        return prev;
+      }
+      return { kind: 'chapter', chapterId: map.current_chapter };
+    });
+  }, [map]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
       if (pending) {
         setPending(null);
         setSlotName('');
-      } else {
-        onClose();
+        return;
       }
+      onClose();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose, pending]);
 
-  const flagList = useMemo(() => {
-    if (!map) return [];
-    return Object.entries(map.flags).filter(([, v]) => v && v !== 'false');
-  }, [map]);
-
-  const firstChapter = map
-    ? [...map.chapters].sort((a, b) => a.rank - b.rank)[0]
-    : undefined;
-
-  const onChapter = useCallback((chapterId: string, label: string) => {
-    setPending({ kind: 'chapter', chapterId, label });
-    setSlotName('');
+  const onChapter = useCallback((chapterId: string) => {
+    setSelection({ kind: 'chapter', chapterId });
   }, []);
 
-  const onEdge = useCallback(
-    (ruleId: string, label: string, toLabel: string) => {
-      setPending({ kind: 'edge', ruleId, label, toLabel });
-      setSlotName('');
-    },
-    [],
-  );
+  const onEdge = useCallback((ruleId: string) => {
+    setSelection({ kind: 'edge', ruleId });
+  }, []);
 
   const confirm = () => {
     if (!pending) return;
@@ -544,14 +770,14 @@ function StorylineModal({
     setSlotName('');
   };
 
+  const orderedChapters = map
+    ? [...map.chapters].sort((a, b) => a.rank - b.rank)
+    : [];
+
   return (
     <div
       className="story-modal-root"
-      style={{
-        background: entered ? 'rgba(8,10,14,0.58)' : 'rgba(8,10,14,0)',
-        backdropFilter: entered ? 'blur(6px)' : 'blur(0px)',
-        transition: 'background 220ms ease, backdrop-filter 220ms ease',
-      }}
+      data-entered={entered ? 'true' : 'false'}
       role="dialog"
       aria-modal="true"
       aria-label="故事线"
@@ -559,110 +785,91 @@ function StorylineModal({
         if (e.target === e.currentTarget && !pending) onClose();
       }}
     >
-      <div
-        className="story-modal"
-        style={{
-          opacity: entered ? 1 : 0,
-          transform: entered
-            ? 'translateY(0) scale(1)'
-            : 'translateY(10px) scale(0.985)',
-          transition:
-            'opacity 240ms ease, transform 280ms cubic-bezier(.22,1,.36,1)',
-        }}
-      >
+      <div className="story-modal">
         <header className="story-modal__head">
           <div className="min-w-0">
-            <p className="story-modal__eyebrow">Storyboard</p>
             <h2 className="story-modal__title">故事线</h2>
             {map && (
-              <span className="story-modal__badge">
-                {chapterShort(map, map.current_chapter)}
-              </span>
+              <p className="story-modal__badge">
+                当前 {chapterShort(map, map.current_chapter)}
+              </p>
             )}
-            <p className="story-modal__lead">
-              {map
-                ? flagList.length > 0
-                  ? `已置 flag：${flagList.map(([k]) => k).join(' · ')}`
-                  : '尚未置任何剧情 flag'
-                : '正在同步进度…'}
-              <span className="mx-1.5 opacity-40">|</span>
-              拖拽平移 / 滚轮缩放；悬停连线看分歧；点击章节或支点可新开存档
-            </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {firstChapter && map && (
-              <button
-                type="button"
-                disabled={busy}
-                className="story-modal__btn disabled:opacity-50"
-                onClick={() => {
-                  setPending({
-                    kind: 'chapter',
-                    chapterId: firstChapter.id,
-                    label: chapterShort(map, firstChapter.id),
-                  });
-                  setSlotName('');
-                }}
-              >
-                从第一章新开
-              </button>
-            )}
-            <button
-              type="button"
-              className="story-modal__btn story-modal__btn--ghost"
-              onClick={onClose}
-            >
-              关闭 Esc
-            </button>
-          </div>
+          <button
+            type="button"
+            className="story-modal__btn story-modal__btn--ghost"
+            onClick={onClose}
+          >
+            关闭
+          </button>
         </header>
 
-        <div className="story-modal__canvas story-modal__canvas--flow">
-          {!map ? (
-            <div
-              className="flex h-full min-h-[280px] items-center justify-center text-sm"
-              style={{ color: 'var(--ui-fg-muted)' }}
-            >
-              <span className="inline-flex items-center gap-2">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+        {map && (
+          <nav className="story-strip" aria-label="章节">
+            {orderedChapters.map((c) => {
+              const phase = phaseOf(map, c.id);
+              const selected =
+                selection?.kind === 'chapter' && selection.chapterId === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="story-strip__item"
+                  data-phase={phase}
+                  data-selected={selected ? 'true' : 'false'}
+                  aria-current={phase === 'now' ? 'step' : undefined}
+                  onClick={() => onChapter(c.id)}
+                >
+                  <span className="story-strip__rank">
+                    {String(c.rank + 1).padStart(2, '0')}
+                  </span>
+                  <span className="story-strip__name">{c.display_name}</span>
+                </button>
+              );
+            })}
+          </nav>
+        )}
+
+        <div className="story-modal__body">
+          <div className="story-modal__canvas story-modal__canvas--flow">
+            {!map ? (
+              <div
+                className="flex h-full min-h-[280px] items-center justify-center text-sm"
+                style={{ color: 'var(--ui-fg-muted)' }}
+              >
                 加载故事线…
-              </span>
-            </div>
-          ) : (
-            <ReactFlowProvider>
-              <StoryFlowCanvas
+              </div>
+            ) : (
+              <ReactFlowProvider>
+                <StoryFlowCanvas
+                  map={map}
+                  busy={busy}
+                  selection={selection}
+                  onChapter={onChapter}
+                  onEdge={onEdge}
+                />
+              </ReactFlowProvider>
+            )}
+          </div>
+          {map && selection && (
+            <aside className="story-modal__side">
+              <StoryInspector
                 map={map}
+                selection={selection}
                 busy={busy}
-                onChapter={onChapter}
-                onEdge={onEdge}
+                onPickChapter={onChapter}
+                onPickEdge={onEdge}
+                onRequestRestart={setPending}
               />
-            </ReactFlowProvider>
+            </aside>
           )}
         </div>
-
-        <footer className="story-modal__foot">
-          <span className="inline-flex items-center gap-1.5">
-            <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{ background: 'var(--ui-accent)' }}
-            />
-            当前章节
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span
-              className="h-2.5 w-6 rounded-sm border"
-              style={{ borderColor: 'var(--ui-accent)' }}
-            />
-            分歧支点（悬停看说明）
-          </span>
-          <span className="ml-auto opacity-70">点击空白处或 Esc 关闭</span>
-        </footer>
       </div>
 
       {pending && map && (
         <div
           className="absolute inset-0 z-[10] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.4)' }}
+          style={{ background: 'var(--ui-overlay)' }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               setPending(null);
@@ -676,10 +883,13 @@ function StorylineModal({
               background: 'var(--ui-panel-solid)',
               borderColor: 'var(--ui-border)',
               color: 'var(--ui-fg)',
-              animation: 'story-node-in 220ms ease both',
             }}
+            role="alertdialog"
+            aria-labelledby="story-restart-title"
           >
-            <h4 className="text-base font-semibold">从该节点新开存档？</h4>
+            <h4 id="story-restart-title" className="text-base font-semibold">
+              从该节点新开存档？
+            </h4>
             <p
               className="mt-2 text-sm leading-relaxed"
               style={{ color: 'var(--ui-fg-muted)' }}
@@ -691,16 +901,11 @@ function StorylineModal({
             <label className="mt-4 block text-xs">
               <span style={{ color: 'var(--ui-fg-muted)' }}>存档名（可选）</span>
               <input
-                className="mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm outline-none"
-                style={{
-                  background: 'var(--ui-input)',
-                  borderColor: 'var(--ui-border)',
-                  color: 'var(--ui-fg)',
-                }}
+                className="oc-input mt-1.5"
                 value={slotName}
                 maxLength={64}
                 autoFocus
-                placeholder="例如：测结局甲 / 二章分歧"
+                placeholder="例如：测结局甲"
                 onChange={(e) => setSlotName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') confirm();
@@ -710,8 +915,7 @@ function StorylineModal({
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded-xl px-4 py-2 text-sm"
-                style={{ color: 'var(--ui-fg-muted)' }}
+                className="oc-btn oc-btn-ghost"
                 onClick={() => {
                   setPending(null);
                   setSlotName('');
@@ -722,11 +926,7 @@ function StorylineModal({
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50"
-                style={{
-                  background: 'var(--ui-accent)',
-                  color: 'var(--ui-accent-fg)',
-                }}
+                className="oc-btn oc-btn-primary"
                 onClick={confirm}
               >
                 确认新开

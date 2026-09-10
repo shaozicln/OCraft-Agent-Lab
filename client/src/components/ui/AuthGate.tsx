@@ -9,6 +9,7 @@ import {
   registerPayloadSchema,
 } from '@ocraft/shared';
 import { useAuth } from '@/hooks/useAuth';
+import { ScreenState } from './ScreenState';
 
 interface AuthGateProps {
   children: (ctx: {
@@ -28,6 +29,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showRecoverHint, setShowRecoverHint] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,77 +58,54 @@ export function AuthGate({ children }: AuthGateProps) {
   };
 
   if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-white text-gray-500">
-        正在验证登录状态…
-      </main>
-    );
+    return <ScreenState kind="loading" title="正在确认登录状态" />;
   }
 
   if (!isAuthenticated || !session) {
     return (
-      <main
-        className="flex min-h-screen items-center justify-center px-4"
-        style={{ background: 'var(--ui-bg)' }}
-      >
-        <div
-          className="w-full max-w-md rounded-2xl border p-8"
-          style={{
-            background: 'var(--ui-panel-solid)',
-            borderColor: 'var(--ui-border)',
-            color: 'var(--ui-fg)',
-            boxShadow: 'var(--ui-shadow)',
-          }}
-        >
-          <h1 className="text-2xl font-bold">OCraft</h1>
+      <main className="oc-screen">
+        <div className="oc-card w-full max-w-md p-8 text-left">
+          <h1 className="text-2xl font-semibold tracking-tight">OCraft</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--ui-fg-muted)' }}>
-            登录后进入 3D 场景与剧情包
+            {mode === 'login' ? '登录后进入场景' : '创建账号后进入场景'}
           </p>
-          
+
           <div
-            className="mt-6 flex gap-2 rounded-lg p-1"
+            className="mt-6 flex gap-1 rounded-lg p-1"
             style={{ background: 'var(--ui-bg)' }}
+            role="tablist"
+            aria-label="登录或注册"
           >
-            <button
-              type="button"
-              onClick={() => {
-                setMode('login');
-                setError(null);
-              }}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
-                mode === 'login' ? '' : ''
-              }`}
-              style={
-                mode === 'login'
-                  ? {
-                      background: 'var(--ui-panel-solid)',
-                      color: 'var(--ui-fg)',
-                      boxShadow: 'var(--ui-shadow)',
-                    }
-                  : { color: 'var(--ui-fg-muted)' }
-              }
-            >
-              登录
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('register');
-                setError(null);
-              }}
-              className="flex-1 rounded-md px-3 py-2 text-sm font-medium transition"
-              style={
-                mode === 'register'
-                  ? {
-                      background: 'var(--ui-panel-solid)',
-                      color: 'var(--ui-fg)',
-                      boxShadow: 'var(--ui-shadow)',
-                    }
-                  : { color: 'var(--ui-fg-muted)' }
-              }
-            >
-              注册
-            </button>
+            {(
+              [
+                ['login', '登录'],
+                ['register', '注册'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={mode === id}
+                onClick={() => {
+                  setMode(id);
+                  setError(null);
+                  setShowRecoverHint(false);
+                }}
+                className="flex-1 rounded-md px-3 py-2 text-sm font-medium"
+                style={
+                  mode === id
+                    ? {
+                        background: 'var(--ui-panel-solid)',
+                        color: 'var(--ui-fg)',
+                        boxShadow: 'var(--ui-shadow)',
+                      }
+                    : { color: 'var(--ui-fg-muted)' }
+                }
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -138,13 +117,8 @@ export function AuthGate({ children }: AuthGateProps) {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
-                className="mt-1 w-full rounded-lg border px-3 py-2 outline-none"
-                style={{
-                  background: 'var(--ui-input)',
-                  borderColor: 'var(--ui-border)',
-                  color: 'var(--ui-fg)',
-                }}
-                placeholder="中文、字母、数字、下划线，2–32 位"
+                name="username"
+                className="oc-input mt-1"
                 required
               />
             </label>
@@ -160,23 +134,15 @@ export function AuthGate({ children }: AuthGateProps) {
                 autoComplete={
                   mode === 'login' ? 'current-password' : 'new-password'
                 }
-                className="mt-1 w-full rounded-lg border px-3 py-2 outline-none"
-                style={{
-                  background: 'var(--ui-input)',
-                  borderColor: 'var(--ui-border)',
-                  color: 'var(--ui-fg)',
-                }}
-                placeholder="至少 6 位"
+                name="password"
+                className="oc-input mt-1"
                 required
                 minLength={6}
               />
             </label>
 
             {error && (
-              <p
-                className="rounded-lg px-3 py-2 text-sm"
-                style={{ color: 'var(--ui-danger)' }}
-              >
+              <p className="oc-alert oc-alert-error" role="alert">
                 {error}
               </p>
             )}
@@ -184,19 +150,34 @@ export function AuthGate({ children }: AuthGateProps) {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
-              style={{
-                background: 'var(--ui-accent)',
-                color: 'var(--ui-accent-fg)',
-              }}
+              className="oc-btn oc-btn-primary w-full"
             >
-              {submitting
-                ? '请稍候…'
-                : mode === 'login'
-                  ? '登录并进入游戏'
-                  : '注册并进入游戏'}
+              {submitting ? '请稍候…' : mode === 'login' ? '进入' : '注册并进入'}
             </button>
           </form>
+
+          {mode === 'login' ? (
+            <p className="mt-4 text-center text-sm">
+              <button
+                type="button"
+                className="underline-offset-2 hover:underline"
+                style={{ color: 'var(--ui-fg-muted)' }}
+                onClick={() => setShowRecoverHint((v) => !v)}
+                aria-expanded={showRecoverHint}
+              >
+                忘记密码？
+              </button>
+            </p>
+          ) : null}
+
+          {showRecoverHint ? (
+            <p
+              className="mt-2 text-center text-xs leading-relaxed"
+              style={{ color: 'var(--ui-fg-muted)' }}
+            >
+              目前没有自助找回。请使用你记得的账号，或重新注册。
+            </p>
+          ) : null}
         </div>
       </main>
     );

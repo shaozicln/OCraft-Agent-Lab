@@ -30,6 +30,7 @@ import {
   setSpeechBubble,
 } from '@/lib/speechBubbles';
 import { AUTO_PLAY_EPILOGUE_MODE_LABELS } from '@ocraft/shared';
+import './game-overlay.css';
 
 interface ChatBoxProps {
   open: boolean;
@@ -287,6 +288,7 @@ export function ChatBox({
   /** 悄悄话开关（默认关；导演自动辨明为后续） */
   const [whisperMode, setWhisperMode] = useState(false);
   const [autoPlaySetupOpen, setAutoPlaySetupOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   /** 当前活跃存档槽（高亮 / 顶栏） */
   const [activeSlotFilename, setActiveSlotFilename] = useState<string | null>(
     null,
@@ -519,6 +521,7 @@ export function ChatBox({
       setHistoryFullscreen(false);
       setLoadPanelOpen(false);
       setSuggestionsOpen(false);
+      setToolsOpen(false);
       onClearSuggestions();
       lastStreamRef.current = '';
       return;
@@ -928,7 +931,7 @@ export function ChatBox({
 
   const handleNewRunFromStart = useCallback(() => {
     stopAutoPlayForWorldChange('即将新开局，自动演绎已停止');
-    onNewRunFromStart?.();
+    return onNewRunFromStart?.() ?? false;
   }, [onNewRunFromStart, stopAutoPlayForWorldChange]);
 
   const handleViewSuggestions = useCallback(() => {
@@ -987,9 +990,9 @@ export function ChatBox({
         />
         {showDock && (
           <div className="absolute bottom-4 left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-4 pointer-events-auto">
-            <div className="rounded-xl border border-slate-600 bg-slate-900/95 px-3 py-2 shadow-xl">
+            <div className="rounded-xl border border-hud-line bg-hud/95 px-3 py-2 shadow-xl">
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-[11px] text-amber-200/90">
+                <span className="truncate text-[11px] text-hud-warn/90">
                   {autoPlay.ui.intervening
                     ? `已接管 · ${autoPlay.ui.progressLabel}`
                     : autoPlay.ui.phase === 'epilogue' &&
@@ -1014,7 +1017,7 @@ export function ChatBox({
                       <button
                         type="button"
                         onClick={() => autoPlay.pause()}
-                        className="rounded px-2 py-0.5 text-[11px] text-slate-300 hover:bg-slate-800"
+                        className="rounded px-2 py-0.5 text-[11px] text-hud-fg hover:bg-hud-elevated"
                       >
                         暂停
                       </button>
@@ -1024,7 +1027,7 @@ export function ChatBox({
                       <button
                         type="button"
                         onClick={autoPlay.resume}
-                        className="rounded px-2 py-0.5 text-[11px] text-sky-300 hover:bg-slate-800"
+                        className="rounded px-2 py-0.5 text-[11px] text-hud-accent hover:bg-hud-elevated"
                       >
                         继续
                       </button>
@@ -1035,7 +1038,7 @@ export function ChatBox({
                       <button
                         type="button"
                         onClick={autoPlay.endEpilogue}
-                        className="rounded px-2 py-0.5 text-[11px] text-amber-100 hover:bg-amber-900/40"
+                        className="rounded px-2 py-0.5 text-[11px] text-hud-warn hover:bg-hud-elevated"
                       >
                         结束杀青
                       </button>
@@ -1044,7 +1047,7 @@ export function ChatBox({
                     <button
                       type="button"
                       onClick={() => autoPlay.stop()}
-                      className="rounded px-2 py-0.5 text-[11px] text-rose-300 hover:bg-slate-800"
+                      className="rounded px-2 py-0.5 text-[11px] text-hud-danger hover:bg-hud-elevated"
                     >
                       停止
                     </button>
@@ -1052,7 +1055,7 @@ export function ChatBox({
                   <button
                     type="button"
                     onClick={() => onEnsureChatOpen?.()}
-                    className="rounded px-2 py-0.5 text-[11px] text-slate-200 hover:bg-slate-800"
+                    className="rounded px-2 py-0.5 text-[11px] text-hud-fg hover:bg-hud-elevated"
                   >
                     打开对话
                   </button>
@@ -1118,15 +1121,15 @@ export function ChatBox({
       />
 
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4 pointer-events-auto">
-        <div className="bg-slate-900/95 border border-slate-600 rounded-2xl shadow-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700">
+        <div className="bg-hud/95 border border-hud-line rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-hud-line">
             <div className="flex items-center gap-1.5 min-w-0">
               <button
                 type="button"
                 onClick={handleOpenHistory}
                 aria-label="查看对话记录"
                 title="对话记录"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-hud-muted transition-colors hover:bg-hud-elevated hover:text-hud-fg"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1149,7 +1152,7 @@ export function ChatBox({
                 onClick={handleOpenLoad}
                 aria-label="存档槽"
                 title="整局存档：每轮对话自动写入当前槽；也可新开一局"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-sky-400"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-hud-muted transition-colors hover:bg-hud-elevated hover:text-hud-accent"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1168,16 +1171,16 @@ export function ChatBox({
                 </svg>
               </button>
               <div className="min-w-0 ml-0.5">
-                <span className="block text-sm font-medium text-white truncate">
-                  场景 · 正在与 {npcName} 交谈
+                <span className="block text-sm font-medium text-hud-fg truncate">
+                  {npcName}
                   {labEnabled && (
-                    <span className="ml-2 align-middle text-[10px] font-normal text-rose-300/90 border border-rose-400/40 rounded px-1 py-0.5">
+                    <span className="ml-2 align-middle text-[10px] font-normal text-hud-danger/90 border border-hud-danger/40 rounded px-1 py-0.5">
                       实验
                     </span>
                   )}
                 </span>
                 {activeSlotTitle && (
-                  <span className="block text-[10px] text-slate-500 truncate">
+                  <span className="block text-[10px] text-hud-muted truncate">
                     自动保存 · {activeSlotTitle}
                   </span>
                 )}
@@ -1186,15 +1189,15 @@ export function ChatBox({
             <button
               type="button"
               onClick={onClose}
-              className="text-slate-400 hover:text-white text-xs px-2 py-1 shrink-0"
+              className="text-hud-muted hover:text-hud-fg text-xs px-2 py-1 shrink-0"
             >
-              ESC 关闭
+              关闭
             </button>
           </div>
 
           {labEnabled && labProgress && (
-            <div className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-slate-700 bg-slate-950/50">
-              <span className="text-[11px] text-rose-200/90 truncate">
+            <div className="flex items-center justify-between gap-2 px-4 py-1.5 border-b border-hud-line bg-hud/60">
+              <span className="text-[11px] text-hud-danger/90 truncate">
                 {labProgress.status === 'running'
                   ? `平级 tick 第 ${labProgress.roundIndex} 轮 · ${labProgress.roundPeerLines}/${labProgress.roundPeerLineCap} · 本局 ${labProgress.sessionPeerLines}/${labProgress.sessionPeerLineCap}`
                   : labProgress.status === 'abort'
@@ -1205,7 +1208,7 @@ export function ChatBox({
                 <button
                   type="button"
                   onClick={() => onClearLabProgress?.()}
-                  className="text-[11px] px-2 py-0.5 rounded text-slate-400 hover:bg-slate-800 shrink-0"
+                  className="text-[11px] px-2 py-0.5 rounded text-hud-muted hover:bg-hud-elevated shrink-0"
                 >
                   收起
                 </button>
@@ -1217,9 +1220,9 @@ export function ChatBox({
             autoPlay.ui.status === 'paused' ||
             autoPlay.ui.status === 'done' ||
             autoPlay.ui.status === 'abort') && (
-            <div className="flex flex-col gap-1 px-4 py-1.5 border-b border-slate-700 bg-slate-950/60">
+            <div className="flex flex-col gap-1 px-4 py-1.5 border-b border-hud-line bg-hud/70">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] text-amber-200/90 truncate">
+                <span className="text-[11px] text-hud-warn/90 truncate">
                   {autoPlay.ui.intervening
                     ? `已接管 · ${autoPlay.ui.progressLabel}`
                     : autoPlay.ui.phase === 'epilogue' &&
@@ -1241,7 +1244,7 @@ export function ChatBox({
                     <button
                       type="button"
                       onClick={() => autoPlay.pause()}
-                      className="text-[11px] px-2 py-0.5 rounded text-slate-300 hover:bg-slate-800"
+                      className="text-[11px] px-2 py-0.5 rounded text-hud-fg hover:bg-hud-elevated"
                     >
                       暂停
                     </button>
@@ -1252,7 +1255,7 @@ export function ChatBox({
                       <button
                         type="button"
                         onClick={autoPlay.resume}
-                        className="text-[11px] px-2 py-0.5 rounded text-sky-300 hover:bg-slate-800"
+                        className="text-[11px] px-2 py-0.5 rounded text-hud-accent hover:bg-hud-elevated"
                       >
                         继续
                       </button>
@@ -1266,10 +1269,10 @@ export function ChatBox({
                         onClick={() =>
                           autoPlay.setAccelerate(!autoPlay.ui.accelerate)
                         }
-                        className={`text-[11px] px-2 py-0.5 rounded hover:bg-slate-800 ${
+                        className={`text-[11px] px-2 py-0.5 rounded hover:bg-hud-elevated ${
                           autoPlay.ui.accelerate
                             ? 'text-amber-200'
-                            : 'text-slate-300'
+                            : 'text-hud-fg'
                         }`}
                         title="加速：尽快升章；终章则冲结局"
                       >
@@ -1284,7 +1287,7 @@ export function ChatBox({
                       <button
                         type="button"
                         onClick={autoPlay.takeover}
-                        className="text-[11px] px-2 py-0.5 rounded text-rose-300 hover:bg-slate-800"
+                        className="text-[11px] px-2 py-0.5 rounded text-hud-danger hover:bg-hud-elevated"
                       >
                         接管
                       </button>
@@ -1293,7 +1296,7 @@ export function ChatBox({
                     <button
                       type="button"
                       onClick={autoPlay.handBack}
-                      className="text-[11px] px-2 py-0.5 rounded text-emerald-300 hover:bg-slate-800"
+                      className="text-[11px] px-2 py-0.5 rounded text-hud-aside hover:bg-hud-elevated"
                     >
                       交回
                     </button>
@@ -1304,7 +1307,7 @@ export function ChatBox({
                       <button
                         type="button"
                         onClick={autoPlay.endEpilogue}
-                        className="text-[11px] px-2 py-0.5 rounded text-amber-100 hover:bg-amber-900/40"
+                        className="text-[11px] px-2 py-0.5 rounded text-hud-warn hover:bg-hud-elevated"
                       >
                         结束杀青
                       </button>
@@ -1314,7 +1317,7 @@ export function ChatBox({
                     <button
                       type="button"
                       onClick={() => autoPlay.stop()}
-                      className="text-[11px] px-2 py-0.5 rounded text-slate-300 hover:bg-slate-800"
+                      className="text-[11px] px-2 py-0.5 rounded text-hud-fg hover:bg-hud-elevated"
                     >
                       停止
                     </button>
@@ -1324,7 +1327,7 @@ export function ChatBox({
                     <button
                       type="button"
                       onClick={autoPlay.dismiss}
-                      className="text-[11px] px-2 py-0.5 rounded text-slate-400 hover:bg-slate-800"
+                      className="text-[11px] px-2 py-0.5 rounded text-hud-muted hover:bg-hud-elevated"
                     >
                       收起
                     </button>
@@ -1336,18 +1339,18 @@ export function ChatBox({
                 !autoPlay.ui.intervening &&
                 autoPlay.ui.phase !== 'epilogue' && (
                   <div className="flex items-center gap-2 text-[11px]">
-                    <span className="text-amber-200/80">本章发言已达上限</span>
+                    <span className="text-hud-warn/80">本章发言已达上限</span>
                     <button
                       type="button"
                       onClick={autoPlay.keepPace}
-                      className="px-2 py-0.5 rounded border border-slate-600 text-slate-200 hover:bg-slate-800"
+                      className="px-2 py-0.5 rounded border border-hud-line text-hud-fg hover:bg-hud-elevated"
                     >
                       保持
                     </button>
                     <button
                       type="button"
                       onClick={() => autoPlay.setAccelerate(true)}
-                      className="px-2 py-0.5 rounded border border-amber-600/50 text-amber-100 hover:bg-slate-800"
+                      className="px-2 py-0.5 rounded border border-hud-warn/50 text-hud-warn hover:bg-hud-elevated"
                     >
                       加速
                     </button>
@@ -1358,24 +1361,26 @@ export function ChatBox({
 
           <div ref={scrollRef} className="h-40 overflow-y-auto px-4 py-3 space-y-2">
             {history.length === 0 && (
-              <p className="text-slate-500 text-sm">开始对话吧</p>
+              <p className="text-hud-muted text-sm">
+                还没有对话。输入一句话，或从「更多」里查看建议。
+              </p>
             )}
             {!connected && (
-              <p className="text-red-400 text-sm">未连接服务器，请先启动 server（4000）</p>
+              <p className="text-hud-danger text-sm">未连接服务器</p>
             )}
             {history.map((item, i) => (
               <div
                 key={i}
                 className={`text-sm ${
                   item.role === 'player'
-                    ? 'text-sky-300 text-right'
+                    ? 'text-hud-accent text-right'
                     : item.role === 'system'
-                      ? 'text-amber-400 text-center'
+                      ? 'text-hud-warn text-center'
                       : item.role === 'exchange'
-                        ? 'text-violet-300/90 italic'
+                        ? 'text-hud-aside/90 italic'
                         : item.role === 'aside'
-                          ? 'text-slate-400/90 italic text-xs'
-                          : 'text-slate-200'
+                          ? 'text-hud-muted/90 italic text-xs'
+                          : 'text-hud-fg'
                 }`}
               >
                 {item.role === 'player'
@@ -1398,15 +1403,15 @@ export function ChatBox({
                   isStreaming &&
                   i === history.length - 1 &&
                   item.speakerId === npcId && (
-                  <span className="inline-block w-1.5 h-4 ml-0.5 bg-slate-400 animate-pulse align-middle" />
+                  <span className="inline-block w-1.5 h-4 ml-0.5 bg-hud-muted animate-pulse align-middle" />
                 )}
               </div>
             ))}
             {isStreaming && !streamText && (
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-hud-muted">
                 {npcName}：
-                <span className="inline-block w-1.5 h-4 ml-0.5 bg-slate-500 animate-pulse align-middle" />
-                <span className="ml-1 text-xs text-slate-500">
+                <span className="inline-block w-1.5 h-4 ml-0.5 bg-hud-muted animate-pulse align-middle" />
+                <span className="ml-1 text-xs text-hud-muted">
                   正在组织语言…
                 </span>
               </div>
@@ -1414,31 +1419,31 @@ export function ChatBox({
           </div>
 
           {suggestionsOpen && (
-            <div className="px-4 py-2 border-t border-slate-700 space-y-2">
+            <div className="px-4 py-2 border-t border-hud-line space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400">剧情建议（点击填入）</span>
+                <span className="text-xs text-hud-muted">剧情建议（点击填入）</span>
                 <button
                   type="button"
                   onClick={() => {
                     setSuggestionsOpen(false);
                     onClearSuggestions();
                   }}
-                  className="text-xs text-slate-500 hover:text-slate-300"
+                  className="text-xs text-hud-muted hover:text-hud-fg"
                 >
                   收起
                 </button>
               </div>
               {suggestionsLoading && (
-                <p className="text-xs text-slate-500">正在根据剧情生成建议…</p>
+                <p className="text-xs text-hud-muted">正在根据剧情生成建议…</p>
               )}
               {!suggestionsLoading && suggestionsError && (
-                <p className="text-xs text-amber-400">{suggestionsError}</p>
+                <p className="text-xs text-hud-warn">{suggestionsError}</p>
               )}
               {!suggestionsLoading &&
                 !suggestionsError &&
                 suggestions &&
                 suggestions.length === 0 && (
-                  <p className="text-xs text-slate-500">暂无可用建议</p>
+                  <p className="text-xs text-hud-muted">暂无可用建议</p>
                 )}
               {!suggestionsLoading && suggestions && suggestions.length > 0 && (
                 <div className="flex flex-col gap-1.5">
@@ -1447,7 +1452,7 @@ export function ChatBox({
                       key={`${i}-${s.slice(0, 12)}`}
                       type="button"
                       onClick={() => handlePickSuggestion(s)}
-                      className="text-left text-sm text-slate-200 bg-slate-800/80 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 transition-colors"
+                      className="text-left text-sm text-hud-fg bg-hud-elevated/80 hover:bg-hud-line border border-hud-line rounded-lg px-3 py-2 transition-colors"
                     >
                       {s}
                     </button>
@@ -1459,7 +1464,7 @@ export function ChatBox({
                   type="button"
                   onClick={handleViewSuggestions}
                   disabled={!connected || inputLocked}
-                  className="text-xs text-sky-400 hover:text-sky-300 disabled:text-slate-600"
+                  className="text-xs text-hud-accent hover:text-hud-accent disabled:text-hud-muted"
                 >
                   换一批
                 </button>
@@ -1468,54 +1473,74 @@ export function ChatBox({
           )}
 
           <form
-            className="flex gap-2 px-4 py-3 border-t border-slate-700"
+            className="flex flex-wrap gap-2 px-4 py-3 border-t border-hud-line"
             onSubmit={(e) => {
               e.preventDefault();
               handleSend();
             }}
           >
-            <button
-              type="button"
-              onClick={handleViewSuggestions}
-              disabled={!connected || inputLocked || suggestionsLoading}
-              title="根据当前剧情生成可选回复"
-              className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed border border-slate-600 rounded-lg text-sm text-slate-200 transition-colors"
-            >
-              {suggestionsLoading ? '生成中…' : '查看建议'}
-            </button>
+            <div className="chat-tools">
+              <button
+                type="button"
+                aria-expanded={toolsOpen}
+                aria-haspopup="menu"
+                aria-label="更多操作"
+                onClick={() => setToolsOpen((v) => !v)}
+                className="shrink-0 px-3 py-2 bg-hud-elevated hover:bg-hud-line border border-hud-line rounded-lg text-sm text-hud-fg transition-colors"
+              >
+                更多
+              </button>
+              {toolsOpen ? (
+                <div className="chat-tools__menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!connected || inputLocked || suggestionsLoading}
+                    className="chat-tools__item"
+                    onClick={() => {
+                      setToolsOpen(false);
+                      handleViewSuggestions();
+                    }}
+                  >
+                    {suggestionsLoading ? '生成建议中…' : '查看建议'}
+                  </button>
+                  {!autoPlay.locksInput && !autoPlay.ui.intervening ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={!connected || isStreaming || listening}
+                      className="chat-tools__item"
+                      onClick={() => {
+                        setToolsOpen(false);
+                        if (getLabPeerAgentsEnabled()) {
+                          pushSystemNote(
+                            '请先关闭设置页「实验室 · 平级多 Agent」，再开自动演绎（二者互斥）。',
+                          );
+                          return;
+                        }
+                        setAutoPlaySetupOpen(true);
+                      }}
+                    >
+                      自动演绎
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => setWhisperMode((v) => !v)}
               disabled={inputLocked}
-              title="悄悄话：仅当前对话 NPC 听见，同场其他人不会插话或旁听"
+              title="悄悄话：仅当前对话 NPC 听见"
               aria-pressed={whisperMode}
               className={`shrink-0 px-3 py-2 border rounded-lg text-sm transition-colors disabled:cursor-not-allowed ${
                 whisperMode
-                  ? 'bg-fuchsia-700/80 hover:bg-fuchsia-600 border-fuchsia-500 text-white'
-                  : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200 disabled:bg-slate-800 disabled:text-slate-600'
+                  ? 'bg-hud-whisper/30 hover:bg-hud-whisper/40 border-hud-whisper text-hud-fg'
+                  : 'bg-hud-elevated hover:bg-hud-line border-hud-line text-hud-fg disabled:bg-hud-elevated disabled:text-hud-muted'
               }`}
             >
               悄悄话
             </button>
-            {!autoPlay.locksInput && !autoPlay.ui.intervening ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (getLabPeerAgentsEnabled()) {
-                    pushSystemNote(
-                      '请先关闭设置页「实验室 · 平级多 Agent」，再开自动演绎（二者互斥）。',
-                    );
-                    return;
-                  }
-                  setAutoPlaySetupOpen(true);
-                }}
-                disabled={!connected || isStreaming || listening}
-                title="打开自动演绎设置"
-                className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed border border-amber-700/60 rounded-lg text-sm text-amber-200/90 transition-colors"
-              >
-                自动演绎
-              </button>
-            ) : null}
             <input
               ref={inputRef}
               type="text"
@@ -1542,12 +1567,12 @@ export function ChatBox({
                             : '输入对话…'
               }
               autoComplete="off"
-              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex-1 min-w-[10rem] bg-hud-elevated border border-hud-line rounded-lg px-3 py-2 text-sm text-hud-fg placeholder:text-hud-muted focus:border-hud-accent disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <button
               type="submit"
               disabled={inputLocked || !input.trim()}
-              className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-sm text-white transition-colors"
+              className="px-4 py-2 bg-hud-accent hover:bg-hud-accent disabled:bg-hud-line disabled:cursor-not-allowed rounded-lg text-sm text-hud-on-accent transition-colors"
             >
               发送
             </button>

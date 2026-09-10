@@ -1,6 +1,7 @@
 'use client';
 
 import { Html } from '@react-three/drei';
+import '@/components/ui/game-overlay.css';
 
 const CHARS_PER_LINE = 10;
 const MAX_LINES = 3;
@@ -42,19 +43,7 @@ export function SpeechBubbleHtml({
       zIndexRange={[40, 0]}
       style={{ pointerEvents: 'none' }}
     >
-      <div
-        className="pointer-events-none px-2 py-1 text-center text-[12px] font-medium leading-[1.35] text-white"
-        style={{
-          background: '#000',
-          color: '#fff',
-          whiteSpace: 'pre',
-          writingMode: 'horizontal-tb',
-          borderRadius: 4,
-          maxWidth: '11em',
-        }}
-      >
-        {display}
-      </div>
+      <div className="speech-bubble">{display}</div>
     </Html>
   );
 }

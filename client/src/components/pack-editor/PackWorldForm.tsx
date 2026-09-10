@@ -289,6 +289,14 @@ export function PackWorldForm({
                   {
                     id: `ending_${(w.endings?.length ?? 0) + 1}`,
                     display_name: '',
+                    enabled: true,
+                    require_flags: [],
+                    require_any_flags: [],
+                    forbid_flags: [],
+                    player_triggers: [],
+                    set_flags: [],
+                    clear_flags: [],
+                    priority: 0,
                   },
                 ],
               })

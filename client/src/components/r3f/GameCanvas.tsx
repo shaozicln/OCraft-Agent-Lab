@@ -2,12 +2,14 @@
 
 import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { Html, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import type { NpcFollowState } from '@ocraft/shared';
 import { OfficeScene } from './OfficeScene';
 import { Player, type NearbyNpc } from './Player';
 import { type HumanoidAnimation } from './Humanoid';
 import { NpcActor, type NpcActorPhase } from './NpcActor';
+import '@/components/ui/game-overlay.css';
 
 export type SceneNpc = {
   npcId: string;
@@ -30,6 +32,19 @@ type StagedNpc = SceneNpc & {
 
 const ENTER_STAGGER = 0.28;
 const LEAVE_STAGGER = 0.22;
+const SCENE_CLEAR = '#efebe4';
+
+function SceneLoader() {
+  const { active, progress } = useProgress();
+  if (!active) return null;
+  return (
+    <Html center style={{ pointerEvents: 'none' }}>
+      <div className="game-scene-loader" role="status">
+        场景 {Math.round(progress)}%
+      </div>
+    </Html>
+  );
+}
 
 interface GameCanvasProps {
   npcs: SceneNpc[];
@@ -153,7 +168,7 @@ export const GameCanvas = memo(function GameCanvas({
         frameloop="always"
         camera={{ position: [0, 1.6, 6], fov: 60 }}
         className="h-full w-full"
-        style={{ background: '#FFFFFF' }}
+        style={{ background: SCENE_CLEAR }}
         gl={{
           antialias: true,
           powerPreference: 'high-performance',
@@ -162,9 +177,9 @@ export const GameCanvas = memo(function GameCanvas({
         }}
         performance={{ min: 0.5 }}
       >
-        <color attach="background" args={['#FFFFFF']} />
+        <color attach="background" args={[SCENE_CLEAR]} />
         <ambientLight intensity={0.9} />
-        <hemisphereLight args={['#FFFFFF', '#EFEFEF', 0.5]} />
+        <hemisphereLight args={['#F4F0EA', '#E4DDD2', 0.5]} />
         <directionalLight
           castShadow
           position={[6, 10, 4]}
@@ -177,6 +192,7 @@ export const GameCanvas = memo(function GameCanvas({
           shadow-camera-top={10}
           shadow-camera-bottom={-10}
         />
+        <SceneLoader />
         <Suspense fallback={null}>
           <OfficeScene />
           {staged.map((n) => (

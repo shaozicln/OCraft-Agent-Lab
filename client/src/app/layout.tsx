@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/theme/bootstrap-script";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import "./globals.css";
 
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OCraft 3D RPG Agent',
-  description: '3D office scene with AI NPC dialogue',
+  title: "OCraft",
+  description: "3D 场景中的剧情对话",
 };
 
 export default function RootLayout({
@@ -27,9 +28,14 @@ export default function RootLayout({
     <html
       lang="zh-CN"
       data-theme="light"
+      data-palette="mist"
+      data-appearance="system"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ThemeProvider>{children}</ThemeProvider>
       </body>

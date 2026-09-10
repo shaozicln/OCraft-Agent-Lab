@@ -45,13 +45,13 @@ export function ChatHistoryFullscreen({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
-      <header className="flex shrink-0 items-center gap-3 border-b border-slate-800 px-4 py-3">
+    <div className="fixed inset-0 z-50 flex flex-col bg-hud">
+      <header className="flex shrink-0 items-center gap-3 border-b border-hud-line px-4 py-3">
         <button
           type="button"
           onClick={onClose}
           aria-label="返回对话"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-hud-fg transition-colors hover:bg-hud-elevated hover:text-hud-fg"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -69,8 +69,8 @@ export function ChatHistoryFullscreen({
           </svg>
         </button>
         <div className="min-w-0 flex flex-col">
-          <h2 className="text-base font-medium text-white">整场对话记录</h2>
-          <span className="text-xs text-slate-500 truncate">
+          <h2 className="text-base font-medium text-hud-fg">整场对话记录</h2>
+          <span className="text-xs text-hud-muted truncate">
             当前交互：{npcName}
           </span>
         </div>
@@ -79,24 +79,24 @@ export function ChatHistoryFullscreen({
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
         <div className="mx-auto max-w-2xl space-y-4">
           {history.length === 0 && (
-            <p className="text-center text-slate-500 text-sm">暂无对话记录</p>
+            <p className="text-center text-hud-muted text-sm">暂无对话记录</p>
           )}
           {history.map((item, i) => (
             <div
               key={i}
               className={`text-sm leading-relaxed ${
                 item.role === 'player'
-                  ? 'text-right text-sky-300'
+                  ? 'text-right text-hud-accent'
                   : item.role === 'system'
-                    ? 'text-center text-amber-400'
+                    ? 'text-center text-hud-warn'
                     : item.role === 'exchange'
-                      ? 'text-left text-violet-300'
+                      ? 'text-left text-hud-aside'
                       : item.role === 'aside'
-                        ? 'text-left text-slate-400 italic'
-                        : 'text-left text-slate-200'
+                        ? 'text-left text-hud-muted italic'
+                        : 'text-left text-hud-fg'
               }`}
             >
-              <span className="text-slate-500 text-xs">
+              <span className="text-hud-muted text-xs">
                 {item.role === 'player'
                   ? item.whisper
                     ? '悄悄话·你'
@@ -116,7 +116,7 @@ export function ChatHistoryFullscreen({
                 isStreaming &&
                 i === history.length - 1 &&
                 item.speakerId === npcId && (
-                <span className="inline-block w-1.5 h-4 ml-0.5 bg-slate-400 animate-pulse align-middle" />
+                <span className="inline-block w-1.5 h-4 ml-0.5 bg-hud-muted animate-pulse align-middle" />
               )}
             </div>
           ))}
