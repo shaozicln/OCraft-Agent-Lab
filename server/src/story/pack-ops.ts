@@ -10,6 +10,11 @@ import {
   loadWorldManifest,
   resolveStoryPacksRoot,
 } from './pack-loader';
+import {
+  resolveVersionDirPath,
+  resolveVersionsPath,
+  resolveWorldPath,
+} from './pack-paths';
 
 /** 目录名安全化：保留中文/字母数字，其余变 _ */
 export function sanitizeVersionNameForDir(versionName: string): string {
@@ -41,12 +46,17 @@ export function makeVersionDirName(
   return `${sanitizeVersionNameForDir(versionName)}__${formatPackTimestamp(date)}`;
 }
 
+/**
+ * 版本目录绝对路径。
+ * 所有从 URL / 请求参数拼出来的 worldId、versionDir 都必须经过这里，
+ * 由 pack-paths 统一做段级校验 + 越界断言，防止 `..` 穿越跳出 story-packs。
+ */
 export function resolveVersionPath(
   worldId: string,
   versionDir: string,
   packsRoot = resolveStoryPacksRoot(),
 ): string {
-  return path.join(packsRoot, worldId, 'versions', versionDir);
+  return resolveVersionDirPath(packsRoot, worldId, versionDir);
 }
 
 function writeJson(filePath: string, data: unknown) {
@@ -444,7 +454,7 @@ export function createWorldPack(opts: {
   packsRoot?: string;
 }): SavePackAsResult {
   const packsRoot = opts.packsRoot ?? resolveStoryPacksRoot();
-  const worldPath = path.join(packsRoot, opts.worldId);
+  const worldPath = resolveWorldPath(packsRoot, opts.worldId);
   if (fs.existsSync(worldPath)) {
     throw new Error(`世界已存在: ${opts.worldId}`);
   }
@@ -508,7 +518,7 @@ export function listDiskWorldSummaries(packsRoot = resolveStoryPacksRoot()) {
         ? (process.env.OFFICIAL_VERSION_DIR ?? manifest.official_version_dir)
         : manifest.official_version_dir;
 
-    const versionsPath = path.join(packsRoot, worldId, 'versions');
+    const versionsPath = resolveVersionsPath(packsRoot, worldId);
     const versions: (typeof worlds)[number]['versions'] = [];
     if (fs.existsSync(versionsPath)) {
       for (const v of fs.readdirSync(versionsPath, { withFileTypes: true })) {
@@ -565,7 +575,7 @@ export function deleteWorldOnDisk(
   worldId: string,
   packsRoot = resolveStoryPacksRoot(),
 ): void {
-  const worldPath = path.join(packsRoot, worldId);
+  const worldPath = resolveWorldPath(packsRoot, worldId);
   if (!fs.existsSync(worldPath)) {
     throw new Error(`世界不存在: ${worldId}`);
   }
@@ -581,7 +591,7 @@ export function writeWorldManifest(
   },
   packsRoot = resolveStoryPacksRoot(),
 ): void {
-  writeJson(path.join(packsRoot, worldId, 'manifest.json'), {
+  writeJson(path.join(resolveWorldPath(packsRoot, worldId), 'manifest.json'), {
     world_id: manifest.world_id,
     official_version_dir: manifest.official_version_dir,
     description: manifest.description,

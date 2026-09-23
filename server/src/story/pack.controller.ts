@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Headers,
   Param,
@@ -23,6 +24,8 @@ import {
   storyPackSchema,
 } from '@ocraft/shared';
 import { AuthService } from '../auth/auth.service';
+import { LlmService } from '../agent/core/llm.service';
+import { bindHost, isLoopbackOnly, packAdminIds } from '../config/env';
 import { PackService } from './pack.service';
 import { PackGenerateService } from './pack-generate.service';
 import { PackClarifyService } from './pack-clarify.service';
@@ -36,6 +39,7 @@ export class PackController {
     private readonly packClarifyService: PackClarifyService,
     private readonly packDistillService: PackDistillService,
     private readonly authService: AuthService,
+    private readonly llmService: LlmService,
   ) {}
 
   private requirePlayerId(authorization?: string): string {
@@ -48,6 +52,37 @@ export class PackController {
       throw new UnauthorizedException('Invalid or expired token');
     }
     return verified.playerId;
+  }
+
+  /**
+   * 剧情包写操作 / AI 生成类接口的准入检查。
+   *
+   * 这些操作的影响范围是「全局」而不是「当前玩家」：覆写或删除某个版本会连带
+   * 清掉该版本下所有玩家的进度与人设（见 PackService.deleteProgressRows），
+   * AI 生成类接口则直接消耗服务端的模型额度。所以不能只校验「你是一个合法玩家」。
+   *
+   * 策略：
+   * - 仅监听本机（默认 BIND_HOST=127.0.0.1）时，本机用户即管理员，无需配置；
+   * - 一旦 BIND_HOST 指向外部地址，就必须显式配置 PACK_ADMIN_IDS，否则一律拒绝（fail-closed）。
+   */
+  private requirePackAdmin(authorization?: string): string {
+    const playerId = this.requirePlayerId(authorization);
+    const admins = packAdminIds();
+
+    if (admins.length === 0) {
+      if (isLoopbackOnly()) return playerId;
+      throw new ForbiddenException(
+        `服务已对外监听（BIND_HOST=${bindHost()}）但未配置 PACK_ADMIN_IDS，` +
+          '为避免影响其他玩家，已拒绝剧情包写操作与 AI 生成请求。',
+      );
+    }
+
+    if (!admins.includes(playerId)) {
+      throw new ForbiddenException(
+        `玩家 ${playerId} 不在 PACK_ADMIN_IDS 白名单中，无权修改剧情包`,
+      );
+    }
+    return playerId;
   }
 
   @Get('worlds')
@@ -89,7 +124,7 @@ export class PackController {
     @Param('versionDir') versionDir: string,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
+    this.requirePackAdmin(authorization);
     const parsed = packUpdatePayloadSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(formatAuthValidationError(parsed.error));
@@ -113,7 +148,7 @@ export class PackController {
     @Param('worldId') worldId: string,
     @Param('versionDir') versionDir: string,
   ) {
-    this.requirePlayerId(authorization);
+    this.requirePackAdmin(authorization);
     return this.packService.deleteVersion(worldId, versionDir);
   }
 
@@ -122,7 +157,7 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Param('worldId') worldId: string,
   ) {
-    this.requirePlayerId(authorization);
+    this.requirePackAdmin(authorization);
     return this.packService.deleteWorld(worldId);
   }
 
@@ -131,7 +166,7 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
+    this.requirePackAdmin(authorization);
     const parsed = packSeedPayloadSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(formatAuthValidationError(parsed.error));
@@ -147,7 +182,7 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
+    this.requirePackAdmin(authorization);
     const parsed = packSaveAsPayloadSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(formatAuthValidationError(parsed.error));
@@ -160,7 +195,7 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
+    this.requirePackAdmin(authorization);
     const parsed = packCreateWorldPayloadSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(formatAuthValidationError(parsed.error));
@@ -174,7 +209,7 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
+    const playerId = this.requirePackAdmin(authorization);
     const parsed = packGenerateDraftPayloadSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(formatAuthValidationError(parsed.error));
@@ -185,12 +220,14 @@ export class PackController {
         `basePack 无效：${formatAuthValidationError(baseParsed.error)}`,
       );
     }
-    const result = await this.packGenerateService.generateDraft({
-      prompt: parsed.data.prompt,
-      outline: parsed.data.outline,
-      basePack: baseParsed.data,
-      sections: parsed.data.sections,
-    });
+    const result = await this.llmService.runForPlayer(playerId, () =>
+      this.packGenerateService.generateDraft({
+        prompt: parsed.data.prompt,
+        outline: parsed.data.outline,
+        basePack: baseParsed.data,
+        sections: parsed.data.sections,
+      }),
+    );
     return {
       pack: result.pack,
       source: result.source,
@@ -205,7 +242,7 @@ export class PackController {
     @Body() body: unknown,
     @Res() res: Response,
   ) {
-    this.requirePlayerId(authorization);
+    const playerId = this.requirePackAdmin(authorization);
     const parsed = packGenerateDraftPayloadSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(formatAuthValidationError(parsed.error));
@@ -231,15 +268,17 @@ export class PackController {
     };
 
     try {
-      for await (const ev of this.packGenerateService.generateDraftStream({
-        prompt: parsed.data.prompt,
-        outline: parsed.data.outline,
-        basePack: baseParsed.data,
-        sections: parsed.data.sections,
-      })) {
-        write(ev);
-        if (ev.type === 'error') break;
-      }
+      await this.llmService.runForPlayer(playerId, async () => {
+        for await (const ev of this.packGenerateService.generateDraftStream({
+          prompt: parsed.data.prompt,
+          outline: parsed.data.outline,
+          basePack: baseParsed.data,
+          sections: parsed.data.sections,
+        })) {
+          write(ev);
+          if (ev.type === 'error') break;
+        }
+      });
     } catch (err) {
       write({
         type: 'error',
@@ -254,8 +293,10 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
-    return this.packClarifyService.start(body);
+    const playerId = this.requirePackAdmin(authorization);
+    return this.llmService.runForPlayer(playerId, () =>
+      this.packClarifyService.start(body),
+    );
   }
 
   @Post('clarify/apply')
@@ -263,8 +304,10 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
-    return this.packClarifyService.apply(body);
+    const playerId = this.requirePackAdmin(authorization);
+    return this.llmService.runForPlayer(playerId, () =>
+      this.packClarifyService.apply(body),
+    );
   }
 
   @Post('clarify/polish')
@@ -272,8 +315,10 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
-    return this.packClarifyService.polish(body);
+    const playerId = this.requirePackAdmin(authorization);
+    return this.llmService.runForPlayer(playerId, () =>
+      this.packClarifyService.polish(body),
+    );
   }
 
   @Post('distill/brief')
@@ -281,8 +326,10 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
-    return this.packDistillService.brief(body);
+    const playerId = this.requirePackAdmin(authorization);
+    return this.llmService.runForPlayer(playerId, () =>
+      this.packDistillService.brief(body),
+    );
   }
 
   @Post('distill/normalize')
@@ -290,8 +337,10 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
-    return this.packDistillService.normalize(body);
+    const playerId = this.requirePackAdmin(authorization);
+    return this.llmService.runForPlayer(playerId, async () =>
+      this.packDistillService.normalize(body),
+    );
   }
 
   @Post('distill/apply')
@@ -299,8 +348,10 @@ export class PackController {
     @Headers('authorization') authorization: string | undefined,
     @Body() body: unknown,
   ) {
-    this.requirePlayerId(authorization);
-    return this.packDistillService.apply(body);
+    const playerId = this.requirePackAdmin(authorization);
+    return this.llmService.runForPlayer(playerId, async () =>
+      this.packDistillService.apply(body),
+    );
   }
 
   @Get('selection')

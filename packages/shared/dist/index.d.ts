@@ -8,6 +8,7 @@ export * from './pack-api.schema';
 export * from './chapter.util';
 export * from './tools.schema';
 export * from './llm.schema';
+export * from './llm-settings.schema';
 export * from './mock-reply';
 export * from './agent-trace.schema';
 export * from './pack-clarify.schema';

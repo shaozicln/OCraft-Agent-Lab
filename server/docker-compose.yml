@@ -12,7 +12,8 @@ services:
       POSTGRES_PASSWORD: ocraft
       POSTGRES_DB: ocraft
     ports:
-      - '15432:5432'
+      # 只绑定回环地址（理由同根目录 compose）：避免弱口令数据库暴露给局域网
+      - '127.0.0.1:15432:5432'
     volumes:
       - ocraft_pgdata:/var/lib/postgresql/data
     healthcheck:

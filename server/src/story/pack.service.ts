@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import {
@@ -24,6 +25,7 @@ import {
   type StoryPack,
 } from '@ocraft/shared';
 import { DbService } from '../db/db.service';
+import { LlmService } from '../agent/core/llm.service';
 import {
   playerNpcState,
   playerPackProfiles,
@@ -70,7 +72,10 @@ export class PackService implements OnModuleInit {
     { worldId: string; packVersionId: string; explicit: boolean }
   >();
 
-  constructor(private readonly dbService: DbService) {}
+  constructor(
+    private readonly dbService: DbService,
+    @Optional() private readonly llmService?: LlmService,
+  ) {}
 
   onModuleInit() {
     try {
@@ -155,7 +160,11 @@ export class PackService implements OnModuleInit {
   ): Promise<T> {
     await this.hydratePlayer(playerId);
     const pack = this.getPackForPlayerSync(playerId);
-    return this.als.run({ playerId, pack }, fn);
+    const run = () => this.als.run({ playerId, pack }, fn);
+    if (!this.llmService) return run();
+    return this.als.run({ playerId, pack }, () =>
+      this.llmService!.runForPlayer(playerId, fn),
+    );
   }
 
   private getPackForPlayerSync(playerId: string): StoryPack {

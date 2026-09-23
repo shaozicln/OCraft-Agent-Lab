@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { AuthSession } from '@ocraft/shared';
 import { eq, sql } from 'drizzle-orm';
+import { requireAuthSecret } from '../config/env';
 import { DbService } from '../db/db.service';
 import { players } from '../db/schema';
 
@@ -25,7 +26,9 @@ export class AuthService {
   constructor(private readonly dbService: DbService) {}
 
   private get secret(): string {
-    return process.env.AUTH_SECRET ?? 'dev-auth-secret-change-me';
+    // 不再提供兜底常量。缺失或仍是占位符时 requireAuthSecret() 直接抛错；
+    // 正常启动路径下 main.ts 的 assertServerEnv() 已经拦下，这里是纵深防御。
+    return requireAuthSecret();
   }
 
   normalizeUsername(username: string): string {

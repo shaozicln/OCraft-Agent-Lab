@@ -246,7 +246,7 @@ export class DirectorService {
       const messages = this.buildPrompt(input);
       const raw = await this.llmService.complete(messages, {
         json: true,
-        model: process.env.DIRECTOR_MODEL,
+        model: this.llmService.directorModel(),
         temperature: 0.3,
         maxTokens: 200,
       });

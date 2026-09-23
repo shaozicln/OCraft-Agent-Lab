@@ -26,6 +26,7 @@ import {
   startNewRunPayloadSchema,
 } from '@ocraft/shared';
 import { AuthService } from '../auth/auth.service';
+import { clientOrigins } from '../config/env';
 import { AgentHarnessService } from '../agent/core/agent-harness.service';
 import { NpcExchangeService } from '../agent/multiagent/npc-exchange.service';
 import { NpcAsideService } from '../agent/multiagent/npc-aside.service';
@@ -53,9 +54,19 @@ interface AuthedSocket extends Socket {
   };
 }
 
-@WebSocketGateway({
-  cors: { origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:3000' },
-})
+// 来源列表与 HTTP 侧共用 clientOrigins()，并且必须是数组 ——
+// Socket.IO 不会自动拆分逗号分隔的字符串，写成一整个字符串会被当成
+// 「单个字面 origin」从而全部拒绝。
+//
+// 历史坑：这里原本写的是 `process.env.CLIENT_ORIGIN ?? 'http://localhost:3000'`，
+// 但装饰器参数在模块加载时求值，早于 dotenv 加载，所以永远读不到 .env，
+// 一直用的是本不存在的 3000 端口（本项目 client 跑在 3300）。
+// 现在 main.ts 首行 import './config/load-env' 已保证加载顺序。
+//
+// 说明：本项目客户端固定 `transports: ['websocket']`，浏览器不对 WebSocket
+// 施加 CORS，所以这里主要覆盖 polling 兜底路径；真正的访问控制由
+// handleConnection() 的 token 校验 + BIND_HOST 回环绑定承担。
+@WebSocketGateway({ cors: { origin: clientOrigins() } })
 export class GameGateway implements OnGatewayConnection {
   private readonly logger = new Logger(GameGateway.name);
 

@@ -8,10 +8,12 @@
   --set-rail: color-mix(in srgb, var(--ui-panel-solid) 92%, transparent);
   --set-display: var(--font-settings-display), var(--font-geist-sans),
     'Songti SC', serif;
+  --set-dock-h: 3.5rem;
   min-height: 100vh;
   color: var(--ui-fg);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   background: var(--ui-bg);
+  overflow-anchor: none;
 }
 
 .settings-shell__grain {
@@ -23,43 +25,52 @@
   z-index: 1;
 }
 
-.settings-top {
+.settings-masthead {
+  border-bottom: 1px solid var(--ui-border);
+  background: color-mix(in srgb, var(--ui-panel) 94%, transparent);
+}
+
+/* 题头滚走后才给吸顶条高度；高度不动画，避免改 scrollHeight 来回打 */
+.settings-dock {
   position: sticky;
   top: 0;
   z-index: 10;
-  border-bottom: 1px solid var(--ui-border);
-  background: color-mix(in srgb, var(--ui-panel) 94%, transparent);
-  backdrop-filter: blur(12px);
-}
-
-.settings-top__compact {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
+  height: 0;
+  overflow: hidden;
   pointer-events: none;
-  transition:
-    grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.22s ease;
 }
 
-.settings-top__compact-inner {
+.settings-shell[data-header-collapsed='true'] .settings-dock {
+  height: var(--set-dock-h);
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.settings-dock__bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  min-height: 0;
-  overflow: hidden;
+  height: var(--set-dock-h);
   padding: 0 0.75rem;
+  border-bottom: 1px solid var(--ui-border);
+  background: color-mix(in srgb, var(--ui-panel) 94%, transparent);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s ease;
 }
 
-.settings-top[data-collapsed='true'] .settings-top__compact {
-  grid-template-rows: 1fr;
+.settings-shell[data-header-collapsed='true'] .settings-dock__bar {
   opacity: 1;
+  visibility: visible;
+  transform: none;
   pointer-events: auto;
-}
-
-.settings-top[data-collapsed='true'] .settings-top__compact-inner {
-  padding: 0.45rem 0.75rem;
 }
 
 .settings-top__chip {
@@ -73,15 +84,9 @@
   background: color-mix(in srgb, var(--ui-panel-solid) 88%, transparent);
   color: var(--ui-fg);
   cursor: pointer;
-  transform: translateY(-4px) scale(0.96);
   transition:
-    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     background-color 0.18s ease,
     border-color 0.18s ease;
-}
-
-.settings-top[data-collapsed='true'] .settings-top__chip {
-  transform: translateY(0) scale(1);
 }
 
 .settings-top__chip:hover {
@@ -115,26 +120,6 @@
 .settings-cta--slim {
   padding: 0.4rem 0.75rem;
   font-size: 0.8rem;
-}
-
-.settings-top__full {
-  display: grid;
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transition:
-    grid-template-rows 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.22s ease;
-}
-
-.settings-top__full-inner {
-  overflow: hidden;
-  min-height: 0;
-}
-
-.settings-top[data-collapsed='true'] .settings-top__full {
-  grid-template-rows: 0fr;
-  opacity: 0;
-  pointer-events: none;
 }
 
 .settings-top__row {
@@ -280,15 +265,10 @@
 @media (min-width: 768px) {
   .settings-sidebar {
     position: sticky;
-    top: 7.5rem;
+    top: var(--set-dock-h);
     align-self: flex-start;
     width: 12rem;
     padding: 0.45rem;
-    transition: top 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .settings-shell[data-header-collapsed='true'] .settings-sidebar {
-    top: 3.75rem;
   }
 
   .settings-sidebar-label {
@@ -496,10 +476,8 @@ a.settings-nav-btn {
   .settings-panel-in,
   .settings-cta,
   .settings-nav-btn,
-  .settings-top__compact,
-  .settings-top__full,
   .settings-top__chip,
-  .settings-sidebar {
+  .settings-dock__bar {
     animation: none !important;
     transition: none !important;
   }

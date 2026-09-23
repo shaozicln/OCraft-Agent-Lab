@@ -44,6 +44,7 @@ import {
   setLabPeerAgentsEnabled,
 } from '@/lib/lab-settings';
 import { ThemePicker } from '@/components/ui/ThemePicker';
+import { LlmSettingsPanel } from '@/components/settings/LlmSettingsPanel';
 import './settings.css';
 
 /** 题头拉丁：Literata 书刊感，字面更宽、更舒展 */
@@ -54,7 +55,7 @@ const settingsDisplay = Literata({
   display: 'swap',
 });
 
-type Tab = 'appearance' | 'account' | 'packs' | 'editor' | 'traces' | 'lab';
+type Tab = 'appearance' | 'account' | 'llm' | 'packs' | 'editor' | 'traces' | 'lab';
 
 const SECTION_TO_TOC: Partial<Record<PackGenerateSectionKey, string>> = {
   chapters: 'pack-sec-chapters',
@@ -143,8 +144,8 @@ function SettingsInner({
   const [tracesBusy, setTracesBusy] = useState(false);
   const [labPeerAgents, setLabPeerAgents] = useState(false);
   const [labRiskAck, setLabRiskAck] = useState(false);
-  const [headerScrolled, setHeaderScrolled] = useState(false);
-  const [headerExpandClick, setHeaderExpandClick] = useState(false);
+  const [headerDocked, setHeaderDocked] = useState(false);
+  const mastheadRef = useRef<HTMLDivElement>(null);
   const [clarifyOpen, setClarifyOpen] = useState(false);
   const [clarifyBusy, setClarifyBusy] = useState(false);
   const [clarifySession, setClarifySession] =
@@ -154,36 +155,23 @@ function SettingsInner({
     'save' | 'review' | null
   >(null);
   const [clarifySatisfied, setClarifySatisfied] = useState(false);
-  /** 点击展开时的 scrollY；只有再往下滚超过阈值才收起，避免展开动画触发的 scroll 立刻清掉状态 */
-  const headerPinYRef = useRef(0);
 
   useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY;
-      if (y < 36) {
-        setHeaderScrolled(false);
-        setHeaderExpandClick(false);
-        return;
-      }
-      if (y > 80) {
-        setHeaderScrolled(true);
-        setHeaderExpandClick((pinned) => {
-          if (!pinned) return false;
-          if (y > headerPinYRef.current + 56) return false;
-          return true;
-        });
-      }
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    const el = mastheadRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        setHeaderDocked(!entry.isIntersecting);
+      },
+      { threshold: 0, rootMargin: '0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
-  const headerCollapsed = headerScrolled && !headerExpandClick;
-
-  const expandSettingsHeader = useCallback(() => {
-    headerPinYRef.current = window.scrollY;
-    setHeaderExpandClick(true);
+  const revealSettingsHeader = useCallback(() => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
   }, []);
 
   const currentWorld = useMemo(
@@ -249,6 +237,7 @@ function SettingsInner({
     if (
       t === 'appearance' ||
       t === 'account' ||
+      t === 'llm' ||
       t === 'packs' ||
       t === 'editor' ||
       t === 'traces' ||
@@ -842,6 +831,7 @@ function SettingsInner({
     [
       { id: 'appearance', label: '外观' },
       { id: 'account', label: '账号' },
+      { id: 'llm', label: 'AI 接口' },
     ],
     [
       { id: 'packs', label: '剧情包' },
@@ -866,58 +856,58 @@ function SettingsInner({
   return (
     <main
       className={`settings-shell ${settingsDisplay.variable}`}
-      data-header-collapsed={headerCollapsed ? 'true' : 'false'}
+      data-header-collapsed={headerDocked ? 'true' : 'false'}
     >
       <div className="settings-shell__grain" aria-hidden />
       <div className="settings-shell__inner">
-        <header
-          className="settings-top"
-          data-collapsed={headerCollapsed ? 'true' : 'false'}
-        >
-          <div className="settings-top__compact">
-            <div className="settings-top__compact-inner">
-              <button
-                type="button"
-                className="settings-top__chip"
-                onClick={expandSettingsHeader}
-                aria-expanded={!headerCollapsed}
-                title="展开题头"
-              >
-                <span className="settings-top__chip-title">设置</span>
-                <span className="settings-top__chip-meta">
-                  {selection?.world_id ?? username}
-                </span>
-              </button>
-              <Link href="/" className="settings-cta settings-cta--slim">
-                返回场景
-              </Link>
+        <header className="settings-masthead" ref={mastheadRef}>
+          <div className="settings-top__row">
+            <div className="min-w-0">
+              <p className="settings-top__brand">OCraft</p>
+              <h1 className="settings-top__title">设置</h1>
             </div>
+            <Link href="/" className="settings-cta">
+              返回场景
+            </Link>
           </div>
-
-          <div className="settings-top__full">
-            <div className="settings-top__full-inner">
-              <div className="settings-top__row">
-                <div className="min-w-0">
-                  <p className="settings-top__brand">OCraft</p>
-                  <h1 className="settings-top__title">设置</h1>
-                </div>
-                <Link href="/" className="settings-cta">
-                  返回场景
-                </Link>
-              </div>
-              <div className="settings-cue" title={`${username} · ${cuePath}`}>
-                <span className="settings-cue__tick" aria-hidden />
-                <span className="settings-cue__label">当前包</span>
-                <span
-                  className="settings-cue__path"
-                  data-empty={selection ? 'false' : 'true'}
-                >
-                  {username} · {cuePath}
-                </span>
-              </div>
-            </div>
+          <div className="settings-cue" title={`${username} · ${cuePath}`}>
+            <span className="settings-cue__tick" aria-hidden />
+            <span className="settings-cue__label">当前包</span>
+            <span
+              className="settings-cue__path"
+              data-empty={selection ? 'false' : 'true'}
+            >
+              {username} · {cuePath}
+            </span>
           </div>
         </header>
+
+        <div
+          className="settings-dock"
+          aria-hidden={headerDocked ? 'false' : 'true'}
+        >
+          <div className="settings-dock__bar">
+            <button
+              type="button"
+              className="settings-top__chip"
+              onClick={revealSettingsHeader}
+              tabIndex={headerDocked ? 0 : -1}
+              title="回到题头"
+            >
+              <span className="settings-top__chip-title">设置</span>
+              <span className="settings-top__chip-meta">
+                {selection?.world_id ?? username}
+              </span>
+            </button>
+            <Link
+              href="/"
+              className="settings-cta settings-cta--slim"
+              tabIndex={headerDocked ? 0 : -1}
+            >
+              返回场景
+            </Link>
+          </div>
+        </div>
 
         <div className="settings-body">
           <aside className="settings-sidebar shrink-0">
@@ -1064,6 +1054,15 @@ function SettingsInner({
                 保存账号
               </button>
             </div>
+          )}
+
+          {tab === 'llm' && (
+            <LlmSettingsPanel
+              token={token}
+              panelStyle={panelStyle}
+              onError={setError}
+              onMessage={setMessage}
+            />
           )}
 
           {tab === 'packs' && (

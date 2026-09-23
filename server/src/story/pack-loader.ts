@@ -13,6 +13,11 @@ import {
   type StoryPack,
   type WorldManifest,
 } from '@ocraft/shared';
+import {
+  resolveVersionDirPath,
+  resolveVersionsPath,
+  resolveWorldPath,
+} from './pack-paths';
 
 function readJson(filePath: string): unknown {
   return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
@@ -42,7 +47,10 @@ export function loadWorldManifest(
   packsRoot: string,
   worldId: string,
 ): WorldManifest {
-  const manifestPath = path.join(packsRoot, worldId, 'manifest.json');
+  const manifestPath = path.join(
+    resolveWorldPath(packsRoot, worldId),
+    'manifest.json',
+  );
   return worldManifestSchema.parse(readJson(manifestPath));
 }
 
@@ -95,12 +103,7 @@ export function loadOfficialPack(
   const manifest = loadWorldManifest(packsRoot, worldId);
   const versionDir =
     process.env.OFFICIAL_VERSION_DIR ?? manifest.official_version_dir;
-  const versionPath = path.join(
-    packsRoot,
-    worldId,
-    'versions',
-    versionDir,
-  );
+  const versionPath = resolveVersionDirPath(packsRoot, worldId, versionDir);
   if (!fs.existsSync(versionPath)) {
     throw new Error(`Official pack not found: ${versionPath}`);
   }
@@ -119,7 +122,7 @@ export function listVersionDirs(
   packsRoot: string,
   worldId: string,
 ): string[] {
-  const versionsPath = path.join(packsRoot, worldId, 'versions');
+  const versionsPath = resolveVersionsPath(packsRoot, worldId);
   if (!fs.existsSync(versionsPath)) return [];
   return fs
     .readdirSync(versionsPath, { withFileTypes: true })

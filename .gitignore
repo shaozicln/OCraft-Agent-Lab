@@ -19,3 +19,10 @@ desktop.ini
 
 # 日志
 *.log
+
+# 环境变量与本地密钥
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local

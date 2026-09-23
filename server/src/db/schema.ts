@@ -7,7 +7,7 @@
  * 3. npm run db:migrate
  *
  * 表一览：
- * - players              玩家账号 + 选用 Pack
+ * - players              玩家账号 + 选用 Pack + 个人 LLM 接口
  * - player_pack_profiles 某玩家在某包版本下的角色人设
  * - player_npc_state     某玩家在某包版本下与某 NPC 的当前进度
  * - story_flags          分人剧情 flag（L4 可选；世界主线见 world_flags）
@@ -53,6 +53,15 @@ export const players = pgTable(
   selectedWorldId: text('selected_world_id'),
   /** 选用的包版本目录名；null = 跟随全服默认默认 */
   selectedPackVersionId: text('selected_pack_version_id'),
+  /** 玩家自填的 OpenAI 兼容 Base URL；空则回退 LLM_BASE_URL */
+  llmBaseUrl: text('llm_base_url'),
+  /** AES-GCM 加密后的 API Key；空则回退 LLM_API_KEY */
+  llmApiKeyEnc: text('llm_api_key_enc'),
+  llmModel: text('llm_model'),
+  llmEmbedModel: text('llm_embed_model'),
+  llmDirectorModel: text('llm_director_model'),
+  /** 'true' | 'false'；null = 跟随 LLM_ENABLE_THINKING */
+  llmEnableThinking: text('llm_enable_thinking'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

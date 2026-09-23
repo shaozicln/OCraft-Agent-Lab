@@ -1,10 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { AsyncLocalStorage } from 'async_hooks';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import OpenAI from 'openai';
 import {
   buildMockReplyFromContext,
   LlmMessage,
   ToolCallResult,
 } from '@ocraft/shared';
+import { LlmSettingsService, envLlmConfig } from './llm-settings.service';
+import type { ResolvedLlmConfig } from './llm.types';
 
 export interface StreamChunk {
   text: string;
@@ -29,25 +32,69 @@ export interface ChatWithToolsResult {
 @Injectable()
 export class LlmService {
   private readonly logger = new Logger(LlmService.name);
-  private readonly client: OpenAI | null;
+  private readonly als = new AsyncLocalStorage<ResolvedLlmConfig>();
+  private readonly clients = new Map<string, OpenAI>();
+  /** 无玩家上下文时（eval 脚本）使用的进程级配置 */
+  private readonly envConfig: ResolvedLlmConfig;
 
-  constructor() {
-    const apiKey = process.env.LLM_API_KEY;
-    const baseURL = process.env.LLM_BASE_URL;
-    this.client =
-      apiKey && baseURL
-        ? new OpenAI({ apiKey, baseURL })
-        : null;
-
-    if (!this.client) {
+  constructor(@Optional() private readonly settings?: LlmSettingsService) {
+    this.envConfig = envLlmConfig();
+    if (this.envConfig.source === 'none') {
       this.logger.warn(
-        'LLM_API_KEY / LLM_BASE_URL not set — running in MOCK mode',
+        'no LLM credentials in .env — fill AI API in Settings, or set LLM_API_KEY / LLM_BASE_URL',
       );
     }
   }
 
+  async runForPlayer<T>(
+    playerId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const config = this.settings
+      ? await this.settings.resolve(playerId)
+      : this.envConfig;
+    return this.als.run(config, fn);
+  }
+
+  async runWithConfig<T>(
+    config: ResolvedLlmConfig,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    return this.als.run(config, fn);
+  }
+
+  private resolved(): ResolvedLlmConfig {
+    return this.als.getStore() ?? this.envConfig;
+  }
+
+  private client(): OpenAI | null {
+    const cfg = this.resolved();
+    if (!cfg.apiKey || !cfg.baseURL) return null;
+    const cacheKey = `${cfg.baseURL}\0${cfg.apiKey}`;
+    const cached = this.clients.get(cacheKey);
+    if (cached) return cached;
+    const created = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseURL });
+    this.clients.set(cacheKey, created);
+    return created;
+  }
+
+  /** 配置（尤其 Key）变更/清空后，丢弃缓存的 client，避免旧 Key 常驻内存 */
+  dropClientFor(config: ResolvedLlmConfig): void {
+    if (!config.apiKey || !config.baseURL) return;
+    this.clients.delete(`${config.baseURL}\0${config.apiKey}`);
+  }
+
   isMockMode(): boolean {
-    return !this.client;
+    return this.resolved().source === 'none';
+  }
+
+  chatModel(): string {
+    return this.resolved().model || 'qwen-plus';
+  }
+
+  directorModel(): string {
+    const cfg = this.resolved();
+    return cfg.directorModel || cfg.model || 'qwen-plus';
   }
 
   /**
@@ -55,7 +102,7 @@ export class LlmService {
    * hybrid 默认会先写 reasoning_content，前端像卡住。游戏默认关思考。
    */
   private vendorBodyExtras(): Record<string, unknown> {
-    const thinking = process.env.LLM_ENABLE_THINKING === 'true';
+    const thinking = this.resolved().enableThinking;
     return {
       enable_thinking: thinking,
       chat_template_kwargs: { enable_thinking: thinking },
@@ -74,11 +121,12 @@ export class LlmService {
       json?: boolean;
     } = {},
   ): Promise<string> {
-    if (!this.client) {
+    const client = this.client();
+    if (!client) {
       return this.mockComplete(messages);
     }
-    const model = opts.model ?? process.env.LLM_MODEL ?? 'qwen-plus';
-    const res = await this.client.chat.completions.create({
+    const model = opts.model || this.chatModel();
+    const res = await client.chat.completions.create({
       model,
       messages,
       temperature: opts.temperature ?? 0.4,
@@ -99,12 +147,13 @@ export class LlmService {
     tools: OpenAI.Chat.ChatCompletionTool[],
     opts: { model?: string; temperature?: number } = {},
   ): Promise<ChatWithToolsResult> {
-    if (!this.client) {
+    const client = this.client();
+    if (!client) {
       return this.mockChatWithTools(messages);
     }
 
-    const model = opts.model ?? process.env.LLM_MODEL ?? 'qwen-plus';
-    const res = await this.client.chat.completions.create({
+    const model = opts.model || this.chatModel();
+    const res = await client.chat.completions.create({
       model,
       messages,
       tools,
@@ -132,13 +181,11 @@ export class LlmService {
    * Mem-V：批量 embedding。无 client / 失败时返回 null（调用方回退本地或关键词）。
    */
   async embed(texts: string[]): Promise<number[][] | null> {
-    if (!this.client || texts.length === 0) return null;
+    const client = this.client();
+    if (!client || texts.length === 0) return null;
     try {
-      const model =
-        process.env.LLM_EMBED_MODEL ??
-        process.env.EMBEDDING_MODEL ??
-        'text-embedding-v3';
-      const res = await this.client.embeddings.create({
+      const model = this.resolved().embedModel || 'text-embedding-v3';
+      const res = await client.embeddings.create({
         model,
         input: texts,
       });
@@ -155,15 +202,16 @@ export class LlmService {
   async *streamChat(
     messages: LlmMessage[],
     options: StreamChatOptions = {},
-    model = process.env.LLM_MODEL ?? 'qwen-plus',
+    model?: string,
   ): AsyncGenerator<StreamChunk> {
-    if (!this.client) {
+    const client = this.client();
+    if (!client) {
       yield* this.mockStream(messages, options.toolCalls ?? []);
       return;
     }
 
-    const stream = await this.client.chat.completions.create({
-      model,
+    const stream = await client.chat.completions.create({
+      model: model || this.chatModel(),
       messages,
       stream: true,
       temperature: 0.8,

@@ -20,7 +20,10 @@ services:
       POSTGRES_DB: ocraft
     ports:
       # 宿主机勿用 5432/5433：Windows Hyper-V 常保留 5358–5457
-      - '15432:5432'
+      # 只绑定回环地址：否则同局域网 / 虚拟局域网（如 Radmin VPN）上的任何设备
+      # 都能用下面这个弱口令直连数据库，绕过全部应用逻辑。
+      # 确实需要别的设备连库时，再显式改成 '15432:5432' 并收紧系统防火墙。
+      - '127.0.0.1:15432:5432'
     volumes:
       - ocraft_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -38,13 +41,20 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - '4400:4400'
+      # 只绑定回环地址，避免服务对局域网开放
+      - '127.0.0.1:4400:4400'
     env_file:
       - path: server/.env
         required: false
     environment:
       NODE_ENV: production
       PORT: '4400'
+      # 容器内必须监听 0.0.0.0，宿主机的端口映射才能生效；
+      # 对外的暴露面由上面的 127.0.0.1 端口绑定 + 系统防火墙控制。
+      BIND_HOST: 0.0.0.0
+      # 容器内已对 compose 网络开放，因此必须显式声明谁有权改剧情包。
+      # 未设置时：剧情包写入 / 删除 / AI 生成接口会被拒绝（对话与只读功能正常）。
+      # PACK_ADMIN_IDS: '001'
       # 容器内走 compose 网络，不要用 localhost:15432
       DATABASE_URL: postgresql://ocraft:ocraft@postgres:5432/ocraft
       CLIENT_ORIGIN: http://localhost:3300
@@ -64,7 +74,8 @@ services:
     depends_on:
       - server
     ports:
-      - '3300:3300'
+      # 只绑定回环地址，避免服务对局域网开放
+      - '127.0.0.1:3300:3300'
     environment:
       NODE_ENV: production
     restart: unless-stopped
