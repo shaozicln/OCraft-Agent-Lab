@@ -28,6 +28,7 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { clientOrigins } from '../config/env';
 import { AgentHarnessService } from '../agent/core/agent-harness.service';
+import { LlmService } from '../agent/core/llm.service';
 import { NpcExchangeService } from '../agent/multiagent/npc-exchange.service';
 import { NpcAsideService } from '../agent/multiagent/npc-aside.service';
 import { DirectorService } from '../agent/core/director.service';
@@ -76,6 +77,7 @@ export class GameGateway implements OnGatewayConnection {
   constructor(
     private readonly authService: AuthService,
     private readonly agentHarness: AgentHarnessService,
+    private readonly llmService: LlmService,
     private readonly npcExchange: NpcExchangeService,
     private readonly npcAside: NpcAsideService,
     private readonly director: DirectorService,
@@ -462,9 +464,24 @@ export class GameGateway implements OnGatewayConnection {
 
     return this.packService.runWithPlayerAsync(playerId, async () => {
       await this.conversationService.ensureSession(playerId, npcId);
+      const msgPreview =
+        message.length > 48 ? `${message.slice(0, 48)}…` : message;
       this.logger.log(
-        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper}${whisperSource ? `(${whisperSource})` : ''}${isAutoPlay ? ' autoPlay' : ''}${isEpilogue ? ' epilogue' : ''}${isLabPeer ? ' labPeer' : ''} msg="${message}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
+        `player_chat player=${playerId} npc=${npcId} whisper=${isWhisper}${whisperSource ? `(${whisperSource})` : ''}${isAutoPlay ? ' autoPlay' : ''}${isEpilogue ? ' epilogue' : ''}${isLabPeer ? ' labPeer' : ''} msg="${msgPreview}" nearby=${(nearbyNpcIds ?? []).join(',') || '-'}`,
       );
+
+      // 生产默认不回退 .env Key：无玩家配置则直接提示，避免 MOCK / 烧服主额度
+      if (this.llmService.isMockMode()) {
+        const tip =
+          '请在设置中配置 LLM API Key（设置 → AI API），否则无法对话。';
+        this.logger.warn(
+          `player_chat blocked: no LLM credentials player=${playerId}`,
+        );
+        client.emit('npc_error', { npcId, message: tip });
+        client.emit('npc_stream', { npcId, chunk: tip, replace: true });
+        client.emit('npc_stream', { npcId, chunk: '', done: true });
+        return;
+      }
 
       try {
         // 导演：whisper / MA-Lab / 杀青跳过 LLM 排场外的复杂调度；杀青仍走主回复

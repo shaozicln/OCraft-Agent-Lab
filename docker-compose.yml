@@ -57,8 +57,11 @@ services:
       # PACK_ADMIN_IDS: '001'
       # 容器内走 compose 网络，不要用 localhost:15432
       DATABASE_URL: postgresql://ocraft:ocraft@postgres:5432/ocraft
+      # 生产域名示例：CLIENT_ORIGIN: https://cspona.top
       CLIENT_ORIGIN: http://localhost:3300
       STORY_PACKS_ROOT: /app/story-packs
+      # 生产不要用服主 Key 顶玩家：保持默认（production 下不允许 env 回退）
+      # LLM_ALLOW_ENV_FALLBACK: 'false'
     volumes:
       - ./story-packs:/app/story-packs
     restart: unless-stopped

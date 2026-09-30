@@ -4,7 +4,7 @@ import type {
   PatchPlayerLlmSettings,
   PlayerLlmSettings,
 } from '@ocraft/shared';
-import { requireAuthSecret } from '../../config/env';
+import { allowEnvLlmFallback, requireAuthSecret } from '../../config/env';
 import { DbService } from '../../db/db.service';
 import { players } from '../../db/schema';
 import { decryptSecret, encryptSecret, maskApiKey } from './llm-secret';
@@ -93,8 +93,10 @@ export class LlmSettingsService {
     },
     env = envLlmConfig(),
   ): ResolvedLlmConfig {
-    const apiKey = player.apiKey || env.apiKey;
-    const baseURL = player.baseUrl || env.baseURL;
+    const useEnvKey = allowEnvLlmFallback();
+    const apiKey = player.apiKey || (useEnvKey ? env.apiKey : '');
+    const baseURL = player.baseUrl || (useEnvKey ? env.baseURL : '');
+    // 模型名仍可继承 .env 默认，不消耗额度
     const model = player.model || env.model;
     const embedModel = player.embedModel || env.embedModel;
     const directorModel = player.directorModel || env.directorModel || model;

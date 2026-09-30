@@ -75,6 +75,18 @@ export function clientOrigins(): string[] {
 }
 
 /**
+ * 是否允许用 server/.env 的 LLM_* 顶替「玩家未在设置里填的 Key」。
+ * - 显式 true/false 优先
+ * - 默认：仅 NODE_ENV=development 允许（本机省事）；production 必须玩家自备 Key，避免公网烧服主额度
+ */
+export function allowEnvLlmFallback(): boolean {
+  const raw = (process.env.LLM_ALLOW_ENV_FALLBACK ?? '').trim().toLowerCase();
+  if (raw === 'true' || raw === '1' || raw === 'yes') return true;
+  if (raw === 'false' || raw === '0' || raw === 'no') return false;
+  return process.env.NODE_ENV === 'development';
+}
+
+/**
  * 允许「改写/删除剧情包」与「触发 AI 生成」的玩家白名单（playerId，逗号分隔）。
  * 只在服务对网络开放时才被要求配置。
  */

@@ -152,8 +152,16 @@ export class AgentHarnessService {
       playerMessage,
     );
 
+    // 不打印全文 Prompt（含人设/记忆，体积大且敏感）；仅摘要便于排障
     if (process.env.NODE_ENV !== 'production') {
-      this.logger.log(`[dev prompt] ${JSON.stringify(dialogMessages, null, 2)}`);
+      const roles = dialogMessages.map((m) => m.role).join('>');
+      const chars = dialogMessages.reduce(
+        (n, m) => n + (m.content?.length ?? 0),
+        0,
+      );
+      this.logger.debug(
+        `[dev prompt] npc=${npcId} roles=${roles} msgs=${dialogMessages.length} chars=${chars}`,
+      );
     }
 
     const openaiMessages = this.toOpenAiMessages(dialogMessages);
