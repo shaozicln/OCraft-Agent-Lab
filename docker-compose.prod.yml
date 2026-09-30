@@ -1,0 +1,85 @@
+# OCraft 生产编排（阿里云 + 宝塔反代）
+#
+# 服务器路径（仓库根目录）：
+#   /www/server/go_project/OCraft-Web/docker-compose.prod.yml
+#
+# 前置：
+#   1. 已 clone 本仓库到上述目录
+#   2. 已填写 server/.env（AUTH_SECRET、CLIENT_ORIGIN 等）
+#   3. 安全组 / 防火墙只开 80、443、22；不要开 3300/4400/5432
+#   4. 宝塔给 ocraft.cspona.top 做 HTTPS，反代到本机端口（见文件末尾）
+#
+# 启动：
+#   cd /www/server/go_project/OCraft-Web
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# 更新代码：
+#   git pull && docker compose -f docker-compose.prod.yml up -d --build
+#   （不要加 -v，否则会删数据库卷）
+
+name: ocraft-prod
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ocraft-postgres
+    environment:
+      POSTGRES_USER: ocraft
+      POSTGRES_PASSWORD: ocraft
+      POSTGRES_DB: ocraft
+    # 生产：不映射到宿主机，仅 compose 内网可访问
+    volumes:
+      - ocraft_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ocraft -d ocraft']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/server.Dockerfile
+    container_name: ocraft-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # 仅本机，供宝塔 / Nginx 反代
+      - '127.0.0.1:4400:4400'
+    env_file:
+      - path: server/.env
+        required: true
+    environment:
+      NODE_ENV: production
+      PORT: '4400'
+      BIND_HOST: 0.0.0.0
+      DATABASE_URL: postgresql://ocraft:ocraft@postgres:5432/ocraft
+      CLIENT_ORIGIN: https://ocraft.cspona.top
+      STORY_PACKS_ROOT: /app/story-packs
+      LLM_ALLOW_ENV_FALLBACK: 'false'
+      # 首次注册后把你的玩家 UID 写进 server/.env 的 PACK_ADMIN_IDS
+    volumes:
+      - ./story-packs:/app/story-packs
+    restart: unless-stopped
+
+  client:
+    build:
+      context: .
+      dockerfile: docker/client.Dockerfile
+      args:
+        # 浏览器走同域 HTTPS；由 Nginx 把 /socket.io、/auth 等转到 4400
+        NEXT_PUBLIC_GAME_SERVER_URL: https://ocraft.cspona.top
+    container_name: ocraft-client
+    depends_on:
+      - server
+    ports:
+      - '127.0.0.1:3300:3300'
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+volumes:
+  ocraft_pgdata:
+    name: ocraft_prod_pgdata

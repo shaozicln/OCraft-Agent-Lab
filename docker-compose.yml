@@ -7,6 +7,10 @@
 #
 # 只要数据库（兼容旧习惯）：
 #   docker compose up -d postgres
+#
+# 阿里云生产（子域 ocraft.cspona.top + 宝塔反代）：
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   详见 docker-compose.prod.yml 头注释
 
 name: ocraft
 
