@@ -1,0 +1,69 @@
+# 本机 docker save → 服务器 docker load 后使用（不依赖阿里云 ACR）
+#
+# 本机已执行：
+#   docker build ... -t ocraft-server:prod
+#   docker build ... -t ocraft-client:prod
+#   docker save ocraft-server:prod ocraft-client:prod -o ocraft-images.tar
+#
+# 服务器：
+#   cd /www/server/go_project/OCraft-Web
+#   docker load -i ocraft-images.tar
+#   # 确保 server/.env 已配置
+#   docker compose -f docker-compose.prod.images.yml up -d
+
+name: ocraft-prod
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ocraft-postgres
+    environment:
+      POSTGRES_USER: ocraft
+      POSTGRES_PASSWORD: ocraft
+      POSTGRES_DB: ocraft
+    volumes:
+      - ocraft_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ocraft -d ocraft']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  server:
+    image: ocraft-server:prod
+    container_name: ocraft-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:4400:4400'
+    env_file:
+      - path: server/.env
+        required: true
+    environment:
+      NODE_ENV: production
+      PORT: '4400'
+      BIND_HOST: 0.0.0.0
+      DATABASE_URL: postgresql://ocraft:ocraft@postgres:5432/ocraft
+      CLIENT_ORIGIN: https://ocraft.cspona.top
+      STORY_PACKS_ROOT: /app/story-packs
+      LLM_ALLOW_ENV_FALLBACK: 'false'
+    volumes:
+      - ./story-packs:/app/story-packs
+    restart: unless-stopped
+
+  client:
+    image: ocraft-client:prod
+    container_name: ocraft-client
+    depends_on:
+      - server
+    ports:
+      - '127.0.0.1:3300:3300'
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+volumes:
+  ocraft_pgdata:
+    name: ocraft_prod_pgdata
