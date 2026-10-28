@@ -17,6 +17,11 @@ skills-lock.json
 Thumbs.db
 desktop.ini
 
+# 本地 Docker 镜像包（体积大，勿提交）
+*.tar
+ocraft-images.tar
+ocraft-images*.tar
+
 # 日志
 *.log
 
