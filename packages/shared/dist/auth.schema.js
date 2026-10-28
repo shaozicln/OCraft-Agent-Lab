@@ -26,6 +26,8 @@ exports.authSessionSchema = zod_1.z.object({
     playerId: zod_1.z.string().regex(/^\d{3}$/, '玩家 UID 须为三位数字'),
     username: zod_1.z.string(),
     token: zod_1.z.string().min(1),
+    /** 站点管理员（审核 / 官方标记）；旧会话缺省视为 false */
+    is_admin: zod_1.z.boolean().optional().default(false),
 });
 /** 将 Zod 校验错误转成用户可读的中文提示 */
 function formatAuthValidationError(error) {

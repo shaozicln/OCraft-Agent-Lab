@@ -446,6 +446,85 @@ export function savePackAsCopy(opts: {
 /**
  * 新建世界：写 manifest + 极简空壳首版本（不复制官方结构）。
  */
+/**
+ * Fork：新建世界目录，拷贝世界设定（manifest）+ 所选版本（可多选），改 pack.json.world_id。
+ * 版本目录名保持与源相同，便于溯源。
+ */
+export function forkWorldPack(opts: {
+  fromWorldId: string;
+  fromVersionDirs: string[];
+  toWorldId: string;
+  description?: string;
+  notes?: string;
+  packsRoot?: string;
+}): {
+  worldId: string;
+  versionDirs: string[];
+  officialVersionDir: string;
+} {
+  const packsRoot = opts.packsRoot ?? resolveStoryPacksRoot();
+  const srcWorld = resolveWorldPath(packsRoot, opts.fromWorldId);
+  if (!fs.existsSync(srcWorld)) {
+    throw new Error(`源世界不存在: ${opts.fromWorldId}`);
+  }
+  const destWorld = resolveWorldPath(packsRoot, opts.toWorldId);
+  if (fs.existsSync(destWorld)) {
+    throw new Error(`目标世界已存在: ${opts.toWorldId}`);
+  }
+
+  const dirs = [...new Set(opts.fromVersionDirs.map((d) => d.trim()).filter(Boolean))];
+  if (dirs.length === 0) {
+    throw new Error('请至少选择一个版本');
+  }
+
+  fs.mkdirSync(path.join(destWorld, 'versions'), { recursive: true });
+
+  for (const versionDir of dirs) {
+    const src = resolveVersionPath(opts.fromWorldId, versionDir, packsRoot);
+    if (!fs.existsSync(src)) {
+      throw new Error(`源版本不存在: ${opts.fromWorldId}/${versionDir}`);
+    }
+    const dest = resolveVersionPath(opts.toWorldId, versionDir, packsRoot);
+    copyDirRecursive(src, dest);
+    const packJsonPath = path.join(dest, 'pack.json');
+    const header = JSON.parse(fs.readFileSync(packJsonPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    header.world_id = opts.toWorldId;
+    if (opts.notes !== undefined) {
+      header.notes = opts.notes;
+    } else {
+      header.notes = `Fork 自 ${opts.fromWorldId}/${versionDir}`;
+    }
+    fs.writeFileSync(
+      packJsonPath,
+      `${JSON.stringify(header, null, 2)}\n`,
+      'utf-8',
+    );
+  }
+
+  const srcManifest = loadWorldManifest(packsRoot, opts.fromWorldId);
+  const officialVersionDir = dirs.includes(srcManifest.official_version_dir)
+    ? srcManifest.official_version_dir
+    : dirs[0]!;
+
+  writeJson(path.join(destWorld, 'manifest.json'), {
+    world_id: opts.toWorldId,
+    official_version_dir: officialVersionDir,
+    description:
+      opts.description?.trim() ||
+      srcManifest.description ||
+      undefined,
+  });
+
+  return {
+    worldId: opts.toWorldId,
+    versionDirs: dirs,
+    officialVersionDir,
+  };
+}
+
 export function createWorldPack(opts: {
   worldId: string;
   versionName: string;

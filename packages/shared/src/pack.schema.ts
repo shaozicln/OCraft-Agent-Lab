@@ -10,6 +10,46 @@ export const packIdSchema = z
   .max(64)
   .regex(/^[a-zA-Z0-9_-]+$/, 'id 仅允许字母数字、_、-');
 
+/**
+ * 社区世界短名（展示名）：最多 20 字；中文 / 英文 / 数字 / 罗马数字字母；NFC。
+ * 跨用户可重名；真正主键是 communityWorldId。
+ */
+export const communityShortNameSchema = z
+  .string()
+  .transform((s) => s.normalize('NFC').trim())
+  .pipe(
+    z
+      .string()
+      .min(1, '短名不能为空')
+      .max(20, '短名最多 20 字')
+      .regex(
+        /^[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9IVXLCDMivxlcdm]+$/,
+        '短名仅允许中文、英文、数字、罗马数字字母（IVXLCDM）',
+      ),
+  );
+
+/**
+ * 社区 world_id：官方短名（如 office）或 u{uid}_{shortName}（可含中文）。
+ * 创建后不改。
+ */
+export const communityWorldIdSchema = z
+  .string()
+  .transform((s) => s.normalize('NFC').trim())
+  .pipe(
+    z
+      .string()
+      .min(1)
+      .max(96)
+      .refine(
+        (v) =>
+          !/[\\/\0]/.test(v) &&
+          !v.includes('..') &&
+          v !== '.' &&
+          /^[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9IVXLCDMivxlcdm_-]+$/.test(v),
+        'world_id 非法',
+      ),
+  );
+
 export const packChapterSchema = z.object({
   id: packIdSchema,
   display_name: z.string(),
@@ -274,7 +314,7 @@ export const packPlayablePlayerSchema = z.object({
 
 export const packHeaderSchema = z.object({
   schema_version: z.number().int().positive(),
-  world_id: packIdSchema,
+  world_id: communityWorldIdSchema,
   /** 版本名（不含时间戳）；目录为 版本名__时间戳 */
   display_name: z.string().min(1),
   /** ISO 或 yyyyMMddTHHmm */
@@ -290,7 +330,7 @@ export const packHeaderSchema = z.object({
 });
 
 export const worldManifestSchema = z.object({
-  world_id: packIdSchema,
+  world_id: communityWorldIdSchema,
   /** versions/ 下的目录名（含 __时间戳） */
   official_version_dir: z.string().min(1),
   description: z.string().optional(),

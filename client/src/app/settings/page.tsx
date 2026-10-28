@@ -19,6 +19,9 @@ import type {
   PackGenerateSections,
   PackGenerateStreamEvent,
   PackSelection,
+  PackTrashItem,
+  PackTrashListResponse,
+  PackWorldListSort,
   PackWorldSummary,
   PlayerAccount,
   PlayerPackProfile,
@@ -174,9 +177,60 @@ function SettingsInner({
     window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
   }, []);
 
+  const [worldQuery, setWorldQuery] = useState('');
+  const [worldSort, setWorldSort] = useState<PackWorldListSort>('default');
+
+  const displayWorlds = useMemo(() => {
+    let list = [...worlds];
+    const needle = worldQuery.trim().toLowerCase();
+    if (needle) {
+      list = list.filter((w) => {
+        const hay = [
+          w.short_name ?? '',
+          w.world_id,
+          w.owner_username ?? '',
+          w.description ?? '',
+        ]
+          .join('\n')
+          .toLowerCase();
+        return hay.includes(needle);
+      });
+    }
+    if (worldSort === 'likes') {
+      list.sort(
+        (a, b) =>
+          (b.like_count ?? 0) - (a.like_count ?? 0) ||
+          (a.short_name ?? a.world_id).localeCompare(
+            b.short_name ?? b.world_id,
+            'zh',
+          ),
+      );
+    } else if (worldSort === 'favorites') {
+      list.sort(
+        (a, b) =>
+          (b.favorite_count ?? 0) - (a.favorite_count ?? 0) ||
+          (a.short_name ?? a.world_id).localeCompare(
+            b.short_name ?? b.world_id,
+            'zh',
+          ),
+      );
+    } else if (worldSort === 'name') {
+      list.sort((a, b) =>
+        (a.short_name ?? a.world_id).localeCompare(
+          b.short_name ?? b.world_id,
+          'zh',
+        ),
+      );
+    }
+    return list;
+  }, [worlds, worldQuery, worldSort]);
+
   const currentWorld = useMemo(
-    () => worlds.find((w) => w.world_id === selectedWorldId) ?? worlds[0],
-    [worlds, selectedWorldId],
+    () =>
+      worlds.find((w) => w.world_id === selectedWorldId) ??
+      displayWorlds[0] ??
+      worlds[0],
+    [worlds, displayWorlds, selectedWorldId],
   );
 
   const applyPackProfile = (p: PlayerPackProfile) => {
@@ -184,17 +238,36 @@ function SettingsInner({
     setProfileFields(resolveProfileFields(p));
   };
 
+  const [isSiteAdmin, setIsSiteAdmin] = useState(false);
+  const [trashItems, setTrashItems] = useState<PackTrashItem[]>([]);
+
+  const refreshTrash = useCallback(async () => {
+    try {
+      const res = await apiFetch<PackTrashListResponse>('/packs/trash', {
+        token,
+      });
+      setTrashItems(res.items);
+    } catch {
+      setTrashItems([]);
+    }
+  }, [token]);
+
   const refreshPacks = useCallback(async () => {
     const [worldsRes, sel] = await Promise.all([
-      apiFetch<{ worlds: PackWorldSummary[] }>('/packs/worlds', { token }),
+      apiFetch<{ worlds: PackWorldSummary[]; is_admin?: boolean }>(
+        '/packs/worlds',
+        { token },
+      ),
       apiFetch<PackSelection>('/packs/selection', { token }),
     ]);
     setWorlds(worldsRes.worlds);
+    setIsSiteAdmin(!!worldsRes.is_admin);
     setSelection(sel);
     setSelectedWorldId((prev) => prev || sel.world_id || worldsRes.worlds[0]?.world_id || '');
     setEditWorldId((prev) => prev || sel.world_id);
     setEditVersionDir((prev) => prev || sel.pack_version_id);
     setSaveAsFrom((prev) => prev || sel.pack_version_id);
+    void refreshTrash();
 
     const official =
       worldsRes.worlds.find((w) =>
@@ -213,7 +286,7 @@ function SettingsInner({
         // placeholder 可选
       }
     }
-  }, [token]);
+  }, [token, refreshTrash]);
 
   const refreshAccount = useCallback(async () => {
     const a = await apiFetch<PlayerAccount>('/players/me', { token });
@@ -702,7 +775,7 @@ function SettingsInner({
         token,
         method: 'POST',
         body: {
-          worldId: newWorldId.trim(),
+          shortName: newWorldId.trim(),
           versionName: newWorldVersion.trim() || undefined,
           description: newWorldDesc.trim() || undefined,
         },
@@ -746,8 +819,15 @@ function SettingsInner({
     }
   };
 
-  const deleteWorld = async (worldId: string) => {
-    if (!confirm(`删除整个世界 ${worldId}（含全部版本）？不可恢复。`)) return;
+  const deleteWorld = async (worldId: string, asAdminForce = false) => {
+    if (
+      !confirm(
+        asAdminForce
+          ? `管理员强制将 ${worldId} 移入回收站？仅管理员可恢复。`
+          : `将世界 ${worldId} 移入回收站？磁盘与游玩历史保留，可稍后恢复。`,
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -756,15 +836,58 @@ function SettingsInner({
         token,
         method: 'DELETE',
       });
-      setMessage(`已删除世界 ${worldId}`);
+      setMessage(`已移入回收站 ${worldId}`);
       if (editWorldId === worldId) {
         setPackDraft(null);
         setEditWorldId('');
         setEditVersionDir('');
       }
+      if (selectedWorldId === worldId) setSelectedWorldId('');
       await refreshPacks();
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除世界失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreTrashWorld = async (worldId: string) => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiFetch(`/packs/trash/${encodeURIComponent(worldId)}/restore`, {
+        token,
+        method: 'POST',
+      });
+      setMessage(`已恢复 ${worldId}`);
+      await refreshPacks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '恢复失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const purgeTrashWorld = async (worldId: string) => {
+    if (
+      !confirm(
+        `彻底清空 ${worldId}？将删除磁盘文件与回收站记录，游玩历史保留。不可恢复。`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiFetch(
+        `/packs/worlds/${encodeURIComponent(worldId)}?purge=1`,
+        { token, method: 'DELETE' },
+      );
+      setMessage(`已彻底清空 ${worldId}`);
+      await refreshPacks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '清空失败');
     } finally {
       setBusy(false);
     }
@@ -1079,8 +1202,44 @@ function SettingsInner({
                     恢复默认
                   </button>
                 </div>
+                <div className="mt-3 flex flex-wrap items-end gap-2">
+                  <label className="block min-w-[12rem] flex-1 text-sm">
+                    <span style={{ color: 'var(--ui-fg-muted)' }}>搜索</span>
+                    <input
+                      className="mt-1 w-full rounded-lg border px-3 py-1.5 text-sm"
+                      style={{
+                        background: 'var(--ui-input)',
+                        borderColor: 'var(--ui-border)',
+                        color: 'var(--ui-fg)',
+                      }}
+                      value={worldQuery}
+                      onChange={(e) => setWorldQuery(e.target.value)}
+                      placeholder="短名 / 作者 / world_id"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span style={{ color: 'var(--ui-fg-muted)' }}>排序</span>
+                    <select
+                      className="mt-1 block rounded-lg border px-3 py-1.5 text-sm"
+                      style={{
+                        background: 'var(--ui-input)',
+                        borderColor: 'var(--ui-border)',
+                        color: 'var(--ui-fg)',
+                      }}
+                      value={worldSort}
+                      onChange={(e) =>
+                        setWorldSort(e.target.value as PackWorldListSort)
+                      }
+                    >
+                      <option value="default">默认（官方优先）</option>
+                      <option value="likes">点赞</option>
+                      <option value="favorites">收藏</option>
+                      <option value="name">名称</option>
+                    </select>
+                  </label>
+                </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {worlds.map((w) => (
+                  {displayWorlds.map((w) => (
                     <button
                       key={w.world_id}
                       type="button"
@@ -1099,10 +1258,25 @@ function SettingsInner({
                             }
                       }
                     >
-                      {w.world_id}
+                      {(w.short_name ?? w.world_id)
+                        + (w.owner_username ? ` · ${w.owner_username}` : '')
+                        + (w.is_official_world ? ' · 官方' : '')
+                        + ((w.like_count ?? 0) > 0
+                          ? ` · ♥${w.like_count}`
+                          : '')}
                     </button>
                   ))}
-                  {currentWorld && currentWorld.world_id !== 'office' && (
+                  {displayWorlds.length === 0 && (
+                    <span
+                      className="text-sm"
+                      style={{ color: 'var(--ui-fg-muted)' }}
+                    >
+                      无匹配世界
+                    </span>
+                  )}
+                  {currentWorld &&
+                    !currentWorld.is_official_world &&
+                    currentWorld.is_owner && (
                     <button
                       type="button"
                       disabled={busy}
@@ -1113,12 +1287,324 @@ function SettingsInner({
                       }}
                       onClick={() => void deleteWorld(currentWorld.world_id)}
                     >
-                      删除世界
+                      移入回收站
+                    </button>
+                  )}
+                  {currentWorld &&
+                    !currentWorld.is_official_world &&
+                    isSiteAdmin &&
+                    !currentWorld.is_owner && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="rounded-lg border px-3 py-1.5 text-xs"
+                      style={{
+                        borderColor: 'var(--ui-border)',
+                        color: 'var(--ui-danger)',
+                      }}
+                      onClick={() =>
+                        void deleteWorld(currentWorld.world_id, true)
+                      }
+                    >
+                      强制移入回收站
                     </button>
                   )}
                 </div>
                 {currentWorld && (
-                  <ul className="mt-4 space-y-2">
+                  <>
+                    {(currentWorld.forked_from_world_id ||
+                      currentWorld.forked_from_version_dirs?.length) && (
+                      <p
+                        className="mt-2 text-xs"
+                        style={{ color: 'var(--ui-fg-muted)' }}
+                      >
+                        Fork from{' '}
+                        {currentWorld.forked_from_world_id ?? '原世界'}
+                        {currentWorld.forked_from_version_dirs?.length
+                          ? ` · ${currentWorld.forked_from_version_dirs.join(', ')}`
+                          : ''}
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {currentWorld.is_owner && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="rounded-lg border px-3 py-1.5 text-xs"
+                          style={{ borderColor: 'var(--ui-border)' }}
+                          onClick={() =>
+                            void (async () => {
+                              setBusy(true);
+                              try {
+                                await apiFetch(
+                                  `/packs/worlds/${encodeURIComponent(currentWorld.world_id)}/share`,
+                                  {
+                                    token,
+                                    method: 'PUT',
+                                    body: {
+                                      isShared: !currentWorld.is_shared,
+                                      ensureVersionDir:
+                                        currentWorld.official_version_dir,
+                                    },
+                                  },
+                                );
+                                await refreshPacks();
+                              } catch (err) {
+                                setError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : '共享失败',
+                                );
+                              } finally {
+                                setBusy(false);
+                              }
+                            })()
+                          }
+                        >
+                          {currentWorld.is_shared ? '取消世界共享' : '共享世界'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className="rounded-lg border px-3 py-1.5 text-xs"
+                        style={{ borderColor: 'var(--ui-border)' }}
+                        onClick={() =>
+                          void (async () => {
+                            setBusy(true);
+                            try {
+                              await apiFetch(
+                                `/packs/worlds/${encodeURIComponent(currentWorld.world_id)}/reaction`,
+                                {
+                                  token,
+                                  method: 'PUT',
+                                  body: {
+                                    target: 'world',
+                                    kind: 'like',
+                                    active: !currentWorld.liked_by_me,
+                                  },
+                                },
+                              );
+                              await refreshPacks();
+                            } catch (err) {
+                              setError(
+                                err instanceof Error ? err.message : '点赞失败',
+                              );
+                            } finally {
+                              setBusy(false);
+                            }
+                          })()
+                        }
+                      >
+                        {currentWorld.liked_by_me ? '取消赞' : '赞'} (
+                        {currentWorld.like_count ?? 0})
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className="rounded-lg border px-3 py-1.5 text-xs"
+                        style={{ borderColor: 'var(--ui-border)' }}
+                        onClick={() =>
+                          void (async () => {
+                            setBusy(true);
+                            try {
+                              await apiFetch(
+                                `/packs/worlds/${encodeURIComponent(currentWorld.world_id)}/reaction`,
+                                {
+                                  token,
+                                  method: 'PUT',
+                                  body: {
+                                    target: 'world',
+                                    kind: 'favorite',
+                                    active: !currentWorld.favorited_by_me,
+                                  },
+                                },
+                              );
+                              await refreshPacks();
+                            } catch (err) {
+                              setError(
+                                err instanceof Error
+                                  ? err.message
+                                  : '收藏失败',
+                              );
+                            } finally {
+                              setBusy(false);
+                            }
+                          })()
+                        }
+                      >
+                        {currentWorld.favorited_by_me ? '取消收藏' : '收藏'} (
+                        {currentWorld.favorite_count ?? 0})
+                      </button>
+                      {!currentWorld.is_owner &&
+                        currentWorld.is_shared && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border px-3 py-1.5 text-xs"
+                            style={{ borderColor: 'var(--ui-border)' }}
+                            onClick={() =>
+                              void (async () => {
+                                const shared = currentWorld.versions.filter(
+                                  (v) => v.is_shared,
+                                );
+                                if (shared.length === 0) {
+                                  setError('没有可 Fork 的共享版本');
+                                  return;
+                                }
+                                const name = prompt(
+                                  'Fork 为新世界短名（可中文，最多20字）',
+                                  `${currentWorld.short_name ?? 'fork'}-副本`,
+                                );
+                                if (!name?.trim()) return;
+                                const listed = shared
+                                  .map((v, i) => `${i + 1}. ${v.version_dir}`)
+                                  .join('\n');
+                                const pick = prompt(
+                                  `选择要 Fork 的版本（填序号，逗号分隔；留空=全部）\n${listed}`,
+                                  '',
+                                );
+                                let dirs: string[];
+                                if (!pick?.trim()) {
+                                  dirs = shared.map((v) => v.version_dir);
+                                } else {
+                                  const idxs = pick
+                                    .split(/[,，\s]+/)
+                                    .map((s) => parseInt(s.trim(), 10))
+                                    .filter((n) => n >= 1 && n <= shared.length);
+                                  dirs = [
+                                    ...new Set(
+                                      idxs.map((n) => shared[n - 1]!.version_dir),
+                                    ),
+                                  ];
+                                }
+                                if (dirs.length === 0) {
+                                  setError('未选择有效版本');
+                                  return;
+                                }
+                                setBusy(true);
+                                try {
+                                  const res = await apiFetch<{
+                                    world_id: string;
+                                  }>('/packs/fork', {
+                                    token,
+                                    method: 'POST',
+                                    body: {
+                                      fromWorldId: currentWorld.world_id,
+                                      fromVersionDirs: dirs,
+                                      shortName: name.trim(),
+                                    },
+                                  });
+                                  await refreshPacks();
+                                  setSelectedWorldId(res.world_id);
+                                  setMessage(
+                                    `已 Fork → ${res.world_id}（${dirs.length} 个版本）`,
+                                  );
+                                } catch (err) {
+                                  setError(
+                                    err instanceof Error
+                                      ? err.message
+                                      : 'Fork 失败',
+                                  );
+                                } finally {
+                                  setBusy(false);
+                                }
+                              })()
+                            }
+                          >
+                            Fork 共享版本
+                          </button>
+                        )}
+                      {isSiteAdmin && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border px-3 py-1.5 text-xs"
+                            style={{ borderColor: 'var(--ui-border)' }}
+                            onClick={() =>
+                              void (async () => {
+                                setBusy(true);
+                                try {
+                                  await apiFetch(
+                                    `/packs/worlds/${encodeURIComponent(currentWorld.world_id)}/moderation`,
+                                    {
+                                      token,
+                                      method: 'PUT',
+                                      body: {
+                                        status:
+                                          currentWorld.moderation === 'hidden'
+                                            ? 'normal'
+                                            : 'hidden',
+                                      },
+                                    },
+                                  );
+                                  await refreshPacks();
+                                } catch (err) {
+                                  setError(
+                                    err instanceof Error
+                                      ? err.message
+                                      : '审核失败',
+                                  );
+                                } finally {
+                                  setBusy(false);
+                                }
+                              })()
+                            }
+                          >
+                            {currentWorld.moderation === 'hidden'
+                              ? '取消隐藏'
+                              : '隐藏'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border px-3 py-1.5 text-xs"
+                            style={{ borderColor: 'var(--ui-border)' }}
+                            onClick={() =>
+                              void (async () => {
+                                const next = !currentWorld.is_official_world;
+                                let afterCancel: 'private' | 'public' | undefined;
+                                if (!next) {
+                                  const choice = confirm(
+                                    '取消官方后设为公开？\n确定=公开，取消=私密',
+                                  );
+                                  afterCancel = choice ? 'public' : 'private';
+                                }
+                                setBusy(true);
+                                try {
+                                  await apiFetch(
+                                    `/packs/worlds/${encodeURIComponent(currentWorld.world_id)}/official`,
+                                    {
+                                      token,
+                                      method: 'PUT',
+                                      body: {
+                                        isOfficial: next,
+                                        afterCancel,
+                                      },
+                                    },
+                                  );
+                                  await refreshPacks();
+                                } catch (err) {
+                                  setError(
+                                    err instanceof Error
+                                      ? err.message
+                                      : '设官方失败',
+                                  );
+                                } finally {
+                                  setBusy(false);
+                                }
+                              })()
+                            }
+                          >
+                            {currentWorld.is_official_world
+                              ? '取消官方'
+                              : '设为官方'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <ul className="mt-4 space-y-2">
                     {currentWorld.versions.map((v) => (
                       <li
                         key={v.version_dir}
@@ -1135,13 +1621,167 @@ function SettingsInner({
                           >
                             {v.created_at}
                             {v.is_official ? ' · 测试默认' : ''}
+                            {v.is_shared ? ' · 已共享' : ' · 私密'}
+                            {v.moderation === 'hidden' ? ' · 已隐藏' : ''}
                             {selection?.world_id === v.world_id &&
                             selection?.pack_version_id === v.version_dir
                               ? ' · 当前选用'
                               : ''}
+                            {` · 赞 ${v.like_count ?? 0} · 藏 ${v.favorite_count ?? 0}`}
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border px-3 py-1.5 text-xs"
+                            style={{ borderColor: 'var(--ui-border)' }}
+                            onClick={() =>
+                              void (async () => {
+                                setBusy(true);
+                                try {
+                                  await apiFetch(
+                                    `/packs/worlds/${encodeURIComponent(v.world_id)}/reaction`,
+                                    {
+                                      token,
+                                      method: 'PUT',
+                                      body: {
+                                        target: 'version',
+                                        versionDir: v.version_dir,
+                                        kind: 'like',
+                                        active: !v.liked_by_me,
+                                      },
+                                    },
+                                  );
+                                  await refreshPacks();
+                                } catch (err) {
+                                  setError(
+                                    err instanceof Error
+                                      ? err.message
+                                      : '点赞失败',
+                                  );
+                                } finally {
+                                  setBusy(false);
+                                }
+                              })()
+                            }
+                          >
+                            {v.liked_by_me ? '取消赞' : '赞'} (
+                            {v.like_count ?? 0})
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border px-3 py-1.5 text-xs"
+                            style={{ borderColor: 'var(--ui-border)' }}
+                            onClick={() =>
+                              void (async () => {
+                                setBusy(true);
+                                try {
+                                  await apiFetch(
+                                    `/packs/worlds/${encodeURIComponent(v.world_id)}/reaction`,
+                                    {
+                                      token,
+                                      method: 'PUT',
+                                      body: {
+                                        target: 'version',
+                                        versionDir: v.version_dir,
+                                        kind: 'favorite',
+                                        active: !v.favorited_by_me,
+                                      },
+                                    },
+                                  );
+                                  await refreshPacks();
+                                } catch (err) {
+                                  setError(
+                                    err instanceof Error
+                                      ? err.message
+                                      : '收藏失败',
+                                  );
+                                } finally {
+                                  setBusy(false);
+                                }
+                              })()
+                            }
+                          >
+                            {v.favorited_by_me ? '取消收藏' : '收藏'} (
+                            {v.favorite_count ?? 0})
+                          </button>
+                          {currentWorld.is_owner && currentWorld.is_shared && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="rounded-lg border px-3 py-1.5 text-xs"
+                              style={{ borderColor: 'var(--ui-border)' }}
+                              onClick={() =>
+                                void (async () => {
+                                  setBusy(true);
+                                  try {
+                                    await apiFetch(
+                                      `/packs/worlds/${encodeURIComponent(v.world_id)}/versions/${encodeURIComponent(v.version_dir)}/share`,
+                                      {
+                                        token,
+                                        method: 'PUT',
+                                        body: { isShared: !v.is_shared },
+                                      },
+                                    );
+                                    await refreshPacks();
+                                  } catch (err) {
+                                    setError(
+                                      err instanceof Error
+                                        ? err.message
+                                        : '版本共享失败',
+                                    );
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                })()
+                              }
+                            >
+                              {v.is_shared ? '取消版本共享' : '共享版本'}
+                            </button>
+                          )}
+                          {isSiteAdmin && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="rounded-lg border px-3 py-1.5 text-xs"
+                              style={{ borderColor: 'var(--ui-border)' }}
+                              onClick={() =>
+                                void (async () => {
+                                  setBusy(true);
+                                  try {
+                                    await apiFetch(
+                                      `/packs/worlds/${encodeURIComponent(v.world_id)}/versions/${encodeURIComponent(v.version_dir)}/moderation`,
+                                      {
+                                        token,
+                                        method: 'PUT',
+                                        body: {
+                                          status:
+                                            v.moderation === 'hidden'
+                                              ? 'normal'
+                                              : 'hidden',
+                                        },
+                                      },
+                                    );
+                                    await refreshPacks();
+                                  } catch (err) {
+                                    setError(
+                                      err instanceof Error
+                                        ? err.message
+                                        : '版本审核失败',
+                                    );
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                })()
+                              }
+                            >
+                              {v.moderation === 'hidden'
+                                ? '取消隐藏版本'
+                                : '隐藏版本'}
+                            </button>
+                          )}
                           <button
                             type="button"
                             disabled={busy}
@@ -1169,7 +1809,7 @@ function SettingsInner({
                           >
                             选用
                           </button>
-                          {!v.is_official && (
+                          {!v.is_official && currentWorld.is_owner && (
                             <button
                               type="button"
                               disabled={busy}
@@ -1183,6 +1823,82 @@ function SettingsInner({
                               }
                             >
                               删除
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+
+              <div className="settings-panel" style={panelStyle}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="settings-panel__title">回收站</h2>
+                  <button
+                    type="button"
+                    className="text-sm"
+                    style={{ color: 'var(--ui-accent)' }}
+                    onClick={() => void refreshTrash()}
+                  >
+                    刷新
+                  </button>
+                </div>
+                <p className="settings-panel__lead">
+                  进站后列表不可见；可恢复。管理员可彻底清空（删磁盘）。
+                </p>
+                {trashItems.length === 0 ? (
+                  <p
+                    className="mt-3 text-sm"
+                    style={{ color: 'var(--ui-fg-muted)' }}
+                  >
+                    回收站为空
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {trashItems.map((t) => (
+                      <li
+                        key={t.world_id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2"
+                        style={{ borderColor: 'var(--ui-border)' }}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-mono text-sm truncate">
+                            {t.short_name || t.world_id}
+                          </div>
+                          <div
+                            className="text-xs"
+                            style={{ color: 'var(--ui-fg-muted)' }}
+                          >
+                            {t.world_id}
+                            {t.delete_scope === 'admin' ? ' · 审核删除' : ' · 自删'}
+                            {' · '}
+                            {new Date(t.deleted_at).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border px-3 py-1.5 text-xs"
+                            style={{ borderColor: 'var(--ui-border)' }}
+                            onClick={() => void restoreTrashWorld(t.world_id)}
+                          >
+                            恢复
+                          </button>
+                          {isSiteAdmin && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="rounded-lg border px-3 py-1.5 text-xs"
+                              style={{
+                                borderColor: 'var(--ui-border)',
+                                color: 'var(--ui-danger)',
+                              }}
+                              onClick={() => void purgeTrashWorld(t.world_id)}
+                            >
+                              彻底清空
                             </button>
                           )}
                         </div>
@@ -1249,15 +1965,15 @@ function SettingsInner({
               <div className="settings-panel" style={panelStyle}>
                 <h2 className="settings-panel__title">新建世界</h2>
                 <p className="settings-panel__lead">
-                  世界 ID = story-packs/ 文件夹名；首版版本名可省略（默认等于世界 ID）。
+                  填写短名（可中文，最多 20 字）；系统生成唯一 world_id。默认私密。
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="block text-sm">
                     <span style={{ color: 'var(--ui-fg-muted)' }}>
-                      世界 ID（文件夹名）
+                      世界短名
                     </span>
                     <input
-                      className="mt-1 w-full rounded-lg border px-3 py-2 font-mono"
+                      className="mt-1 w-full rounded-lg border px-3 py-2"
                       style={{
                         background: 'var(--ui-input)',
                         borderColor: 'var(--ui-border)',
@@ -1265,7 +1981,7 @@ function SettingsInner({
                       }}
                       value={newWorldId}
                       onChange={(e) => setNewWorldId(e.target.value)}
-                      placeholder="例如 awaken"
+                      placeholder="例如 觉醒II"
                     />
                   </label>
                   <label className="block text-sm">

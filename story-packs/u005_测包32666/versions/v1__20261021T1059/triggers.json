@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "trigger_1",
+      "enabled": true,
+      "from_chapter": "chapter_1",
+      "to_chapter": null,
+      "min_affinity": 0,
+      "require_flags": [],
+      "player_triggers": [],
+      "set_flags": []
+    }
+  ],
+  "npc_reply_flag_rules": [
+    {
+      "id": "reply_flag_1",
+      "enabled": true,
+      "when_chapter_in": [
+        "chapter_1"
+      ],
+      "set_flag": "flag_1",
+      "value": "true",
+      "triggers": []
+    }
+  ],
+  "exchange_events": []
+}

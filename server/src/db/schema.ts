@@ -62,6 +62,8 @@ export const players = pgTable(
   llmDirectorModel: text('llm_director_model'),
   /** 'true' | 'false'；null = 跟随 LLM_ENABLE_THINKING */
   llmEnableThinking: text('llm_enable_thinking'),
+  /** 站点管理员：审核隐藏/显示/强制删除、标记官方；不能改别人包内容 */
+  isAdmin: text('is_admin').notNull().default('false'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -70,6 +72,159 @@ export const players = pgTable(
     .notNull(),
   },
   (t) => [uniqueIndex('players_username_idx').on(t.username)],
+);
+
+/**
+ * 社区世界元数据（磁盘 story-packs/{world_id} 仍为内容真相源）
+ * world_id 全局唯一：官方用短名；用户包为 u{playerId}_{shortName}（可含中文）
+ */
+export const communityWorlds = pgTable('community_worlds', {
+  worldId: text('world_id').primaryKey(),
+  /** 展示用短名（可跨作者重名） */
+  shortName: text('short_name').notNull(),
+  /** null = 系统/官方种子；取消官方后归勺子 */
+  ownerPlayerId: text('owner_player_id').references(() => players.id),
+  description: text('description'),
+  /** 默认选用版本目录 */
+  officialVersionDir: text('official_version_dir').notNull(),
+  isOfficial: text('is_official').notNull().default('false'),
+  isShared: text('is_shared').notNull().default('false'),
+  /** normal | hidden（隐藏后仅 admin 可见/可操作） */
+  moderation: text('moderation').notNull().default('normal'),
+  forkedFromWorldId: text('forked_from_world_id'),
+  /** Fork 时拷贝的源版本目录列表 */
+  forkedFromVersionDirs: jsonb('forked_from_version_dirs').$type<
+    string[] | null
+  >(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+/** 社区版本元数据：共享粒度在版本；世界未共享时版本不可共享 */
+export const communityVersions = pgTable(
+  'community_versions',
+  {
+    worldId: text('world_id')
+      .notNull()
+      .references(() => communityWorlds.worldId, { onDelete: 'cascade' }),
+    versionDir: text('version_dir').notNull(),
+    ownerPlayerId: text('owner_player_id').references(() => players.id),
+    isShared: text('is_shared').notNull().default('false'),
+    moderation: text('moderation').notNull().default('normal'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.worldId, t.versionDir],
+      name: 'community_versions_pk',
+    }),
+  ],
+);
+
+/** 世界回收站（行转移；同名在站内时禁止再建） */
+export const communityWorldsTrash = pgTable('community_worlds_trash', {
+  worldId: text('world_id').primaryKey(),
+  shortName: text('short_name').notNull(),
+  ownerPlayerId: text('owner_player_id').references(() => players.id),
+  description: text('description'),
+  officialVersionDir: text('official_version_dir').notNull(),
+  isOfficial: text('is_official').notNull().default('false'),
+  isShared: text('is_shared').notNull().default('false'),
+  moderation: text('moderation').notNull().default('normal'),
+  forkedFromWorldId: text('forked_from_world_id'),
+  forkedFromVersionDirs: jsonb('forked_from_version_dirs').$type<
+    string[] | null
+  >(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  deletedBy: text('deleted_by')
+    .notNull()
+    .references(() => players.id),
+  /** user = 作者自删；admin = 审核强制删 */
+  deleteScope: text('delete_scope').notNull().$type<'user' | 'admin'>(),
+});
+
+export const communityVersionsTrash = pgTable(
+  'community_versions_trash',
+  {
+    worldId: text('world_id').notNull(),
+    versionDir: text('version_dir').notNull(),
+    ownerPlayerId: text('owner_player_id').references(() => players.id),
+    isShared: text('is_shared').notNull().default('false'),
+    moderation: text('moderation').notNull().default('normal'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    deletedBy: text('deleted_by')
+      .notNull()
+      .references(() => players.id),
+    deleteScope: text('delete_scope').notNull().$type<'user' | 'admin'>(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.worldId, t.versionDir],
+      name: 'community_versions_trash_pk',
+    }),
+  ],
+);
+
+/**
+ * 点赞：target_type=world 时 version_dir 存空串；=version 时必填版本目录。
+ */
+export const packLikes = pgTable(
+  'pack_likes',
+  {
+    playerId: text('player_id')
+      .notNull()
+      .references(() => players.id),
+    targetType: text('target_type').notNull().$type<'world' | 'version'>(),
+    worldId: text('world_id').notNull(),
+    versionDir: text('version_dir').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.playerId, t.targetType, t.worldId, t.versionDir],
+      name: 'pack_likes_pk',
+    }),
+  ],
+);
+
+export const packFavorites = pgTable(
+  'pack_favorites',
+  {
+    playerId: text('player_id')
+      .notNull()
+      .references(() => players.id),
+    targetType: text('target_type').notNull().$type<'world' | 'version'>(),
+    worldId: text('world_id').notNull(),
+    versionDir: text('version_dir').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.playerId, t.targetType, t.worldId, t.versionDir],
+      name: 'pack_favorites_pk',
+    }),
+  ],
 );
 
 /**

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.storyPackSchema = exports.worldManifestSchema = exports.packHeaderSchema = exports.packPlayablePlayerSchema = exports.packWorldFileSchema = exports.packEndingSchema = exports.packAnimationRuleSchema = exports.packAnimationRuleWhenSchema = exports.packAnimationIdSchema = exports.packNumericToolsSchema = exports.packPromptsFileSchema = exports.packFlagConstraintSchema = exports.packFlagConstraintWhenSchema = exports.packFatigueHintSchema = exports.packAffinityTierSchema = exports.packTriggersFileSchema = exports.packExchangeEventSchema = exports.packNpcReplyFlagRuleSchema = exports.packTriggerRuleSchema = exports.packFlagSetEntrySchema = exports.packNpcSchema = exports.packMemorySchema = exports.packFlagDefSchema = exports.packChapterSchema = exports.packIdSchema = void 0;
+exports.storyPackSchema = exports.worldManifestSchema = exports.packHeaderSchema = exports.packPlayablePlayerSchema = exports.packWorldFileSchema = exports.packEndingSchema = exports.packAnimationRuleSchema = exports.packAnimationRuleWhenSchema = exports.packAnimationIdSchema = exports.packNumericToolsSchema = exports.packPromptsFileSchema = exports.packFlagConstraintSchema = exports.packFlagConstraintWhenSchema = exports.packFatigueHintSchema = exports.packAffinityTierSchema = exports.packTriggersFileSchema = exports.packExchangeEventSchema = exports.packNpcReplyFlagRuleSchema = exports.packTriggerRuleSchema = exports.packFlagSetEntrySchema = exports.packNpcSchema = exports.packMemorySchema = exports.packFlagDefSchema = exports.packChapterSchema = exports.communityWorldIdSchema = exports.communityShortNameSchema = exports.packIdSchema = void 0;
 exports.assertPackReferences = assertPackReferences;
 exports.getDefaultChapterId = getDefaultChapterId;
 exports.getFirstChapterId = getFirstChapterId;
@@ -21,6 +21,33 @@ exports.packIdSchema = zod_1.z
     .min(1)
     .max(64)
     .regex(/^[a-zA-Z0-9_-]+$/, 'id 仅允许字母数字、_、-');
+/**
+ * 社区世界短名（展示名）：最多 20 字；中文 / 英文 / 数字 / 罗马数字字母；NFC。
+ * 跨用户可重名；真正主键是 communityWorldId。
+ */
+exports.communityShortNameSchema = zod_1.z
+    .string()
+    .transform((s) => s.normalize('NFC').trim())
+    .pipe(zod_1.z
+    .string()
+    .min(1, '短名不能为空')
+    .max(20, '短名最多 20 字')
+    .regex(/^[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9IVXLCDMivxlcdm]+$/, '短名仅允许中文、英文、数字、罗马数字字母（IVXLCDM）'));
+/**
+ * 社区 world_id：官方短名（如 office）或 u{uid}_{shortName}（可含中文）。
+ * 创建后不改。
+ */
+exports.communityWorldIdSchema = zod_1.z
+    .string()
+    .transform((s) => s.normalize('NFC').trim())
+    .pipe(zod_1.z
+    .string()
+    .min(1)
+    .max(96)
+    .refine((v) => !/[\\/\0]/.test(v) &&
+    !v.includes('..') &&
+    v !== '.' &&
+    /^[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9IVXLCDMivxlcdm_-]+$/.test(v), 'world_id 非法'));
 exports.packChapterSchema = zod_1.z.object({
     id: exports.packIdSchema,
     display_name: zod_1.z.string(),
@@ -264,7 +291,7 @@ exports.packPlayablePlayerSchema = zod_1.z.object({
 });
 exports.packHeaderSchema = zod_1.z.object({
     schema_version: zod_1.z.number().int().positive(),
-    world_id: exports.packIdSchema,
+    world_id: exports.communityWorldIdSchema,
     /** 版本名（不含时间戳）；目录为 版本名__时间戳 */
     display_name: zod_1.z.string().min(1),
     /** ISO 或 yyyyMMddTHHmm */
@@ -279,7 +306,7 @@ exports.packHeaderSchema = zod_1.z.object({
     playable_player: exports.packPlayablePlayerSchema.optional(),
 });
 exports.worldManifestSchema = zod_1.z.object({
-    world_id: exports.packIdSchema,
+    world_id: exports.communityWorldIdSchema,
     /** versions/ 下的目录名（含 __时间戳） */
     official_version_dir: zod_1.z.string().min(1),
     description: zod_1.z.string().optional(),

@@ -24,6 +24,7 @@ import {
   type PackWorldSummary,
   type StoryPack,
 } from '@ocraft/shared';
+import { AuthService } from '../auth/auth.service';
 import { DbService } from '../db/db.service';
 import { LlmService } from '../agent/core/llm.service';
 import {
@@ -40,9 +41,14 @@ import {
   resolveStoryPacksRoot,
 } from './pack-loader';
 import {
+  CommunityPackService,
+  makeUserWorldId,
+} from './community-pack.service';
+import {
   createWorldPack,
   deleteVersionOnDisk,
   deleteWorldOnDisk,
+  forkWorldPack,
   listDiskWorldSummaries,
   resolveVersionPath,
   savePackAsCopy,
@@ -74,10 +80,12 @@ export class PackService implements OnModuleInit {
 
   constructor(
     private readonly dbService: DbService,
+    private readonly community: CommunityPackService,
+    private readonly authService: AuthService,
     @Optional() private readonly llmService?: LlmService,
   ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
     try {
       this.officialPack = loadOfficialPack();
       this.cachePack(this.officialPack);
@@ -89,6 +97,20 @@ export class PackService implements OnModuleInit {
         `Failed to load official story pack: ${err instanceof Error ? err.message : err}`,
       );
       throw err;
+    }
+    try {
+      await this.authService.bootstrapAdminIfNeeded();
+    } catch (err) {
+      this.logger.warn(
+        `Admin bootstrap failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+    try {
+      await this.community.syncFromDisk();
+    } catch (err) {
+      this.logger.warn(
+        `Community pack sync failed: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 
@@ -254,9 +276,18 @@ export class PackService implements OnModuleInit {
         .limit(1);
       const row = rows[0];
       if (row?.selectedWorldId && row?.selectedPackVersionId) {
-        worldId = row.selectedWorldId;
-        packVersionId = row.selectedPackVersionId;
-        explicit = true;
+        const ok = await this.community.canAccessVersion(
+          playerId,
+          row.selectedWorldId,
+          row.selectedPackVersionId,
+        );
+        if (ok) {
+          worldId = row.selectedWorldId;
+          packVersionId = row.selectedPackVersionId;
+          explicit = true;
+          this.community.grantPlay(playerId, worldId, packVersionId);
+        }
+        // 刷新后无 grant 且已取消共享 → 回官方，不清 DB 历史选用（仅本局不用）
       }
     }
 
@@ -269,8 +300,38 @@ export class PackService implements OnModuleInit {
     return pack;
   }
 
-  listWorlds(): PackWorldSummary[] {
+  /** 磁盘全量扫描（无社区过滤）；社区货架请用 listWorldsForPlayer */
+  listWorlds() {
     return listDiskWorldSummaries();
+  }
+
+  /** 按玩家过滤的社区货架（官方 + 自己的 + 已共享） */
+  async listWorldsForPlayer(playerId: string): Promise<PackWorldSummary[]> {
+    if (!this.dbService.isReady) {
+      return this.listWorlds().map((w) => ({
+        ...w,
+        short_name: w.world_id,
+        is_official_world: true,
+        is_shared: true,
+        is_owner: false,
+        moderation: 'normal' as const,
+        versions: w.versions.map((v) => ({
+          ...v,
+          is_shared: true,
+          is_owner: false,
+          moderation: 'normal' as const,
+          like_count: 0,
+          favorite_count: 0,
+          liked_by_me: false,
+          favorited_by_me: false,
+        })),
+        like_count: 0,
+        favorite_count: 0,
+        liked_by_me: false,
+        favorited_by_me: false,
+      }));
+    }
+    return this.community.listVisibleWorlds(playerId);
   }
 
   async seedVersion(
@@ -387,6 +448,151 @@ export class PackService implements OnModuleInit {
     }
   }
 
+  /** 登录用户新建社区世界（shortName → u{uid}_{shortName}） */
+  async createWorldForPlayer(
+    playerId: string,
+    opts: {
+      shortName?: string;
+      worldId?: string;
+      versionName?: string;
+      description?: string;
+      notes?: string;
+    },
+  ) {
+    const reserved = new Set([
+      'office',
+      'awaken',
+      process.env.OFFICIAL_WORLD ?? 'office',
+    ]);
+    const shortRaw = (opts.shortName ?? opts.worldId ?? '').trim();
+    if (!shortRaw) {
+      throw new BadRequestException('请提供 shortName');
+    }
+    if (reserved.has(shortRaw.normalize('NFC'))) {
+      throw new BadRequestException('不能占用官方世界短名');
+    }
+    const worldId = makeUserWorldId(playerId, shortRaw);
+    const shortName = worldId.slice(`u${playerId}_`.length);
+    if (this.dbService.isReady) {
+      await this.community.assertWorldIdAvailable(worldId);
+    }
+    const versionName = opts.versionName?.trim() || shortName;
+    const created = await this.createWorld({
+      worldId,
+      versionName,
+      description: opts.description,
+      notes: opts.notes,
+    });
+    if (this.dbService.isReady) {
+      await this.community.upsertWorldMeta({
+        worldId,
+        shortName,
+        ownerPlayerId: playerId,
+        description: opts.description,
+        officialVersionDir: created.version_dir,
+        isOfficial: false,
+        isShared: false,
+      });
+      await this.community.upsertVersionMeta({
+        worldId,
+        versionDir: created.version_dir,
+        ownerPlayerId: playerId,
+        isShared: false,
+      });
+    }
+    return { ...created, short_name: shortName, owner_player_id: playerId };
+  }
+
+  async forkWorldForPlayer(
+    playerId: string,
+    opts: {
+      fromWorldId: string;
+      fromVersionDirs: string[];
+      shortName?: string;
+      description?: string;
+      notes?: string;
+    },
+  ) {
+    for (const dir of opts.fromVersionDirs) {
+      const ok = await this.community.isVersionListed(
+        playerId,
+        opts.fromWorldId,
+        dir,
+      );
+      if (!ok) {
+        throw new BadRequestException(
+          `无权 Fork 版本 ${opts.fromWorldId}/${dir}（须已共享可见）`,
+        );
+      }
+    }
+    const source = (await this.listWorldsForPlayer(playerId)).find(
+      (w) => w.world_id === opts.fromWorldId,
+    );
+    const shortRaw =
+      opts.shortName?.trim() ||
+      source?.short_name ||
+      opts.fromWorldId;
+    const worldId = makeUserWorldId(playerId, shortRaw);
+    const shortName = worldId.slice(`u${playerId}_`.length);
+    if (this.dbService.isReady) {
+      await this.community.assertWorldIdAvailable(worldId);
+    }
+
+    let forked: {
+      worldId: string;
+      versionDirs: string[];
+      officialVersionDir: string;
+    };
+    try {
+      forked = forkWorldPack({
+        fromWorldId: opts.fromWorldId,
+        fromVersionDirs: opts.fromVersionDirs,
+        toWorldId: worldId,
+        description: opts.description,
+        notes: opts.notes,
+      });
+    } catch (err) {
+      throw new BadRequestException(
+        err instanceof Error ? err.message : 'Fork 失败',
+      );
+    }
+
+    for (const versionDir of forked.versionDirs) {
+      const pack = await this.loadPackAsync(worldId, versionDir);
+      this.cachePack(pack);
+      await this.seedVersion(worldId, versionDir);
+    }
+    if (this.dbService.isReady) {
+      await this.community.upsertWorldMeta({
+        worldId,
+        shortName,
+        ownerPlayerId: playerId,
+        description: opts.description ?? source?.description,
+        officialVersionDir: forked.officialVersionDir,
+        isOfficial: false,
+        isShared: false,
+        forkedFromWorldId: opts.fromWorldId,
+        forkedFromVersionDirs: forked.versionDirs,
+      });
+      for (const versionDir of forked.versionDirs) {
+        await this.community.upsertVersionMeta({
+          worldId,
+          versionDir,
+          ownerPlayerId: playerId,
+          isShared: false,
+        });
+      }
+    }
+    return {
+      world_id: worldId,
+      short_name: shortName,
+      version_dirs: forked.versionDirs,
+      official_version_dir: forked.officialVersionDir,
+      forked_from_world_id: opts.fromWorldId,
+      forked_from_version_dirs: forked.versionDirs,
+    };
+  }
+
   async getSelection(playerId: string): Promise<PackSelection> {
     const pack = await this.hydratePlayer(playerId);
     const key = this.playerKeys.get(playerId);
@@ -397,12 +603,28 @@ export class PackService implements OnModuleInit {
     };
   }
 
+  clearPlayGrant(playerId: string) {
+    this.community.clearPlayGrant(playerId);
+  }
+
   async selectPack(
     playerId: string,
     worldId: string,
     packVersionId: string,
   ): Promise<PackSelection> {
-    // 校验包存在
+    if (this.dbService.isReady) {
+      const visible = await this.community.isVersionListed(
+        playerId,
+        worldId,
+        packVersionId,
+      );
+      if (!visible) {
+        throw new BadRequestException(
+          '该世界/版本不可见（未共享、已隐藏或在回收站）',
+        );
+      }
+    }
+
     await this.loadPackAsync(worldId, packVersionId);
 
     if (!this.dbService.isReady) {
@@ -434,6 +656,7 @@ export class PackService implements OnModuleInit {
       packVersionId,
       explicit: true,
     });
+    this.community.grantPlay(playerId, worldId, packVersionId);
     this.logger.log(
       `Player ${playerId} selected pack ${worldId}/${packVersionId}`,
     );
@@ -453,6 +676,8 @@ export class PackService implements OnModuleInit {
         .where(eq(players.id, playerId));
     }
     this.playerKeys.delete(playerId);
+    // 恢复默认 = 结束本局；取消共享后的 play grant 一并清掉
+    this.community.clearPlayGrant(playerId);
     return this.getSelection(playerId);
   }
 

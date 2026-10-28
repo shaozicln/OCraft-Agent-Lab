@@ -18,7 +18,8 @@ import * as path from 'path';
 
 /** 路径分隔符、空字节、控制字符、以及任何位置的 `..` */
 const FORBIDDEN_SEGMENT = /[\\/\0\x00-\x1f]|\.\./;
-const MAX_SEGMENT_LENGTH = 64;
+/** 用户世界 id 可为 u{uid}_{中文短名}，放宽到 96 */
+const MAX_SEGMENT_LENGTH = 96;
 
 export function assertSafePathSegment(value: string, label: string): string {
   if (typeof value !== 'string' || value.length === 0) {

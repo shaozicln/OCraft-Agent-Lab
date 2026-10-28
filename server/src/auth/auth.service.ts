@@ -104,6 +104,54 @@ export class AuthService {
     return String(n).padStart(3, '0');
   }
 
+  /**
+   * 一次性创建/提权站点管理员（勺子）。
+   * 需 env ADMIN_BOOTSTRAP_PASSWORD；已存在用户只补 is_admin，不改密码。
+   */
+  async bootstrapAdminIfNeeded(): Promise<void> {
+    if (!this.dbService.isReady) return;
+    const password = (process.env.ADMIN_BOOTSTRAP_PASSWORD ?? '').trim();
+    if (!password) return;
+
+    const usernameRaw =
+      (process.env.ADMIN_BOOTSTRAP_USERNAME ?? '勺子').trim() || '勺子';
+    const username = this.normalizeUsername(usernameRaw);
+    const db = this.requireDb();
+
+    const existing = await db
+      .select({
+        id: players.id,
+        isAdmin: players.isAdmin,
+      })
+      .from(players)
+      .where(eq(players.username, username))
+      .limit(1);
+
+    if (existing[0]) {
+      if (existing[0].isAdmin !== 'true' && existing[0].isAdmin !== '1') {
+        await db
+          .update(players)
+          .set({ isAdmin: 'true', updatedAt: new Date() })
+          .where(eq(players.id, existing[0].id));
+        this.logger.warn(
+          `Bootstrap: elevated ${username} (${existing[0].id}) to admin`,
+        );
+      }
+      return;
+    }
+
+    const id = await this.allocateUid();
+    await db.insert(players).values({
+      id,
+      username,
+      passwordHash: this.hashPassword(password),
+      isAdmin: 'true',
+    });
+    this.logger.warn(
+      `Bootstrap: created admin ${username} uid=${id} — 登录后请删除 ADMIN_BOOTSTRAP_PASSWORD`,
+    );
+  }
+
   async register(username: string, password: string): Promise<AuthSession> {
     const db = this.requireDb();
     const normalized = this.normalizeUsername(username);
@@ -130,6 +178,7 @@ export class AuthService {
       playerId,
       username: normalized,
       token: this.signToken(playerId),
+      is_admin: false,
     };
   }
 
@@ -142,6 +191,7 @@ export class AuthService {
         id: players.id,
         username: players.username,
         passwordHash: players.passwordHash,
+        isAdmin: players.isAdmin,
       })
       .from(players)
       .where(eq(players.username, normalized))
@@ -157,6 +207,7 @@ export class AuthService {
       playerId: row.id,
       username: row.username ?? normalized,
       token: this.signToken(row.id),
+      is_admin: row.isAdmin === 'true' || row.isAdmin === '1',
     };
   }
 
@@ -168,7 +219,11 @@ export class AuthService {
     if (!db) return null;
 
     const rows = await db
-      .select({ id: players.id, username: players.username })
+      .select({
+        id: players.id,
+        username: players.username,
+        isAdmin: players.isAdmin,
+      })
       .from(players)
       .where(eq(players.id, verified.playerId))
       .limit(1);
@@ -180,6 +235,7 @@ export class AuthService {
       playerId: row.id,
       username: row.username,
       token,
+      is_admin: row.isAdmin === 'true' || row.isAdmin === '1',
     };
   }
 
@@ -197,6 +253,7 @@ export class AuthService {
         id: players.id,
         username: players.username,
         passwordHash: players.passwordHash,
+        isAdmin: players.isAdmin,
       })
       .from(players)
       .where(eq(players.id, playerId))
@@ -239,6 +296,7 @@ export class AuthService {
       playerId,
       username: nextUsername,
       token: this.signToken(playerId),
+      is_admin: row.isAdmin === 'true' || row.isAdmin === '1',
     };
   }
 

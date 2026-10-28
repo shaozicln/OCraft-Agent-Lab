@@ -2,6 +2,16 @@ import { z } from 'zod';
 import { type StoryFlagsSnapshot } from './story.schema';
 /** 包内 ID：章节 / flag / NPC 等，由 Pack 声明，代码不写死业务枚举 */
 export declare const packIdSchema: z.ZodString;
+/**
+ * 社区世界短名（展示名）：最多 20 字；中文 / 英文 / 数字 / 罗马数字字母；NFC。
+ * 跨用户可重名；真正主键是 communityWorldId。
+ */
+export declare const communityShortNameSchema: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+/**
+ * 社区 world_id：官方短名（如 office）或 u{uid}_{shortName}（可含中文）。
+ * 创建后不改。
+ */
+export declare const communityWorldIdSchema: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
 export declare const packChapterSchema: z.ZodObject<{
     id: z.ZodString;
     display_name: z.ZodString;
@@ -344,7 +354,7 @@ export declare const packPlayablePlayerSchema: z.ZodObject<{
 }, z.core.$strip>;
 export declare const packHeaderSchema: z.ZodObject<{
     schema_version: z.ZodNumber;
-    world_id: z.ZodString;
+    world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
     display_name: z.ZodString;
     created_at: z.ZodString;
     notes: z.ZodOptional<z.ZodString>;
@@ -357,7 +367,7 @@ export declare const packHeaderSchema: z.ZodObject<{
     }, z.core.$strip>>;
 }, z.core.$strip>;
 export declare const worldManifestSchema: z.ZodObject<{
-    world_id: z.ZodString;
+    world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
     official_version_dir: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
@@ -365,7 +375,7 @@ export declare const worldManifestSchema: z.ZodObject<{
 export declare const storyPackSchema: z.ZodObject<{
     header: z.ZodObject<{
         schema_version: z.ZodNumber;
-        world_id: z.ZodString;
+        world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
         display_name: z.ZodString;
         created_at: z.ZodString;
         notes: z.ZodOptional<z.ZodString>;

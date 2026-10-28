@@ -1,51 +1,182 @@
 import { z } from 'zod';
 export declare const packVersionSummarySchema: z.ZodObject<{
-    world_id: z.ZodString;
+    world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
     version_dir: z.ZodString;
     version_name: z.ZodString;
     created_at: z.ZodString;
     notes: z.ZodOptional<z.ZodString>;
     is_official: z.ZodBoolean;
+    is_shared: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    is_owner: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    moderation: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
+        normal: "normal";
+        hidden: "hidden";
+    }>>>;
+    like_count: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+    favorite_count: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+    liked_by_me: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    favorited_by_me: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
 }, z.core.$strip>;
 export declare const packWorldSummarySchema: z.ZodObject<{
-    world_id: z.ZodString;
+    world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+    short_name: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodString>;
     official_version_dir: z.ZodString;
     versions: z.ZodArray<z.ZodObject<{
-        world_id: z.ZodString;
+        world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
         version_dir: z.ZodString;
         version_name: z.ZodString;
         created_at: z.ZodString;
         notes: z.ZodOptional<z.ZodString>;
         is_official: z.ZodBoolean;
+        is_shared: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+        is_owner: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+        moderation: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
+            normal: "normal";
+            hidden: "hidden";
+        }>>>;
+        like_count: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+        favorite_count: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+        liked_by_me: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+        favorited_by_me: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
     }, z.core.$strip>>;
+    owner_player_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    owner_username: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    is_official_world: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    is_shared: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    is_owner: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    moderation: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
+        normal: "normal";
+        hidden: "hidden";
+    }>>>;
+    forked_from_world_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    forked_from_version_dirs: z.ZodOptional<z.ZodNullable<z.ZodArray<z.ZodString>>>;
+    forked_from_version_dir: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    like_count: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+    favorite_count: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+    liked_by_me: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    favorited_by_me: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
 }, z.core.$strip>;
 export declare const packSeedPayloadSchema: z.ZodObject<{
-    worldId: z.ZodString;
+    worldId: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
     versionDir: z.ZodString;
 }, z.core.$strip>;
 export declare const packSaveAsPayloadSchema: z.ZodObject<{
-    worldId: z.ZodString;
+    worldId: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
     fromVersionDir: z.ZodOptional<z.ZodString>;
     versionName: z.ZodString;
     notes: z.ZodOptional<z.ZodString>;
     blankContent: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
-/** 新建世界：world_id = 文件夹名；首版版本名默认等于 worldId（极简空壳） */
+/**
+ * 新建世界。
+ * - shortName：展示短名（可与他人重名）；服务端生成唯一 world_id = u{uid}_{shortName}
+ * - worldId：兼容旧客户端；若传入且无 shortName，则按短名处理（非管理员不可占用 office/awaken）
+ */
 export declare const packCreateWorldPayloadSchema: z.ZodObject<{
-    worldId: z.ZodString;
+    worldId: z.ZodOptional<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>;
+    shortName: z.ZodOptional<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>;
     versionName: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodString>;
     notes: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export type PackCreateWorldPayload = z.infer<typeof packCreateWorldPayloadSchema>;
+export declare const packShareWorldPayloadSchema: z.ZodObject<{
+    isShared: z.ZodBoolean;
+    ensureVersionDir: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+export type PackShareWorldPayload = z.infer<typeof packShareWorldPayloadSchema>;
+export declare const packShareVersionPayloadSchema: z.ZodObject<{
+    isShared: z.ZodBoolean;
+}, z.core.$strip>;
+export type PackShareVersionPayload = z.infer<typeof packShareVersionPayloadSchema>;
+export declare const packForkPayloadSchema: z.ZodObject<{
+    fromWorldId: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+    fromVersionDirs: z.ZodArray<z.ZodString>;
+    shortName: z.ZodOptional<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>;
+    description: z.ZodOptional<z.ZodString>;
+    notes: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+export type PackForkPayload = z.infer<typeof packForkPayloadSchema>;
+export declare const packModerationPayloadSchema: z.ZodObject<{
+    status: z.ZodEnum<{
+        normal: "normal";
+        hidden: "hidden";
+    }>;
+}, z.core.$strip>;
+export type PackModerationPayload = z.infer<typeof packModerationPayloadSchema>;
+export declare const packSetOfficialPayloadSchema: z.ZodObject<{
+    isOfficial: z.ZodBoolean;
+    afterCancel: z.ZodOptional<z.ZodEnum<{
+        public: "public";
+        private: "private";
+    }>>;
+}, z.core.$strip>;
+export type PackSetOfficialPayload = z.infer<typeof packSetOfficialPayloadSchema>;
+export declare const packReactionPayloadSchema: z.ZodObject<{
+    target: z.ZodEnum<{
+        world: "world";
+        version: "version";
+    }>;
+    kind: z.ZodDefault<z.ZodEnum<{
+        like: "like";
+        favorite: "favorite";
+    }>>;
+    versionDir: z.ZodOptional<z.ZodString>;
+    active: z.ZodBoolean;
+}, z.core.$strip>;
+export type PackReactionPayload = z.infer<typeof packReactionPayloadSchema>;
+/** GET /packs/worlds?q=&sort= */
+export declare const packWorldListSortSchema: z.ZodDefault<z.ZodEnum<{
+    default: "default";
+    name: "name";
+    likes: "likes";
+    favorites: "favorites";
+}>>;
+export type PackWorldListSort = z.infer<typeof packWorldListSortSchema>;
+export declare const packWorldListQuerySchema: z.ZodObject<{
+    q: z.ZodDefault<z.ZodOptional<z.ZodString>>;
+    sort: z.ZodDefault<z.ZodEnum<{
+        default: "default";
+        name: "name";
+        likes: "likes";
+        favorites: "favorites";
+    }>>;
+}, z.core.$strip>;
+export type PackWorldListQuery = z.infer<typeof packWorldListQuerySchema>;
+export declare const packTrashItemSchema: z.ZodObject<{
+    world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+    short_name: z.ZodString;
+    owner_player_id: z.ZodNullable<z.ZodString>;
+    delete_scope: z.ZodEnum<{
+        user: "user";
+        admin: "admin";
+    }>;
+    deleted_at: z.ZodString;
+    deleted_by: z.ZodString;
+}, z.core.$strip>;
+export type PackTrashItem = z.infer<typeof packTrashItemSchema>;
+export declare const packTrashListResponseSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+        short_name: z.ZodString;
+        owner_player_id: z.ZodNullable<z.ZodString>;
+        delete_scope: z.ZodEnum<{
+            user: "user";
+            admin: "admin";
+        }>;
+        deleted_at: z.ZodString;
+        deleted_by: z.ZodString;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+export type PackTrashListResponse = z.infer<typeof packTrashListResponseSchema>;
 export declare const packSelectionSchema: z.ZodObject<{
-    world_id: z.ZodString;
+    world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
     pack_version_id: z.ZodString;
     is_explicit: z.ZodBoolean;
 }, z.core.$strip>;
 export declare const packSelectPayloadSchema: z.ZodObject<{
-    worldId: z.ZodString;
+    worldId: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
     packVersionId: z.ZodString;
 }, z.core.$strip>;
 export declare const packRuntimeChapterSchema: z.ZodObject<{
@@ -65,7 +196,7 @@ export declare const packRuntimeNpcSchema: z.ZodObject<{
 /** 当前玩家生效包的运行时摘要（进场用） */
 export declare const packRuntimeSchema: z.ZodObject<{
     selection: z.ZodObject<{
-        world_id: z.ZodString;
+        world_id: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
         pack_version_id: z.ZodString;
         is_explicit: z.ZodBoolean;
     }, z.core.$strip>;

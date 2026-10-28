@@ -30,6 +30,8 @@ export const authSessionSchema = z.object({
   playerId: z.string().regex(/^\d{3}$/, '玩家 UID 须为三位数字'),
   username: z.string(),
   token: z.string().min(1),
+  /** 站点管理员（审核 / 官方标记）；旧会话缺省视为 false */
+  is_admin: z.boolean().optional().default(false),
 });
 
 export type RegisterPayload = z.infer<typeof registerPayloadSchema>;

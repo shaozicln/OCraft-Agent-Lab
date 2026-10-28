@@ -1,31 +1,57 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.packGenerateDraftPayloadSchema = exports.PACK_GENERATE_OUTLINE_MAX = exports.PACK_GENERATE_PROMPT_MAX = exports.packGenerateStreamEventSchema = exports.PACK_GENERATE_SECTION_LABELS = exports.DEFAULT_PACK_GENERATE_SECTIONS = exports.packGenerateSectionsSchema = exports.packGenerateSectionKeys = exports.packUpdatePayloadSchema = exports.packRuntimeSchema = exports.packRuntimeNpcSchema = exports.packRuntimeChapterSchema = exports.packSelectPayloadSchema = exports.packSelectionSchema = exports.packCreateWorldPayloadSchema = exports.packSaveAsPayloadSchema = exports.packSeedPayloadSchema = exports.packWorldSummarySchema = exports.packVersionSummarySchema = void 0;
+exports.packGenerateDraftPayloadSchema = exports.PACK_GENERATE_OUTLINE_MAX = exports.PACK_GENERATE_PROMPT_MAX = exports.packGenerateStreamEventSchema = exports.PACK_GENERATE_SECTION_LABELS = exports.DEFAULT_PACK_GENERATE_SECTIONS = exports.packGenerateSectionsSchema = exports.packGenerateSectionKeys = exports.packUpdatePayloadSchema = exports.packRuntimeSchema = exports.packRuntimeNpcSchema = exports.packRuntimeChapterSchema = exports.packSelectPayloadSchema = exports.packSelectionSchema = exports.packTrashListResponseSchema = exports.packTrashItemSchema = exports.packWorldListQuerySchema = exports.packWorldListSortSchema = exports.packReactionPayloadSchema = exports.packSetOfficialPayloadSchema = exports.packModerationPayloadSchema = exports.packForkPayloadSchema = exports.packShareVersionPayloadSchema = exports.packShareWorldPayloadSchema = exports.packCreateWorldPayloadSchema = exports.packSaveAsPayloadSchema = exports.packSeedPayloadSchema = exports.packWorldSummarySchema = exports.packVersionSummarySchema = void 0;
 const zod_1 = require("zod");
 const pack_schema_1 = require("./pack.schema");
 exports.packVersionSummarySchema = zod_1.z.object({
-    world_id: pack_schema_1.packIdSchema,
+    world_id: pack_schema_1.communityWorldIdSchema,
     /** versions/ 下文件夹名：版本名__时间戳 */
     version_dir: zod_1.z.string().min(1),
     /** 版本名（不含时间戳），来自 pack.json；列表主展示用 version_dir */
     version_name: zod_1.z.string().min(1),
     created_at: zod_1.z.string().min(1),
     notes: zod_1.z.string().optional(),
-    /** 是否为当前全服测试默认 */
+    /** 是否为当前全服测试默认版本（manifest 指针） */
     is_official: zod_1.z.boolean(),
+    /** 版本是否对社区共享 */
+    is_shared: zod_1.z.boolean().optional().default(false),
+    /** 是否当前玩家拥有 */
+    is_owner: zod_1.z.boolean().optional().default(false),
+    /** 审核：normal | hidden */
+    moderation: zod_1.z.enum(['normal', 'hidden']).optional().default('normal'),
+    like_count: zod_1.z.number().int().nonnegative().optional().default(0),
+    favorite_count: zod_1.z.number().int().nonnegative().optional().default(0),
+    liked_by_me: zod_1.z.boolean().optional().default(false),
+    favorited_by_me: zod_1.z.boolean().optional().default(false),
 });
 exports.packWorldSummarySchema = zod_1.z.object({
-    world_id: pack_schema_1.packIdSchema,
+    world_id: pack_schema_1.communityWorldIdSchema,
+    /** 展示短名（可跨作者重名）；缺省等于 world_id */
+    short_name: zod_1.z.string().min(1).optional(),
     description: zod_1.z.string().optional(),
     official_version_dir: zod_1.z.string().min(1),
     versions: zod_1.z.array(exports.packVersionSummarySchema),
+    owner_player_id: zod_1.z.string().nullable().optional(),
+    owner_username: zod_1.z.string().nullable().optional(),
+    is_official_world: zod_1.z.boolean().optional().default(false),
+    is_shared: zod_1.z.boolean().optional().default(false),
+    is_owner: zod_1.z.boolean().optional().default(false),
+    moderation: zod_1.z.enum(['normal', 'hidden']).optional().default('normal'),
+    forked_from_world_id: zod_1.z.string().nullable().optional(),
+    forked_from_version_dirs: zod_1.z.array(zod_1.z.string()).nullable().optional(),
+    /** @deprecated 兼容旧字段；用 forked_from_version_dirs */
+    forked_from_version_dir: zod_1.z.string().nullable().optional(),
+    like_count: zod_1.z.number().int().nonnegative().optional().default(0),
+    favorite_count: zod_1.z.number().int().nonnegative().optional().default(0),
+    liked_by_me: zod_1.z.boolean().optional().default(false),
+    favorited_by_me: zod_1.z.boolean().optional().default(false),
 });
 exports.packSeedPayloadSchema = zod_1.z.object({
-    worldId: pack_schema_1.packIdSchema,
+    worldId: pack_schema_1.communityWorldIdSchema,
     versionDir: zod_1.z.string().min(1),
 });
 exports.packSaveAsPayloadSchema = zod_1.z.object({
-    worldId: pack_schema_1.packIdSchema,
+    worldId: pack_schema_1.communityWorldIdSchema,
     /** 源版本目录名；省略则用当前测试版 */
     fromVersionDir: zod_1.z.string().min(1).optional(),
     /** 版本名（不含时间戳）→ 生成 版本名__时间戳 */
@@ -34,22 +60,89 @@ exports.packSaveAsPayloadSchema = zod_1.z.object({
     /** true = 清空文案仅保留结构 */
     blankContent: zod_1.z.boolean().optional(),
 });
-/** 新建世界：world_id = 文件夹名；首版版本名默认等于 worldId（极简空壳） */
+/**
+ * 新建世界。
+ * - shortName：展示短名（可与他人重名）；服务端生成唯一 world_id = u{uid}_{shortName}
+ * - worldId：兼容旧客户端；若传入且无 shortName，则按短名处理（非管理员不可占用 office/awaken）
+ */
 exports.packCreateWorldPayloadSchema = zod_1.z.object({
-    worldId: pack_schema_1.packIdSchema,
-    /** 首个版本名；省略则用 worldId */
+    worldId: pack_schema_1.communityWorldIdSchema.optional(),
+    shortName: pack_schema_1.communityShortNameSchema.optional(),
+    /** 首个版本名；省略则用 shortName / worldId */
     versionName: zod_1.z.string().trim().min(1).max(64).optional(),
     description: zod_1.z.string().max(500).optional(),
     notes: zod_1.z.string().max(500).optional(),
+}).superRefine((data, ctx) => {
+    if (!data.shortName && !data.worldId) {
+        ctx.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            message: '请提供 shortName 或 worldId',
+            path: ['shortName'],
+        });
+    }
+});
+exports.packShareWorldPayloadSchema = zod_1.z.object({
+    isShared: zod_1.z.boolean(),
+    /** 开启世界共享时，若尚无共享版本，可指定先共享的版本目录 */
+    ensureVersionDir: zod_1.z.string().min(1).optional(),
+});
+exports.packShareVersionPayloadSchema = zod_1.z.object({
+    isShared: zod_1.z.boolean(),
+});
+exports.packForkPayloadSchema = zod_1.z.object({
+    fromWorldId: pack_schema_1.communityWorldIdSchema,
+    /** 要拷贝的版本目录（可多选） */
+    fromVersionDirs: zod_1.z.array(zod_1.z.string().min(1)).min(1).max(32),
+    /** 新世界短名；省略则用源 short_name */
+    shortName: pack_schema_1.communityShortNameSchema.optional(),
+    description: zod_1.z.string().max(500).optional(),
+    notes: zod_1.z.string().max(500).optional(),
+});
+exports.packModerationPayloadSchema = zod_1.z.object({
+    status: zod_1.z.enum(['normal', 'hidden']),
+});
+exports.packSetOfficialPayloadSchema = zod_1.z.object({
+    isOfficial: zod_1.z.boolean(),
+    /**
+     * 取消官方时必填：归勺子后私密或公开（公开=现有版本全部共享）。
+     * 设为官方时忽略。
+     */
+    afterCancel: zod_1.z.enum(['private', 'public']).optional(),
+});
+exports.packReactionPayloadSchema = zod_1.z.object({
+    /** world = 赞/藏整个世界；version 时必须带 versionDir */
+    target: zod_1.z.enum(['world', 'version']),
+    kind: zod_1.z.enum(['like', 'favorite']).default('like'),
+    versionDir: zod_1.z.string().min(1).optional(),
+    active: zod_1.z.boolean(),
+});
+/** GET /packs/worlds?q=&sort= */
+exports.packWorldListSortSchema = zod_1.z
+    .enum(['default', 'likes', 'favorites', 'name'])
+    .default('default');
+exports.packWorldListQuerySchema = zod_1.z.object({
+    q: zod_1.z.string().optional().default(''),
+    sort: exports.packWorldListSortSchema,
+});
+exports.packTrashItemSchema = zod_1.z.object({
+    world_id: pack_schema_1.communityWorldIdSchema,
+    short_name: zod_1.z.string().min(1),
+    owner_player_id: zod_1.z.string().nullable(),
+    delete_scope: zod_1.z.enum(['user', 'admin']),
+    deleted_at: zod_1.z.string().min(1),
+    deleted_by: zod_1.z.string().min(1),
+});
+exports.packTrashListResponseSchema = zod_1.z.object({
+    items: zod_1.z.array(exports.packTrashItemSchema),
 });
 exports.packSelectionSchema = zod_1.z.object({
-    world_id: pack_schema_1.packIdSchema,
+    world_id: pack_schema_1.communityWorldIdSchema,
     pack_version_id: zod_1.z.string().min(1),
     /** true = 显式选用；false = 跟随全服测试默认 */
     is_explicit: zod_1.z.boolean(),
 });
 exports.packSelectPayloadSchema = zod_1.z.object({
-    worldId: pack_schema_1.packIdSchema,
+    worldId: pack_schema_1.communityWorldIdSchema,
     packVersionId: zod_1.z.string().min(1),
 });
 exports.packRuntimeChapterSchema = zod_1.z.object({

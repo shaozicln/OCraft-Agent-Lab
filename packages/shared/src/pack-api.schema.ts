@@ -1,32 +1,62 @@
 import { z } from 'zod';
-import { packIdSchema } from './pack.schema';
+import {
+  communityShortNameSchema,
+  communityWorldIdSchema,
+  packIdSchema,
+} from './pack.schema';
 
 export const packVersionSummarySchema = z.object({
-  world_id: packIdSchema,
+  world_id: communityWorldIdSchema,
   /** versions/ 下文件夹名：版本名__时间戳 */
   version_dir: z.string().min(1),
   /** 版本名（不含时间戳），来自 pack.json；列表主展示用 version_dir */
   version_name: z.string().min(1),
   created_at: z.string().min(1),
   notes: z.string().optional(),
-  /** 是否为当前全服测试默认 */
+  /** 是否为当前全服测试默认版本（manifest 指针） */
   is_official: z.boolean(),
+  /** 版本是否对社区共享 */
+  is_shared: z.boolean().optional().default(false),
+  /** 是否当前玩家拥有 */
+  is_owner: z.boolean().optional().default(false),
+  /** 审核：normal | hidden */
+  moderation: z.enum(['normal', 'hidden']).optional().default('normal'),
+  like_count: z.number().int().nonnegative().optional().default(0),
+  favorite_count: z.number().int().nonnegative().optional().default(0),
+  liked_by_me: z.boolean().optional().default(false),
+  favorited_by_me: z.boolean().optional().default(false),
 });
 
 export const packWorldSummarySchema = z.object({
-  world_id: packIdSchema,
+  world_id: communityWorldIdSchema,
+  /** 展示短名（可跨作者重名）；缺省等于 world_id */
+  short_name: z.string().min(1).optional(),
   description: z.string().optional(),
   official_version_dir: z.string().min(1),
   versions: z.array(packVersionSummarySchema),
+  owner_player_id: z.string().nullable().optional(),
+  owner_username: z.string().nullable().optional(),
+  is_official_world: z.boolean().optional().default(false),
+  is_shared: z.boolean().optional().default(false),
+  is_owner: z.boolean().optional().default(false),
+  moderation: z.enum(['normal', 'hidden']).optional().default('normal'),
+  forked_from_world_id: z.string().nullable().optional(),
+  forked_from_version_dirs: z.array(z.string()).nullable().optional(),
+  /** @deprecated 兼容旧字段；用 forked_from_version_dirs */
+  forked_from_version_dir: z.string().nullable().optional(),
+  like_count: z.number().int().nonnegative().optional().default(0),
+  favorite_count: z.number().int().nonnegative().optional().default(0),
+  liked_by_me: z.boolean().optional().default(false),
+  favorited_by_me: z.boolean().optional().default(false),
 });
 
 export const packSeedPayloadSchema = z.object({
-  worldId: packIdSchema,
+  worldId: communityWorldIdSchema,
   versionDir: z.string().min(1),
 });
 
 export const packSaveAsPayloadSchema = z.object({
-  worldId: packIdSchema,
+  worldId: communityWorldIdSchema,
   /** 源版本目录名；省略则用当前测试版 */
   fromVersionDir: z.string().min(1).optional(),
   /** 版本名（不含时间戳）→ 生成 版本名__时间戳 */
@@ -36,25 +66,112 @@ export const packSaveAsPayloadSchema = z.object({
   blankContent: z.boolean().optional(),
 });
 
-/** 新建世界：world_id = 文件夹名；首版版本名默认等于 worldId（极简空壳） */
+/**
+ * 新建世界。
+ * - shortName：展示短名（可与他人重名）；服务端生成唯一 world_id = u{uid}_{shortName}
+ * - worldId：兼容旧客户端；若传入且无 shortName，则按短名处理（非管理员不可占用 office/awaken）
+ */
 export const packCreateWorldPayloadSchema = z.object({
-  worldId: packIdSchema,
-  /** 首个版本名；省略则用 worldId */
+  worldId: communityWorldIdSchema.optional(),
+  shortName: communityShortNameSchema.optional(),
+  /** 首个版本名；省略则用 shortName / worldId */
   versionName: z.string().trim().min(1).max(64).optional(),
   description: z.string().max(500).optional(),
   notes: z.string().max(500).optional(),
+}).superRefine((data, ctx) => {
+  if (!data.shortName && !data.worldId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: '请提供 shortName 或 worldId',
+      path: ['shortName'],
+    });
+  }
 });
 export type PackCreateWorldPayload = z.infer<typeof packCreateWorldPayloadSchema>;
 
+export const packShareWorldPayloadSchema = z.object({
+  isShared: z.boolean(),
+  /** 开启世界共享时，若尚无共享版本，可指定先共享的版本目录 */
+  ensureVersionDir: z.string().min(1).optional(),
+});
+export type PackShareWorldPayload = z.infer<typeof packShareWorldPayloadSchema>;
+
+export const packShareVersionPayloadSchema = z.object({
+  isShared: z.boolean(),
+});
+export type PackShareVersionPayload = z.infer<typeof packShareVersionPayloadSchema>;
+
+export const packForkPayloadSchema = z.object({
+  fromWorldId: communityWorldIdSchema,
+  /** 要拷贝的版本目录（可多选） */
+  fromVersionDirs: z.array(z.string().min(1)).min(1).max(32),
+  /** 新世界短名；省略则用源 short_name */
+  shortName: communityShortNameSchema.optional(),
+  description: z.string().max(500).optional(),
+  notes: z.string().max(500).optional(),
+});
+export type PackForkPayload = z.infer<typeof packForkPayloadSchema>;
+
+export const packModerationPayloadSchema = z.object({
+  status: z.enum(['normal', 'hidden']),
+});
+export type PackModerationPayload = z.infer<typeof packModerationPayloadSchema>;
+
+export const packSetOfficialPayloadSchema = z.object({
+  isOfficial: z.boolean(),
+  /**
+   * 取消官方时必填：归勺子后私密或公开（公开=现有版本全部共享）。
+   * 设为官方时忽略。
+   */
+  afterCancel: z.enum(['private', 'public']).optional(),
+});
+export type PackSetOfficialPayload = z.infer<typeof packSetOfficialPayloadSchema>;
+
+export const packReactionPayloadSchema = z.object({
+  /** world = 赞/藏整个世界；version 时必须带 versionDir */
+  target: z.enum(['world', 'version']),
+  kind: z.enum(['like', 'favorite']).default('like'),
+  versionDir: z.string().min(1).optional(),
+  active: z.boolean(),
+});
+export type PackReactionPayload = z.infer<typeof packReactionPayloadSchema>;
+
+/** GET /packs/worlds?q=&sort= */
+export const packWorldListSortSchema = z
+  .enum(['default', 'likes', 'favorites', 'name'])
+  .default('default');
+export type PackWorldListSort = z.infer<typeof packWorldListSortSchema>;
+
+export const packWorldListQuerySchema = z.object({
+  q: z.string().optional().default(''),
+  sort: packWorldListSortSchema,
+});
+export type PackWorldListQuery = z.infer<typeof packWorldListQuerySchema>;
+
+export const packTrashItemSchema = z.object({
+  world_id: communityWorldIdSchema,
+  short_name: z.string().min(1),
+  owner_player_id: z.string().nullable(),
+  delete_scope: z.enum(['user', 'admin']),
+  deleted_at: z.string().min(1),
+  deleted_by: z.string().min(1),
+});
+export type PackTrashItem = z.infer<typeof packTrashItemSchema>;
+
+export const packTrashListResponseSchema = z.object({
+  items: z.array(packTrashItemSchema),
+});
+export type PackTrashListResponse = z.infer<typeof packTrashListResponseSchema>;
+
 export const packSelectionSchema = z.object({
-  world_id: packIdSchema,
+  world_id: communityWorldIdSchema,
   pack_version_id: z.string().min(1),
   /** true = 显式选用；false = 跟随全服测试默认 */
   is_explicit: z.boolean(),
 });
 
 export const packSelectPayloadSchema = z.object({
-  worldId: packIdSchema,
+  worldId: communityWorldIdSchema,
   packVersionId: z.string().min(1),
 });
 

@@ -1,0 +1,37 @@
+{
+  "npc_id": "npc_1",
+  "name": "",
+  "meta": {
+    "avatar": "",
+    "model_path": "",
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "spawn_position": [
+      3.2,
+      0,
+      -2.2
+    ]
+  },
+  "attributes": {
+    "fatigue": 20,
+    "max_fatigue": 100,
+    "affinity": 20,
+    "current_status": "idle",
+    "favorite_things": []
+  },
+  "system_prompt_template": "",
+  "memories": [
+    {
+      "id": "mem_1",
+      "tags": [],
+      "keywords": [],
+      "content": "",
+      "min_chapter": "chapter_1"
+    }
+  ],
+  "forbidden_behaviors": [],
+  "appear_require_flags": []
+}

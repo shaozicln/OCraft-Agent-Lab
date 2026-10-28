@@ -113,6 +113,10 @@ export class GameGateway implements OnGatewayConnection {
   }
 
   handleDisconnect(client: AuthedSocket) {
+    const playerId = client.data.playerId;
+    if (playerId) {
+      this.packService.clearPlayGrant(playerId);
+    }
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 

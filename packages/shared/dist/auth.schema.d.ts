@@ -14,6 +14,7 @@ export declare const authSessionSchema: z.ZodObject<{
     playerId: z.ZodString;
     username: z.ZodString;
     token: z.ZodString;
+    is_admin: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
 }, z.core.$strip>;
 export type RegisterPayload = z.infer<typeof registerPayloadSchema>;
 export type LoginPayload = z.infer<typeof loginPayloadSchema>;

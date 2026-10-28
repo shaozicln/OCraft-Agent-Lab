@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AgentModule } from '../agent/agent.module';
 import { PackController } from './pack.controller';
 import { PackService } from './pack.service';
+import { CommunityPackService } from './community-pack.service';
 import { PackGenerateService } from './pack-generate.service';
 import { PackClarifyService } from './pack-clarify.service';
 import { PackDistillService } from './pack-distill.service';
@@ -15,11 +16,17 @@ import { WorldProgressService } from './world-progress.service';
   providers: [
     StoryFlagService,
     WorldProgressService,
+    CommunityPackService,
     PackService,
     PackGenerateService,
     PackClarifyService,
     PackDistillService,
   ],
-  exports: [StoryFlagService, WorldProgressService, PackService],
+  exports: [
+    StoryFlagService,
+    WorldProgressService,
+    PackService,
+    CommunityPackService,
+  ],
 })
 export class StoryModule {}

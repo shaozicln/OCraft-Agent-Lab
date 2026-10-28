@@ -1,0 +1,40 @@
+{
+  "chapters": [
+    {
+      "id": "chapter_1",
+      "display_name": "",
+      "rank": 0
+    }
+  ],
+  "flags": [
+    {
+      "name": "flag_1",
+      "type": "bool",
+      "irreversible": true
+    }
+  ],
+  "default_chapter": "chapter_1",
+  "default_npc": "npc_1",
+  "numeric_tools": {
+    "fatigue_increase": {
+      "triggers": [],
+      "delta": 10,
+      "reason": ""
+    },
+    "interest_hit": {
+      "affinity_delta": 10,
+      "affinity_reason": "",
+      "fatigue_delta": -10,
+      "fatigue_reason": ""
+    }
+  },
+  "animation_rules": [
+    {
+      "id": "anim_1",
+      "enabled": true,
+      "when": {},
+      "animation": "idle"
+    }
+  ],
+  "endings": []
+}
