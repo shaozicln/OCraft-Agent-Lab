@@ -1,6 +1,6 @@
 # OCraft Agent Lab
 
-已部署网站：https://ocraft.cspona.top/
+已部署网站：https://ocraft.cspona.top
 
 有 Api-Key 就能玩，大概是有新点子填填设定就能对话和看演绎
 
